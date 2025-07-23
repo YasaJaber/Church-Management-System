@@ -81,7 +81,7 @@ remove-*.js
 search-*.js
 show-*.js
 simple-*.js
-statistics-*.js
+# statistics-*.js  # Commented out - we need statistics-fresh.js for production
 update-*.js
 verify-*.js
 quick-*.js
