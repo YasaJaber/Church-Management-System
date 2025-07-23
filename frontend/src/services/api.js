@@ -6,11 +6,14 @@ import { Platform } from "react-native";
 // Automatically detect the correct base URL based on platform
 let BASE_URL;
 
-if (__DEV__) {
+// Force use production backend for testing
+const USE_PRODUCTION_BACKEND = true; // Set to false to use local backend
+
+if (__DEV__ && !USE_PRODUCTION_BACKEND) {
   // Development mode - use the actual IP address for all platforms
   BASE_URL = "http://192.168.1.4:5000/api";
 } else {
-  // Production mode - use the deployed Render backend
+  // Production mode OR forced production - use the deployed Render backend
   BASE_URL = "https://church-management-system-b6h7.onrender.com/api";
 }
 
