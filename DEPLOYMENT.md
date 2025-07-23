@@ -51,12 +51,12 @@
 
 Your API will be available at:
 ```
-https://church-management-api.onrender.com
+https://church-management-system-b6h7.onrender.com
 ```
 
 **Test the deployment:**
-- Health check: `https://church-management-api.onrender.com/api/health`
-- API base: `https://church-management-api.onrender.com/api`
+- Health check: `https://church-management-system-b6h7.onrender.com/api/health`
+- API base: `https://church-management-system-b6h7.onrender.com/api`
 
 #### 4. **Environment Variables Setup**
 
@@ -74,7 +74,7 @@ Update your frontend API base URL to point to the deployed backend:
 
 ```javascript
 // In frontend/src/services/api.js
-const API_BASE_URL = 'https://church-management-api.onrender.com/api';
+const API_BASE_URL = 'https://church-management-system-b6h7.onrender.com/api';
 ```
 
 ### 🔧 Troubleshooting

@@ -10,8 +10,8 @@ if (__DEV__) {
   // Development mode - use the actual IP address for all platforms
   BASE_URL = "http://192.168.1.4:5000/api";
 } else {
-  // Production mode - use your actual server URL
-  BASE_URL = "http://192.168.1.4:5000/api";
+  // Production mode - use the deployed Render backend
+  BASE_URL = "https://church-management-system-b6h7.onrender.com/api";
 }
 
 console.log("API Base URL:", BASE_URL);
