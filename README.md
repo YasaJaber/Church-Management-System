@@ -1,165 +1,235 @@
-# 🏛️ نظام متابعة حضور وغياب الأطفال والخدام
+# St. George Church Management System
+## نظام إدارة كنيسة مارجرجس
 
-## كنيسة الشهيد العظيم مارجرجس - أولاد علي
-
-تطبيق موبايل شامل لإدارة حضور وغياب الأطفال والخدام في كنيسة مارجرجس، مبني بـ React Native و Node.js.
-
-## 🔧 التقنيات المستخدمة
-
-### Backend
-
-- **Node.js** + **Express.js** - السيرفر
-- **MongoDB** + **Mongoose** - قاعدة البيانات
-- **JWT** - التوثيق والأمان
-- **bcryptjs** - تشفير كلمات المرور
-- **ExcelJS** - تصدير التقارير
-
-### Frontend
-
-- **React Native** + **Expo** - تطبيق الموبايل
-- **React Navigation** - التنقل بين الشاشات
-- **AsyncStorage** - التخزين المحلي
-- **Axios** - التفاعل مع API
-
-## 🚀 إعداد وتشغيل المشروع
-
-### 1. إعداد Backend
-
-```bash
-# الانتقال لمجلد الباك إند
-cd backend
-
-# تنزيل المكتبات
-npm install
-
-# متغيرات البيئة معدّة بالفعل
-# قاعدة البيانات جاهزة للاستخدام ✅
-
-# تشغيل السيرفر
-npm run dev
-```
-
-### 2. إعداد قاعدة البيانات (اختياري)
-
-```bash
-# إضافة بيانات تجريبية
-npm run seed
-```
-
-### 3. إعداد Frontend
-
-```bash
-# الانتقال لمجلد الفرونت إند
-cd frontend
-
-# تنزيل المكتبات
-npm install
-
-# تشغيل التطبيق
-npm start
-```
-
-## 👥 أنواع المستخدمين
-
-### 🔴 الأدمن (أمين الخدمة/الكاهن)
-
-- **صلاحيات كاملة** في النظام
-- إضافة وتعديل الأطفال في أي فصل
-- تسجيل حضور/غياب الأطفال والخدام
-- عرض الإحصائيات الشاملة
-- **تصدير التقارير** إلى Excel
-
-### 🔵 الخادم
-
-- عرض كل الأطفال (للقراءة فقط)
-- **إضافة/تعديل الأطفال** في فصله فقط
-- **تسجيل حضور/غياب الأطفال** في فصله فقط
-- عرض غياب الخدام (للقراءة فقط)
-- عرض الإحصائيات الخاصة بفصله
-
-## 🏗️ هيكل المراحل والفصول
-
-| المرحلة     | عدد الفصول | الملاحظات              |
-| ----------- | ---------- | ---------------------- |
-| **حضانة**   | فصل واحد   | بدون تقسيم لسنين       |
-| **ابتدائي** | 6 فصول     | من أولى لسادسة ابتدائي |
-| **إعدادي**  | 3 فصول     | أولى – تانية – تالتة   |
-| **ثانوي**   | فصل واحد   | يشمل كل سنوات المرحلة  |
-
-## 📊 الإحصائيات المتاحة
-
-### للفصل الواحد:
-
-- إجمالي عدد الأطفال
-- عدد الحضور والغياب في يوم معين
-- أكثر طفل حضوراً
-- الأطفال المواظبين (4 أسابيع متتالية)
-- نسبة حضور كل طفل
-
-### للكنيسة كاملة:
-
-- إجمالي عدد الفصول والأطفال
-- أكثر طفل حضوراً في الكنيسة
-- جميع الأطفال المواظبين
-- إحصائيات غياب الخدام
-
-## 📱 بيانات تجريبية للاختبار
-
-بعد تشغيل `npm run seed`:
-
-### حسابات المستخدمين:
-
-- **أدمن**: `admin` / `admin123`
-- **خادم 1**: `servant1` / `servant123` (أولى ابتدائي)
-- **خادم 2**: `servant2` / `servant123` (تانية ابتدائي)
-- **خادم 3**: `servant3` / `servant123` (أولى إعدادي)
-
-## 📋 الشاشات الأساسية
-
-1. **شاشة تسجيل الدخول** - مع خاصية "تذكرني"
-2. **الرئيسية** - إحصائيات سريعة وإجراءات مفيدة
-3. **إدارة الأطفال** - عرض وإضافة وتعديل بيانات الأطفال
-4. **تسجيل الحضور** - تسجيل حضور/غياب الأطفال والخدام
-5. **الإحصائيات** - تقارير مفصلة وتصدير Excel
-6. **الحساب الشخصي** - معلومات المستخدم وتسجيل الخروج
-
-## 🔐 الحماية والأمان
-
-- **تشفير كلمات المرور** بـ bcrypt
-- **توثيق آمن** بـ JWT tokens
-- **صلاحيات محكمة** لكل نوع مستخدم
-- **حماية API** من الوصول غير المصرح
-
-## 📤 تصدير التقارير (للأدمن فقط)
-
-### أنواع التقارير:
-
-1. **فصل واحد** - تقرير Excel لحضور أطفال فصل معين
-2. **جميع الفصول** - تقرير موحد لكل أطفال الكنيسة
-3. **غياب الخدام** - تقرير Excel خاص بالخدام
-
-### بيانات التقرير:
-
-- اسم الطفل/الخادم
-- المرحلة والفصل
-- التاريخ والحالة (حضر/غاب)
-- رقم التليفون
-- اسم الخادم المُسجل
-- ملاحظات
-
-## 🔮 التطوير المستقبلي
-
-- إرسال إشعارات للغياب المتكرر
-- استيراد البيانات من ملف Excel
-- تقارير PDF
-- دعم متعدد الكنائس
-- إحصائيات متقدمة أكثر
-
-## 👨‍💻 المطور
-
-**ياسا جابر** - مطور تطبيق نظام متابعة الحضور والغياب
+### 📱 Comprehensive System for Children, Servants, and Attendance Management
 
 ---
 
-_"لمجد الله وخدمة كنيسة الشهيد العظيم مارجرجس"_ ⛪
- 
+## 🚀 Key Features
+
+### 👥 Children Management
+- Register children data (name, age, class)
+- Distribute children across classes
+- Track daily attendance
+- Detailed attendance statistics
+
+### 👨‍🏫 Servants Management
+- Individual servant system (each servant has separate account)
+- Phone number registration
+- Track servant attendance
+- Follow-up reports for consecutive absences
+
+### 📊 Statistics and Reports
+- General attendance statistics
+- Detailed reports for each class
+- Track attendance rates
+- Printable PDF reports
+
+### 🔐 Security System
+- JWT authentication
+- Different permissions (Admin, Teacher, Servant)
+- Sensitive data protection
+
+---
+
+## 🛠️ Technologies Used
+
+### Backend
+
+- **Node.js** + **Express.js**
+- **MongoDB** with **Mongoose**
+- **JWT** for authentication
+- **bcryptjs** for password encryption
+- **date-fns** for date handling
+- **CORS** for cross-origin requests
+
+### Frontend (Mobile App)
+
+- **React Native** + **Expo**
+- **React Navigation** for navigation
+- **Axios** for API calls
+- **AsyncStorage** for local data storage
+- **React Native Calendars** for calendar
+
+---
+
+## 🔧 Installation and Setup
+
+### System Requirements
+
+- Node.js (v16 or newer)
+- npm or yarn
+- MongoDB
+- Expo CLI for mobile app
+
+### 1. Backend Setup
+
+```bash
+cd backend
+npm install
+```
+
+#### Environment Variables Setup
+
+Create a `.env` file in the backend folder:
+
+```env
+MONGODB_URI=your_mongodb_connection_string
+JWT_SECRET=your_jwt_secret_key
+NODE_ENV=development
+```
+
+#### Run the Server
+
+```bash
+# For development
+npm run dev
+
+# For production
+npm start
+```
+
+The server will run on port 5000
+
+### 2. Frontend Setup
+
+```bash
+cd frontend
+npm install
+```
+
+#### Run the Application
+
+```bash
+# Start Expo
+npm start
+
+# For Android
+npm run android
+
+# For iOS
+npm run ios
+
+# For Web
+npm run web
+```
+
+---
+
+## 📂 Project Structure
+
+```text
+margerges-database/
+├── backend/
+│   ├── models/          # Database models
+│   ├── routes/          # API routes
+│   ├── middleware/      # Middleware functions
+│   ├── config/          # Database configuration
+│   ├── index-fixed.js   # Main server file
+│   └── package.json
+├── frontend/
+│   ├── src/
+│   │   ├── screens/     # Application screens
+│   │   ├── services/    # API services
+│   │   ├── context/     # React Context
+│   │   └── utils/       # Utilities and helpers
+│   ├── assets/          # Images and icons
+│   ├── App.js          # Main application file
+│   └── package.json
+└── README.md
+```
+
+---
+
+## 🔌 API Endpoints
+
+### Authentication
+
+- `POST /api/auth/login` - User login
+- `POST /api/auth/register` - Register new account
+
+### Children Management
+
+- `GET /api/children` - Get children list
+- `POST /api/children` - Add new child
+- `PUT /api/children/:id` - Update child data
+- `DELETE /api/children/:id` - Delete child
+
+### Attendance
+
+- `GET /api/attendance` - Get attendance list
+- `POST /api/attendance` - Record attendance
+- `PUT /api/attendance/:id` - Update attendance
+
+### Servants
+
+- `GET /api/servants` - Get servants list
+- `POST /api/servants` - Add new servant
+- `GET /api/servants/statistics` - Get servants statistics
+
+### Classes
+
+- `GET /api/classes` - Get classes list
+- `POST /api/classes` - Create new class
+
+---
+
+## 👥 Usage
+
+### For Admin
+
+1. Login with admin account
+2. Manage children and servants
+3. View statistics and reports
+4. Manage classes
+
+### For Teacher
+
+1. Login to system
+2. Record attendance for children in their class
+3. View class statistics
+
+### For Servant
+
+1. Login to system
+2. View personal information
+3. Record attendance
+
+---
+
+## 🔒 Security
+
+- All passwords encrypted using bcrypt
+- Authentication using JWT tokens
+- Route protection with middleware
+- API-level permission verification
+
+---
+
+## 🌐 Deployment
+
+### Backend Deployment
+
+Backend can be deployed on:
+
+- **Heroku**
+- **Railway**
+- **DigitalOcean**
+- **AWS EC2**
+
+### Frontend Deployment
+
+- Mobile App: **Expo Build Service**
+- Web: **Netlify** or **Vercel**
+
+---
+
+## 📝 Contributing
+
+1. Fork the project
+2. Create a new branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---

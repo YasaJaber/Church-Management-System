@@ -1,0 +1,98 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.production
+
+# Keep example file but ignore actual env files
+!.env.example
+
+# Build outputs
+dist/
+build/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Logs
+logs
+*.log
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# nyc test coverage
+.nyc_output
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+
+# VS Code
+.vscode/
+
+# Test files (optional - you may want to keep these)
+test-*.js
+debug-*.js
+comprehensive-*.js
+check-*.js
+clean-*.js
+create-*.js
+fix-*.js
+final-*.js
+generate-*.js
+get-*.js
+reassign-*.js
+recreate-*.js
+redistribute-*.js
+remove-*.js
+search-*.js
+show-*.js
+simple-*.js
+statistics-*.js
+update-*.js
+verify-*.js
+quick-*.js
+new-*.js
+detailed-*.js
+find-*.js
+clear-*.js
+add-*.js
+calendar-*.js
+token.txt
+login_response.json
+
+# Documentation files
+*.md

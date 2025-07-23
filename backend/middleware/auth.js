@@ -4,31 +4,41 @@ const User = require("../models/User");
 // Middleware to verify JWT token
 const authMiddleware = async (req, res, next) => {
   try {
+    console.log('🔐 Auth middleware called');
     const token = req.header("Authorization")?.replace("Bearer ", "");
+    console.log('🔑 Token:', token ? 'Present' : 'Missing');
 
     if (!token) {
+      console.log('❌ No token provided');
       return res
         .status(401)
         .json({ message: "Access denied. No token provided." });
     }
 
+    console.log('🔍 Verifying token...');
     const decoded = jwt.verify(
       token,
       process.env.JWT_SECRET || "fallback_secret_key"
     );
+    console.log('✅ Token decoded successfully:', { userId: decoded.userId, role: decoded.role });
+    
     const user = await User.findById(decoded.userId)
       .select("-password")
       .populate("assignedClass");
 
+    console.log('👤 User found:', user ? user.name : 'Not found');
     if (!user || !user.isActive) {
+      console.log('❌ Invalid token or inactive user');
       return res
         .status(401)
         .json({ message: "Invalid token or inactive user." });
     }
 
     req.user = user;
+    console.log('✅ Auth middleware passed for:', user.name);
     next();
   } catch (error) {
+    console.log('❌ Auth middleware error:', error.message);
     res.status(401).json({ message: "Invalid token." });
   }
 };

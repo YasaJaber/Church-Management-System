@@ -1,13 +1,77 @@
-# Dependency directories
+# Dependencies
 node_modules/
+*/node_modules/
 
 # Environment variables
 .env
-.env.local
 .env.*
+*.env
+
+# Build outputs
+dist/
+build/
+*/dist/
+*/build/
+
+# Development and test files
+test-*.js
+debug-*.js
+check-*.js
+*.test.js
+*.spec.js
+coverage/
 
 # Log files
 npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Backup files
+*.backup
+*_backup.*
+*.bak
+
+# Temporary files
+*.tmp
+*.temp
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Expo
+.expo/
+.expo-shared/
+web-build/
+expo-env.d.ts
+
+# React Native
+.bundle/
+.gradle/
+android/app/build/
+ios/build/
+
+# Documentation temp files
+*.md.backup
 yarn-debug.log*
 yarn-error.log*
 

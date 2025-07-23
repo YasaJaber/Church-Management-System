@@ -1,9 +1,0 @@
-{
-  "devDependencies": {
-    "qrcode": "^1.5.4"
-  },
-  "dependencies": {
-    "node-fetch": "^2.7.0",
-    "react-native-calendars": "^1.1313.0"
-  }
-}

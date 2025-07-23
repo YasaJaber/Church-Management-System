@@ -2,7 +2,6 @@ const express = require("express");
 const Child = require("../models/Child");
 const Attendance = require("../models/Attendance");
 const User = require("../models/User");
-const FollowUpIgnore = require("../models/FollowUpIgnore");
 const { authMiddleware } = require("../middleware/auth");
 
 const router = express.Router();
@@ -14,16 +13,36 @@ router.get("/children", authMiddleware, async (req, res) => {
   try {
     const { date, classId } = req.query;
 
-    // Build query
+    console.log("\n" + "=".repeat(50));
+    console.log("🔍 GET /children API CALLED");
+    console.log("📅 Date:", date);
+    console.log("🏫 ClassId:", classId);
+    console.log("👤 User:", req.user?.username || "UNKNOWN");
+    console.log("🔐 Role:", req.user?.role || "UNKNOWN");
+    console.log("=".repeat(50));
+
+    // Build query - handle date range for both Date objects and strings
     let query = { type: "child" };
-    if (date) query.date = new Date(date);
+    if (date) {
+      // نبدأ من 00:00:00 للتاريخ
+      const dayStart = new Date(date + "T00:00:00.000Z");
+      // ننهي عند بداية اليوم التالي
+      const dayEnd = new Date(dayStart);
+      dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+      query.date = { $gte: dayStart, $lt: dayEnd };
+      console.log("📅 Date range query:");
+      console.log("   Start:", dayStart.toISOString());
+      console.log("   End:", dayEnd.toISOString());
+    }
 
     // Apply role-based filtering
     let targetClassId = classId;
-    if (req.user.role === "servant" && req.user.assignedClass) {
-      // Servants can only see their assigned class
+    if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
+      // Servants and classTeachers can only see their assigned class
       targetClassId = req.user.assignedClass._id.toString();
+      console.log("👤 Servant/ClassTeacher access - forced classId:", targetClassId);
     } else if (req.user.role !== "admin" && !req.user.assignedClass) {
+      console.log("❌ Access denied for non-admin without class");
       return res.status(403).json({
         success: false,
         error: "Access denied",
@@ -32,11 +51,18 @@ router.get("/children", authMiddleware, async (req, res) => {
 
     if (targetClassId) {
       // Need to get children in that class first
+      console.log("🔍 Filtering by class:", targetClassId);
       const childrenInClass = await Child.find({ class: targetClassId });
       const childIds = childrenInClass.map((child) => child._id);
+      console.log("👥 Found", childrenInClass.length, "children in class");
+      console.log(
+        "👥 Child IDs:",
+        childIds.map((id) => id.toString())
+      );
       query.person = { $in: childIds };
     }
 
+    console.log("🔍 Final query:", JSON.stringify(query));
     const attendanceRecords = await Attendance.find(query)
       .populate({
         path: "person",
@@ -44,14 +70,30 @@ router.get("/children", authMiddleware, async (req, res) => {
       })
       .sort({ date: -1 });
 
+    console.log("📊 Found", attendanceRecords.length, "attendance records");
+    console.log(
+      "📊 Records:",
+      attendanceRecords.map((r) => ({
+        child: r.person?.name,
+        status: r.status,
+        date: r.date,
+      }))
+    );
+
     // Transform data to match frontend expectations
     const transformedData = attendanceRecords.map((record) => ({
       _id: record._id,
       child: record.person,
-      date: record.date.toISOString().split("T")[0],
+      date:
+        typeof record.date === "string"
+          ? record.date
+          : record.date.toISOString().split("T")[0],
       status: record.status,
       notes: record.notes,
     }));
+
+    console.log("✅ Returning", transformedData.length, "records to frontend");
+    console.log("✅ Sample data:", transformedData.slice(0, 2));
 
     res.json({
       success: true,
@@ -73,10 +115,24 @@ router.post("/", authMiddleware, async (req, res) => {
   try {
     const { childId, date, status, notes } = req.body;
 
+    console.log("📨 POST /attendance called");
+    console.log("📄 Request body:", req.body);
+    console.log("🔍 Extracted values:");
+    console.log("   childId:", childId);
+    console.log("   date:", date);
+    console.log("   status:", status);
+    console.log("   notes:", notes);
+
     if (!childId || !date || !status) {
+      console.log("❌ Missing required fields:");
+      console.log("   childId missing:", !childId);
+      console.log("   date missing:", !date);
+      console.log("   status missing:", !status);
+
       return res.status(400).json({
         success: false,
         error: "Child ID, date, and status are required",
+        received: { childId: !!childId, date: !!date, status: !!status },
       });
     }
 
@@ -92,12 +148,26 @@ router.post("/", authMiddleware, async (req, res) => {
     // Parse date to midnight UTC for consistency with stored data
     const attendanceDate = new Date(date + "T00:00:00.000Z"); // Midnight UTC
 
-    // Check if attendance already exists
+    // Check if attendance already exists using date range
+    const dayStart = new Date(date + "T00:00:00.000Z");
+    const dayEnd = new Date(dayStart);
+    dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+
     const existingRecord = await Attendance.findOne({
       person: childId,
-      date: attendanceDate,
+      date: { $gte: dayStart, $lt: dayEnd },
       type: "child",
     });
+
+    console.log("🔍 Checking for existing attendance record:");
+    console.log("   Child ID:", childId);
+    console.log(
+      "   Date range:",
+      dayStart.toISOString(),
+      "to",
+      dayEnd.toISOString()
+    );
+    console.log("   Found existing:", existingRecord ? "YES" : "NO");
 
     let attendanceRecord;
 
@@ -122,19 +192,34 @@ router.post("/", authMiddleware, async (req, res) => {
       await attendanceRecord.save();
     }
 
-    // Populate the response
-    await attendanceRecord.populate({
-      path: "person",
-      populate: { path: "class" },
-    });
+    // Populate the response with all necessary details
+    await attendanceRecord.populate([
+      {
+        path: "person",
+        model: "Child",
+        populate: {
+          path: "class",
+          model: "Class",
+        },
+      },
+      {
+        path: "recordedBy",
+        model: "User",
+        select: "name", // Select only the name of the user
+      },
+    ]);
 
     // Transform to match frontend expectations
     const responseData = {
       _id: attendanceRecord._id,
-      child: attendanceRecord.person,
-      date: attendanceRecord.date.toISOString().split("T")[0],
+      child: attendanceRecord.person, // This is now populated with child and class details
+      date:
+        typeof attendanceRecord.date === "string"
+          ? attendanceRecord.date
+          : attendanceRecord.date.toISOString().split("T")[0],
       status: attendanceRecord.status,
       notes: attendanceRecord.notes,
+      recordedBy: attendanceRecord.recordedBy, // Include who recorded it
     };
 
     // Log attendance for debugging
@@ -142,7 +227,11 @@ router.post("/", authMiddleware, async (req, res) => {
     console.log(`   Child: ${attendanceRecord.person.name}`);
     console.log(`   Status: ${attendanceRecord.status}`);
     console.log(
-      `   Date: ${attendanceRecord.date.toISOString().split("T")[0]}`
+      `   Date: ${
+        typeof attendanceRecord.date === "string"
+          ? attendanceRecord.date
+          : attendanceRecord.date.toISOString().split("T")[0]
+      }`
     );
     console.log(`   Recorded by: ${req.user.name} (${req.user._id})`);
     console.log(
@@ -155,10 +244,17 @@ router.post("/", authMiddleware, async (req, res) => {
       message: "Attendance marked successfully",
     });
   } catch (error) {
-    console.error(error);
+    console.error("❌ Error in POST /attendance:", error);
+    console.error("Error details:", {
+      message: error.message,
+      stack: error.stack,
+      childId: req.body?.childId,
+      date: req.body?.date,
+      status: req.body?.status,
+    });
     res.status(500).json({
       success: false,
-      error: "Server error",
+      error: "Server error: " + error.message,
     });
   }
 });
@@ -177,13 +273,15 @@ router.delete("/:childId/:date", authMiddleware, async (req, res) => {
       });
     }
 
-    // Parse date to match stored format (midnight UTC)
-    const attendanceDate = new Date(date + "T00:00:00.000Z"); // Midnight UTC to match stored data
+    // Parse date to match stored format using date range
+    const dayStart = new Date(date + "T00:00:00.000Z");
+    const dayEnd = new Date(dayStart);
+    dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
 
-    // Find and delete the attendance record
+    // Find and delete the attendance record using date range
     const deletedRecord = await Attendance.findOneAndDelete({
       person: childId,
-      date: attendanceDate,
+      date: { $gte: dayStart, $lt: dayEnd },
       type: "child",
     });
 
@@ -287,206 +385,70 @@ router.post("/mark-all-present", async (req, res) => {
   }
 });
 
-// @route   GET /api/attendance/follow-up
-// @desc    Get children who have been absent for consecutive weeks (افتقاد)
+// @route   GET /api/attendance/recent-activity
+// @desc    Get recent attendance activity (last 10 records regardless of date)
 // @access  Protected
-router.get("/follow-up", authMiddleware, async (req, res) => {
+router.get("/recent-activity", authMiddleware, async (req, res) => {
   try {
-    console.log("🔍 Follow-up API called by:", req.user.name, req.user.role);
+    const { classId, limit = 10 } = req.query;
 
-    // Get the last 12 Friday dates
-    const getFridayDatesBack = (weeksBack) => {
-      const fridays = [];
-      const today = new Date();
+    console.log("\n" + "=".repeat(50));
+    console.log("🔍 GET /recent-activity API CALLED");
+    console.log("🏫 ClassId:", classId);
+    console.log("📊 Limit:", limit);
+    console.log("👤 User:", req.user?.username || "UNKNOWN");
+    console.log("🔐 Role:", req.user?.role || "UNKNOWN");
+    console.log("=".repeat(50));
 
-      for (let i = 0; i < weeksBack; i++) {
-        const friday = new Date();
-        const dayOfWeek = today.getDay();
-        let daysToSubtract;
+    // Build query
+    let query = { type: "child" };
 
-        if (dayOfWeek === 5) {
-          daysToSubtract = i * 7;
-        } else if (dayOfWeek > 5) {
-          daysToSubtract = dayOfWeek - 5 + i * 7;
-        } else {
-          daysToSubtract = dayOfWeek + 2 + i * 7;
-        }
-
-        friday.setDate(today.getDate() - daysToSubtract);
-        fridays.push(friday.toISOString().split("T")[0]);
-      }
-
-      return fridays;
-    };
-
-    const fridayDates = getFridayDatesBack(12);
-    // Sort dates from newest to oldest (most recent Friday first)
-    fridayDates.sort((a, b) => new Date(b) - new Date(a));
-
-    console.log("📅 Friday dates (newest first):", fridayDates);
-
-    // Build children query based on user role
-    let childrenQuery = { isActive: true };
-    if (req.user.role === "servant" && req.user.assignedClass) {
-      childrenQuery.class = req.user.assignedClass._id;
-    }
-
-    // Get all children
-    // Get a list of children to ignore
-    const ignoredChildren = await FollowUpIgnore.find({}).select("child -_id");
-    const ignoredChildIds = ignoredChildren.map((item) => item.child);
-
-    // Exclude ignored children from the main query
-    childrenQuery._id = { $nin: ignoredChildIds };
-
-    // Get all children that are not ignored
-    const children = await Child.find(childrenQuery).populate("class");
-
-    const followUpResults = {};
-
-    // Check each child's consecutive absence
-    for (const child of children) {
-      // Get attendance records for this child (sorted by date descending - newest first)
-      const attendanceRecords = await Attendance.find({
-        person: child._id,
-        type: "child",
-        date: { $in: fridayDates },
-      }).sort({ date: -1 });
-
-      // Create a map of dates to status
-      const attendanceMap = {};
-      attendanceRecords.forEach((record) => {
-        const dateStr = record.date.toISOString().split("T")[0];
-        attendanceMap[dateStr] = record.status;
-      });
-
-      // console.log(`👶 Checking child: ${child.name}`);
-      // console.log(`📊 Attendance map:`, attendanceMap);
-
-      // Count consecutive absences from the most recent Friday
-      // This counts CURRENT consecutive absences only - any attendance breaks the streak
-      let consecutiveAbsences = 0;
-      for (const date of fridayDates) {
-        const status = attendanceMap[date];
-        if (status === "absent" || !status) {
-          // Count as absent if marked absent OR if no record exists
-          consecutiveAbsences++;
-          console.log(
-            `   ❌ ${date}: ${
-              status || "no record"
-            } (consecutive: ${consecutiveAbsences})`
-          );
-        } else if (status === "present") {
-          // ANY attendance breaks the consecutive absence streak
-          // This child attended recently, so they don't need follow-up
-          console.log(
-            `   ✅ ${date}: present - child attended recently, no follow-up needed`
-          );
-          consecutiveAbsences = 0; // Reset to 0 since they attended
-          break; // Stop counting - child is not in follow-up list
-        }
-      }
-
-      console.log(
-        `🔢 ${child.name}: ${consecutiveAbsences} consecutive absences (current streak)`
-      );
-
-      // Only include children with 2+ consecutive absences
-      if (consecutiveAbsences >= 2) {
-        if (!followUpResults[consecutiveAbsences]) {
-          followUpResults[consecutiveAbsences] = [];
-        }
-
-        // Get the last attendance date for this child
-        const lastPresentRecord = attendanceRecords.find(
-          (r) => r.status === "present"
-        );
-
-        followUpResults[consecutiveAbsences].push({
-          _id: child._id,
-          name: child.name,
-          age: child.age,
-          phone: child.phone,
-          parentName: child.parentName,
-          class: child.class,
-          consecutiveAbsences,
-          lastAttendance: lastPresentRecord ? lastPresentRecord.date : null,
-          notes: child.notes || "",
-        });
-      }
-    }
-
-    // Sort each group by name
-    Object.keys(followUpResults).forEach((key) => {
-      followUpResults[key].sort((a, b) => a.name.localeCompare(b.name, "ar"));
-    });
-
-    // Calculate summary statistics
-    const totalFollowUpChildren = Object.values(followUpResults).reduce(
-      (sum, group) => sum + group.length,
-      0
-    );
-
-    const groupSummary = Object.keys(followUpResults)
-      .map((weeks) => ({
-        consecutiveWeeks: parseInt(weeks),
-        count: followUpResults[weeks].length,
-        children: followUpResults[weeks],
-      }))
-      .sort((a, b) => a.consecutiveWeeks - b.consecutiveWeeks);
-
-    console.log(`📊 Found ${totalFollowUpChildren} children needing follow-up`);
-
-    res.json({
-      success: true,
-      data: {
-        summary: {
-          totalFollowUpChildren,
-          groupsCount: Object.keys(followUpResults).length,
-          userRole: req.user.role,
-          className: req.user.assignedClass?.name || "جميع الفصول",
-        },
-        groups: groupSummary,
-        lastUpdated: new Date(),
-        note: "الأطفال الذين غابوا جمعتين متتاليتين أو أكثر",
-      },
-    });
-  } catch (error) {
-    console.error("❌ Error in follow-up route:", error);
-    res.status(500).json({
-      success: false,
-      error: "خطأ في الخادم",
-    });
-  }
-});
-
-// @route   POST /api/attendance/ignore-follow-up
-// @desc    Add a child to the follow-up ignore list for the session
-// @access  Protected
-router.post("/ignore-follow-up", authMiddleware, async (req, res) => {
-  try {
-    const { childId } = req.body;
-
-    if (!childId) {
-      return res.status(400).json({
+    // Apply role-based filtering
+    let targetClassId = classId;
+    if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
+      // Servants and classTeachers can only see their assigned class
+      targetClassId = req.user.assignedClass._id.toString();
+      console.log("👤 Servant/ClassTeacher access - forced classId:", targetClassId);
+    } else if (req.user.role !== "admin" && !req.user.assignedClass) {
+      console.log("❌ Access denied for non-admin without class");
+      return res.status(403).json({
         success: false,
-        error: "Child ID is required",
+        error: "Access denied",
       });
     }
 
-    // Use updateOne with upsert to avoid duplicates and keep it clean
-    await FollowUpIgnore.updateOne(
-      { child: childId },
-      { $set: { ignoredBy: req.user._id } },
-      { upsert: true } // Creates the document if it doesn't exist
-    );
+    if (targetClassId) {
+      // Need to get children in that class first
+      console.log("🔍 Filtering by class:", targetClassId);
+      const childrenInClass = await Child.find({ class: targetClassId });
+      const childIds = childrenInClass.map(child => child._id);
+      query.person = { $in: childIds };
+      console.log("👶 Found children in class:", childIds.length);
+    }
+
+    console.log("🔍 Final query:", JSON.stringify(query));
+
+    // Get recent attendance records, sorted by creation date (newest first)
+    const attendanceRecords = await Attendance.find(query)
+      .populate({
+        path: "person",
+        populate: {
+          path: "class",
+          select: "stage grade",
+        },
+      })
+      .sort({ createdAt: -1 }) // Most recent first
+      .limit(parseInt(limit));
+
+    console.log("📊 Found attendance records:", attendanceRecords.length);
 
     res.json({
       success: true,
-      message: "Child will be ignored in the follow-up list.",
+      data: attendanceRecords,
     });
+
   } catch (error) {
-    console.error("Error ignoring follow-up child:", error);
+    console.error("❌ Error in recent-activity:", error);
     res.status(500).json({
       success: false,
       error: "Server error",
@@ -495,4 +457,3 @@ router.post("/ignore-follow-up", authMiddleware, async (req, res) => {
 });
 
 module.exports = router;
-

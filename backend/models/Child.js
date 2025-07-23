@@ -7,13 +7,6 @@ const childSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    age: {
-      type: Number,
-      required: false, // جعلناه اختياري
-      min: 3,
-      max: 18,
-      default: 8, // عمر افتراضي
-    },
     phone: {
       type: String,
       trim: true,

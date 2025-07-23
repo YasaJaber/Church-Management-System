@@ -1,8 +1,11 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const User = require("../models/User");
 const Attendance = require("../models/Attendance");
 const Class = require("../models/Class");
 const { authMiddleware, adminOnly } = require("../middleware/auth");
+const { zonedTimeToUtc, utcToZonedTime, format } = require('date-fns-tz');
+const { subDays, getDay } = require('date-fns');
 
 const router = express.Router();
 
@@ -13,54 +16,51 @@ const getDateString = (daysAgo = 0) => {
   return date.toISOString().split("T")[0];
 };
 
-// Helper function to get the most recent Friday
+// Helper function to get the most recent Friday based on Cairo time
 const getMostRecentFriday = () => {
-  const today = new Date();
-  const dayOfWeek = today.getDay(); // 0 = Sunday, 5 = Friday
-  let daysAgo;
+  // 1. Get current date in Cairo's time zone
+  const now = new Date();
+  // Using en-US locale is a reliable way to get machine-readable date parts
+  const cairoDate = new Date(now.toLocaleString('en-US', { timeZone: 'Africa/Cairo' }));
 
-  if (dayOfWeek === 5) {
-    // Today is Friday
-    daysAgo = 0;
-  } else if (dayOfWeek > 5) {
-    // Saturday (6) = 1 day ago
-    daysAgo = dayOfWeek - 5;
-  } else {
-    // Sunday (0) to Thursday (4) = go back to previous Friday
-    daysAgo = dayOfWeek + 2;
-  }
+  // 2. Calculate days to subtract to get to the previous Friday
+  // Day of week for Cairo (0=Sun, 1=Mon, ..., 5=Fri, 6=Sat)
+  const dayOfWeek = cairoDate.getDay(); 
+  const daysToSubtract = (dayOfWeek + 2) % 7;
 
-  const friday = new Date();
-  friday.setDate(friday.getDate() - daysAgo);
-  return friday.toISOString().split("T")[0];
+  // 3. Calculate the date of the most recent Friday
+  const fridayDate = new Date(cairoDate);
+  fridayDate.setDate(cairoDate.getDate() - daysToSubtract);
+
+  // 4. Format the date manually to YYYY-MM-DD to avoid timezone issues from .toISOString()
+  const year = fridayDate.getFullYear();
+  const month = String(fridayDate.getMonth() + 1).padStart(2, '0');
+  const day = String(fridayDate.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
 };
 
-// Helper function to get Friday dates going back N weeks
+// Helper function to get Friday dates going back N weeks using date-fns-tz
 const getFridayDatesBack = (weeksBack) => {
   const fridays = [];
-  const today = new Date();
+  const timeZone = 'Africa/Cairo';
+  
+  // 1. Get the current date and time in the Cairo time zone.
+  const now = new Date();
+  let cairoNow = utcToZonedTime(now, timeZone);
 
+  // 2. Find the most recent Friday.
+  // In date-fns, Sunday is 0, Monday is 1, ..., Friday is 5, Saturday is 6.
+  let daysToSubtract = (getDay(cairoNow) - 5 + 7) % 7;
+  let mostRecentFriday = subDays(cairoNow, daysToSubtract);
+
+  // 3. Generate Friday dates for the past N weeks.
   for (let i = 0; i < weeksBack; i++) {
-    const friday = new Date();
-    // Find this week's Friday first
-    const dayOfWeek = today.getDay();
-    let daysToSubtract;
-
-    if (dayOfWeek === 5) {
-      // Today is Friday
-      daysToSubtract = i * 7;
-    } else if (dayOfWeek > 5) {
-      // Weekend, go to last Friday
-      daysToSubtract = dayOfWeek - 5 + i * 7;
-    } else {
-      // Weekday, go to previous Friday
-      daysToSubtract = dayOfWeek + 2 + i * 7;
-    }
-
-    friday.setDate(today.getDate() - daysToSubtract);
-    fridays.push(friday.toISOString().split("T")[0]);
+    const friday = subDays(mostRecentFriday, i * 7);
+    // 4. Format the date to YYYY-MM-DD string.
+    fridays.push(format(friday, 'yyyy-MM-dd', { timeZone }));
   }
-
+  
   return fridays;
 };
 
@@ -92,196 +92,7 @@ router.get("/", authMiddleware, adminOnly, async (req, res) => {
   }
 });
 
-// @route   GET /api/servants/:id
-// @desc    Get single servant details
-// @access  Protected (Admin only)
-router.get("/:id", authMiddleware, adminOnly, async (req, res) => {
-  try {
-    const servant = await User.findById(req.params.id).select("-password");
-
-    if (!servant || servant.role !== "servant") {
-      return res.status(404).json({
-        success: false,
-        error: "Servant not found",
-      });
-    }
-
-    res.json({
-      success: true,
-      data: servant,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      error: "Server error",
-    });
-  }
-});
-
-// @route   POST /api/servants
-// @desc    Add new individual servant
-// @access  Protected (Admin only)
-router.post("/", authMiddleware, adminOnly, async (req, res) => {
-  try {
-    const { name, username, password, phone } = req.body;
-
-    if (!name || !username || !password || !phone) {
-      return res.status(400).json({
-        success: false,
-        error: "Name, username, password, and phone are required",
-      });
-    }
-
-    // Check if username already exists
-    const existingUser = await User.findOne({ username });
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        error: "Username already exists",
-      });
-    }
-
-    // Check if phone already exists
-    const existingPhone = await User.findOne({ phone });
-    if (existingPhone) {
-      return res.status(400).json({
-        success: false,
-        error: "Phone number already exists",
-      });
-    }
-
-    // Create new servant
-    const newServant = new User({
-      username,
-      password, // Will be automatically hashed by the model's pre-save middleware
-      name,
-      phone,
-      role: "servant",
-      assignedClass: null, // Individual servants don't have assigned classes
-    });
-
-    await newServant.save();
-
-    // Remove password from response
-    const servantResponse = newServant.toObject();
-    delete servantResponse.password;
-
-    res.status(201).json({
-      success: true,
-      data: servantResponse,
-      message: "Servant added successfully",
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      error: "Server error",
-    });
-  }
-});
-
-// @route   PUT /api/servants/:id
-// @desc    Update servant information
-// @access  Protected (Admin only)
-router.put("/:id", authMiddleware, adminOnly, async (req, res) => {
-  try {
-    const { name, username, phone, password } = req.body;
-
-    const servant = await User.findById(req.params.id);
-    if (!servant || servant.role !== "servant") {
-      return res.status(404).json({
-        success: false,
-        error: "Servant not found",
-      });
-    }
-
-    // Check if username already exists for other users
-    if (username && username !== servant.username) {
-      const existingUser = await User.findOne({
-        username,
-        _id: { $ne: req.params.id },
-      });
-      if (existingUser) {
-        return res.status(400).json({
-          success: false,
-          error: "Username already exists",
-        });
-      }
-    }
-
-    // Check if phone already exists for other users
-    if (phone && phone !== servant.phone) {
-      const existingPhone = await User.findOne({
-        phone,
-        _id: { $ne: req.params.id },
-      });
-      if (existingPhone) {
-        return res.status(400).json({
-          success: false,
-          error: "Phone number already exists",
-        });
-      }
-    }
-
-    // Update servant fields
-    const updateData = {};
-    if (name !== undefined) updateData.name = name;
-    if (username !== undefined) updateData.username = username;
-    if (phone !== undefined) updateData.phone = phone;
-
-    // Handle password update separately to ensure it gets hashed
-    if (password) {
-      updateData.password = password;
-    }
-
-    const updatedServant = await User.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true }
-    ).select("-password");
-
-    res.json({
-      success: true,
-      data: updatedServant,
-      message: "Servant updated successfully",
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      error: "Server error",
-    });
-  }
-});
-
-// @route   DELETE /api/servants/:id
-// @desc    Delete servant
-// @access  Protected (Admin only)
-router.delete("/:id", authMiddleware, adminOnly, async (req, res) => {
-  try {
-    const servant = await User.findById(req.params.id);
-    if (!servant || servant.role !== "servant") {
-      return res.status(404).json({
-        success: false,
-        error: "Servant not found",
-      });
-    }
-
-    await User.findByIdAndDelete(req.params.id);
-
-    res.json({
-      success: true,
-      message: "Servant deleted successfully",
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      error: "Server error",
-    });
-  }
-});
+// ATTENDANCE ROUTES MUST COME BEFORE /:id ROUTE TO AVOID CONFLICTS
 
 // @route   GET /api/servants/attendance
 // @desc    Get servant attendance by date
@@ -355,42 +166,50 @@ router.post("/attendance", authMiddleware, adminOnly, async (req, res) => {
       });
     }
 
-    // Parse date to midnight UTC for consistency with stored data
-    const attendanceDate = new Date(date + "T00:00:00.000Z"); // Midnight UTC
-
     // Check if attendance already exists
-    let attendanceRecord = await Attendance.findOne({
+    let attendance = await Attendance.findOne({
       person: servantId,
-      date: attendanceDate,
       personModel: "User",
+      date: date,
     });
 
-    if (attendanceRecord) {
-      // Update existing record
-      attendanceRecord.status = status;
-      attendanceRecord.notes = notes || "";
-      attendanceRecord.recordedBy = req.user._id;
-      await attendanceRecord.save();
+    if (attendance) {
+      // Update existing attendance
+      attendance.status = status;
+      attendance.notes = notes || "";
+      attendance.recordedBy = req.user._id;
+      attendance.updatedAt = new Date();
+      await attendance.save();
+
+      console.log(`📝 Servant attendance updated:
+         Servant: ${servant.name}
+         Status: ${status}
+         Date: ${date}
+         Updated by: ${req.user._id}`);
     } else {
-      // Create new record
-      attendanceRecord = new Attendance({
+      // Create new attendance record
+      attendance = new Attendance({
+        type: "servant",
         person: servantId,
         personModel: "User",
-        date: attendanceDate,
+        date: date,
         status: status,
-        type: "servant",
         notes: notes || "",
         recordedBy: req.user._id,
       });
-      await attendanceRecord.save();
-    }
+      await attendance.save();
 
-    await attendanceRecord.populate("person", "name phone role");
+      console.log(`📝 Servant attendance recorded:
+         Servant: ${servant.name}
+         Status: ${status}
+         Date: ${date}
+         Recorded by: ${req.user._id}`);
+    }
 
     res.json({
       success: true,
-      data: attendanceRecord,
-      message: "Servant attendance marked successfully",
+      data: attendance,
+      message: "Attendance recorded successfully",
     });
   } catch (error) {
     console.error(error);
@@ -402,582 +221,551 @@ router.post("/attendance", authMiddleware, adminOnly, async (req, res) => {
 });
 
 // @route   POST /api/servants/attendance/mark-all-present
-// @desc    Mark all individual servants as present for a date
+// @desc    Mark all servants as present for a date
 // @access  Protected (Admin only)
-router.post(
-  "/attendance/mark-all-present",
-  authMiddleware,
-  adminOnly,
-  async (req, res) => {
-    try {
-      const { date } = req.body;
+router.post("/attendance/mark-all-present", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    console.log("📨 Request body:", req.body);
+    const { date, recordedBy } = req.body;
 
-      if (!date) {
-        return res.status(400).json({
-          success: false,
-          error: "Date is required",
-        });
-      }
-
-      // Get all individual servants
-      const servants = await User.find({ role: "servant" });
-
-      if (servants.length === 0) {
-        return res.status(404).json({
-          success: false,
-          error: "No servants found",
-        });
-      }
-
-      // Parse date to midnight UTC for consistency with stored data
-      const attendanceDate = new Date(date + "T00:00:00.000Z"); // Midnight UTC
-
-      // Mark attendance for each servant
-      let updatedCount = 0;
-      for (const servant of servants) {
-        let attendanceRecord = await Attendance.findOne({
-          person: servant._id,
-          date: attendanceDate,
-          personModel: "User",
-        });
-
-        if (attendanceRecord) {
-          attendanceRecord.status = "present";
-          attendanceRecord.notes = "";
-          attendanceRecord.recordedBy = req.user._id;
-          await attendanceRecord.save();
-        } else {
-          attendanceRecord = new Attendance({
-            person: servant._id,
-            personModel: "User",
-            date: attendanceDate,
-            status: "present",
-            type: "servant",
-            notes: "",
-            recordedBy: req.user._id,
-          });
-          await attendanceRecord.save();
-        }
-        updatedCount++;
-      }
-
-      res.json({
-        success: true,
-        message: `Marked ${updatedCount} servants as present`,
-        count: updatedCount,
-      });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({
+    if (!date) {
+      return res.status(400).json({
         success: false,
-        error: "Server error",
+        error: "Date is required",
       });
     }
-  }
-);
+    
+    // Use the provided recordedBy or fall back to the authenticated user's ID
+    const recordedById = recordedBy || req.user._id;
+    console.log("🔑 Using recordedById:", recordedById, "(from request:", recordedBy, ", from user:", req.user._id, ")");
 
-// @route   GET /api/servants/:servantId/statistics
-// @desc    Get statistics for a specific servant
-// @access  Protected (Admin only)
-router.get(
-  "/:servantId/statistics",
-  authMiddleware,
-  adminOnly,
-  async (req, res) => {
-    try {
-      const { servantId } = req.params;
+    // Get all servants
+    const servants = await User.find({ role: "servant" });
 
-      // Find the servant
-      const servant = await User.findById(servantId).select("-password");
-      if (!servant || servant.role !== "servant") {
-        return res.status(404).json({
-          success: false,
-          error: "Servant not found",
-        });
-      }
-
-      // Get all attendance records for this servant
-      const servantAttendance = await Attendance.find({
-        person: servantId,
+    const results = [];
+    for (const servant of servants) {
+      // Check if attendance already exists
+      let attendance = await Attendance.findOne({
+        person: servant._id,
         personModel: "User",
-      }).sort({ date: -1 });
-
-      // Calculate statistics
-      const totalRecords = servantAttendance.length;
-      const presentRecords = servantAttendance.filter(
-        (r) => r.status === "present"
-      );
-      const absentRecords = servantAttendance.filter(
-        (r) => r.status === "absent"
-      );
-      const lateRecords = servantAttendance.filter((r) => r.status === "late");
-
-      const presentCount = presentRecords.length;
-      const absentCount = absentRecords.length;
-      const lateCount = lateRecords.length;
-
-      const attendanceRate =
-        totalRecords > 0 ? ((presentCount / totalRecords) * 100).toFixed(1) : 0;
-
-      res.json({
-        success: true,
-        data: {
-          servant: servant,
-          summary: {
-            totalRecords,
-            presentCount,
-            absentCount,
-            lateCount,
-            attendanceRate: parseFloat(attendanceRate),
-          },
-          recentRecords: servantAttendance.slice(0, 10),
-        },
+        date: date,
       });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({
-        success: false,
-        error: "Server error",
-      });
+
+      if (attendance) {
+        // Update existing attendance
+        attendance.status = "present";
+        attendance.recordedBy = recordedById;
+        attendance.updatedAt = new Date();
+        await attendance.save();
+        results.push({ servant: servant.name, action: "updated" });
+      } else {
+        // Create new attendance record
+        attendance = new Attendance({
+          type: "servant",
+          person: servant._id,
+          personModel: "User",
+          date: date,
+          status: "present",
+          recordedBy: recordedById,
+        });
+        await attendance.save();
+        results.push({ servant: servant.name, action: "created" });
+      }
     }
+
+    console.log(`📝 All servants marked present for ${date} by ${recordedById}`);
+
+    res.json({
+      success: true,
+      data: results,
+      message: `All ${servants.length} servants marked present for ${date}`,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
   }
-);
+});
+
+// SERVANTS STATISTICS ROUTES - MUST COME BEFORE /:id ROUTE
 
 // @route   GET /api/servants/statistics/general
-// @desc    Get general statistics for all individual servants
+// @desc    Get general servants statistics
 // @access  Protected (Admin only)
-router.get(
-  "/statistics/general",
-  authMiddleware,
-  adminOnly,
-  async (req, res) => {
-    try {
-      const servants = await User.find({ role: "servant" });
-      const totalServants = servants.length;
-
-      // Get most recent Friday attendance
-      const mostRecentFriday = getMostRecentFriday();
-      const todayAttendance = await Attendance.find({
-        date: mostRecentFriday,
-        personModel: "User",
-      }).populate({
-        path: "person",
-        match: { role: "servant" },
-      });
-
-      const presentToday = todayAttendance.filter(
-        (record) =>
-          record.person &&
-          (record.status === "present" || record.status === "late")
-      ).length;
-
-      // Calculate average attendance over the last 12 weeks (3 months)
-      const last12Fridays = getFridayDatesBack(12);
-      const recentAttendance = await Attendance.find({
-        date: { $in: last12Fridays },
-        personModel: "User",
-      }).populate({
-        path: "person",
-        match: { role: "servant" },
-      });
-
-      const filteredRecentAttendance = recentAttendance.filter(
-        (record) => record.person
-      );
-      const totalRecentPresent = filteredRecentAttendance.filter(
-        (record) => record.status === "present" || record.status === "late"
-      ).length;
-      const totalRecentRecords = filteredRecentAttendance.length;
-
-      const averageAttendance =
-        totalRecentRecords > 0
-          ? ((totalRecentPresent / totalRecentRecords) * 100).toFixed(1)
-          : "0";
-
-      res.json({
-        success: true,
-        data: {
-          totalServants,
-          presentToday,
-          averageAttendance: parseFloat(averageAttendance),
-          consistentCount: 0, // This would require more complex calculation
-        },
-      });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({
-        success: false,
-        error: "Server error",
-      });
-    }
+router.get("/statistics/general", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const totalServants = await User.countDocuments({ role: "servant" });
+    
+    // Get today's attendance count
+    const today = new Date().toISOString().split("T")[0];
+    const todayAttendanceRecords = await Attendance.find({
+      date: today,
+      personModel: "User",
+      status: "present"
+    }).populate({
+      path: "person",
+      match: { role: "servant" }
+    });
+    
+    // Filter out null persons (only count actual servants)
+    const todayPresent = todayAttendanceRecords.filter(record => record.person !== null).length;
+    
+    // Calculate overall attendance rate
+    const totalAttendanceRecords = await Attendance.countDocuments({
+      personModel: "User"
+    });
+    
+    const presentRecords = await Attendance.countDocuments({
+      personModel: "User",
+      status: "present"
+    });
+    
+    const attendanceRate = totalAttendanceRecords > 0 ? 
+      ((presentRecords / totalAttendanceRecords) * 100).toFixed(1) : 0;
+    
+    // Calculate average weekly attendance (simplified)
+    const averageAttendance = Math.round(totalServants * (attendanceRate / 100));
+    
+    res.json({
+      success: true,
+      data: {
+        totalServants,
+        presentToday: todayPresent,
+        attendanceRate: parseFloat(attendanceRate),
+        averageAttendance,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
   }
-);
+});
 
 // @route   GET /api/servants/statistics/attendance
-// @desc    Get attendance statistics for a period
+// @desc    Get servants attendance statistics
 // @access  Protected (Admin only)
-router.get(
-  "/statistics/attendance",
-  authMiddleware,
-  adminOnly,
-  async (req, res) => {
-    try {
-      const { days = 7 } = req.query;
-
-      // Convert days to weeks (since we only have Fridays)
-      let numberOfWeeks;
-      if (days <= 7) numberOfWeeks = 4; // "This week" = last 4 weeks
-      else if (days <= 30) numberOfWeeks = 8; // "This month" = last 8 weeks
-      else numberOfWeeks = 12; // "This quarter" = last 12 weeks
-
-      // Get Friday dates for the period
-      const fridayDates = getFridayDatesBack(numberOfWeeks);
-
-      // Create weekly attendance data for chart (each Friday)
-      const weeklyData = [];
-
-      for (const fridayDate of fridayDates.reverse()) {
-        const weekRecords = await Attendance.find({
-          date: fridayDate,
-          personModel: "User",
-        }).populate({
-          path: "person",
-          match: { role: "servant" },
-        });
-
-        const filteredRecords = weekRecords.filter((record) => record.person);
-
-        weeklyData.push({
-          date: fridayDate,
-          present: filteredRecords.filter(
-            (record) => record.status === "present"
-          ).length,
-          absent: filteredRecords.filter((record) => record.status === "absent")
-            .length,
-          late: filteredRecords.filter((record) => record.status === "late")
-            .length,
-        });
+router.get("/statistics/attendance", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { days = 7 } = req.query;
+    const daysBack = parseInt(days);
+    
+    // Calculate date range
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysBack);
+    
+    const startDateStr = startDate.toISOString().split("T")[0];
+    const endDateStr = endDate.toISOString().split("T")[0];
+    
+    // Get attendance records for servants in date range
+    const attendanceRecords = await Attendance.find({
+      date: { $gte: startDateStr, $lte: endDateStr },
+      personModel: "User",
+    }).populate({
+      path: "person",
+      match: { role: "servant" },
+      select: "name",
+    });
+    
+    // Filter out null persons (non-servants)
+    const servantAttendance = attendanceRecords.filter(
+      (record) => record.person !== null
+    );
+    
+    // Calculate statistics
+    const totalRecords = servantAttendance.length;
+    const presentCount = servantAttendance.filter(
+      (record) => record.status === "present"
+    ).length;
+    const absentCount = servantAttendance.filter(
+      (record) => record.status === "absent"
+    ).length;
+    
+    // Create daily statistics for chart
+    const dailyStats = {};
+    servantAttendance.forEach(record => {
+      if (!dailyStats[record.date]) {
+        dailyStats[record.date] = { present: 0, absent: 0, total: 0 };
       }
-
-      res.json({
-        success: true,
-        data: {
-          daily: weeklyData, // Keep "daily" for frontend compatibility
-          period: `آخر ${numberOfWeeks} جمعة`,
-          note: "البيانات تظهر حضور الخدام الفرديين في مدرسة الأحد (أيام الجمعة فقط)",
-        },
-      });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({
-        success: false,
-        error: "Server error",
-      });
-    }
+      dailyStats[record.date][record.status]++;
+      dailyStats[record.date].total++;
+    });
+    
+    // Convert to array format for frontend
+    const daily = Object.keys(dailyStats).map(date => ({
+      date,
+      present: dailyStats[date].present,
+      absent: dailyStats[date].absent,
+      total: dailyStats[date].total,
+      attendanceRate: dailyStats[date].total > 0 ? 
+        ((dailyStats[date].present / dailyStats[date].total) * 100).toFixed(1) : 0
+    })).sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    res.json({
+      success: true,
+      data: {
+        totalRecords,
+        presentCount,
+        absentCount,
+        attendanceRate: totalRecords > 0 ? ((presentCount / totalRecords) * 100).toFixed(1) : 0,
+        dateRange: { startDate: startDateStr, endDate: endDateStr },
+        daily, // Add daily statistics for chart
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
   }
-);
+});
 
 // @route   GET /api/servants/statistics/individual
-// @desc    Get individual statistics for each servant
+// @desc    Get individual servants statistics
 // @access  Protected (Admin only)
-router.get(
-  "/statistics/individual",
-  authMiddleware,
-  adminOnly,
-  async (req, res) => {
-    try {
-      const servants = await User.find({ role: "servant" });
-
-      const individualStats = [];
-
-      for (const servant of servants) {
-        const servantRecords = await Attendance.find({
+router.get("/statistics/individual", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const servants = await User.find({ role: "servant" })
+      .select("name phone")
+      .sort({ name: 1 });
+    
+    // Get attendance data for each servant
+    const servantsWithStats = await Promise.all(
+      servants.map(async (servant) => {
+        const totalAttendance = await Attendance.countDocuments({
           person: servant._id,
           personModel: "User",
         });
-
-        const presentCount = servantRecords.filter(
-          (r) => r.status === "present"
-        ).length;
-        const absentCount = servantRecords.filter(
-          (r) => r.status === "absent"
-        ).length;
-        const lateCount = servantRecords.filter(
-          (r) => r.status === "late"
-        ).length;
-        const totalRecords = servantRecords.length;
-
-        const attendanceRate =
-          totalRecords > 0
-            ? ((presentCount / totalRecords) * 100).toFixed(1)
-            : "0";
-
-        individualStats.push({
+        
+        const presentAttendance = await Attendance.countDocuments({
+          person: servant._id,
+          personModel: "User",
+          status: "present",
+        });
+        
+        const absentAttendance = await Attendance.countDocuments({
+          person: servant._id,
+          personModel: "User",
+          status: "absent",
+        });
+        
+        const lateAttendance = await Attendance.countDocuments({
+          person: servant._id,
+          personModel: "User",
+          status: "late",
+        });
+        
+        const attendanceRate = totalAttendance > 0 ? 
+          ((presentAttendance / totalAttendance) * 100).toFixed(1) : 0;
+        
+        return {
           _id: servant._id,
           name: servant.name,
           phone: servant.phone,
-          presentCount,
-          absentCount,
-          lateCount,
-          totalRecords,
+          totalAttendance,
+          presentAttendance,
+          presentCount: presentAttendance,
+          absentCount: absentAttendance,
+          lateCount: lateAttendance,
           attendanceRate: parseFloat(attendanceRate),
-          note: `${totalRecords} جمعة من مدرسة الأحد`,
-        });
-      }
-
-      // Sort by attendance rate
-      individualStats.sort((a, b) => b.attendanceRate - a.attendanceRate);
-
-      res.json({
-        success: true,
-        data: individualStats,
-      });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({
-        success: false,
-        error: "Server error",
-      });
-    }
+        };
+      })
+    );
+    
+    res.json({
+      success: true,
+      data: servantsWithStats,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
   }
-);
-
-// @route   GET /api/servants/statistics/export
-// @desc    Export detailed servants statistics report
-// @access  Protected (Admin only)
-router.get(
-  "/statistics/export",
-  authMiddleware,
-  adminOnly,
-  async (req, res) => {
-    try {
-      const servants = await User.find({ role: "servant" });
-      const today = new Date();
-      const todayFormatted = today.toLocaleDateString("ar-EG", {
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-      });
-
-      // Add UTF-8 BOM and proper CSV headers
-      let csvData = "\uFEFF"; // UTF-8 BOM for proper Arabic display
-      csvData += `"اسم الخادم","رقم التليفون","إجمالي الحضور","حاضر","غائب","متأخر","نسبة الحضور","آخر حضور"\n`;
-
-      for (const servant of servants) {
-        const servantRecords = await Attendance.find({
-          person: servant._id,
-          personModel: "User",
-        }).sort({ date: -1 });
-
-        const presentCount = servantRecords.filter(
-          (r) => r.status === "present"
-        ).length;
-        const absentCount = servantRecords.filter(
-          (r) => r.status === "absent"
-        ).length;
-        const lateCount = servantRecords.filter(
-          (r) => r.status === "late"
-        ).length;
-        const totalRecords = servantRecords.length;
-
-        const attendanceRate =
-          totalRecords > 0
-            ? ((presentCount / totalRecords) * 100).toFixed(1)
-            : "0";
-
-        // Find last attendance date
-        const lastRecord = servantRecords[0];
-        const lastAttendance = lastRecord
-          ? new Date(lastRecord.date).toLocaleDateString("ar-EG", {
-              year: "numeric",
-              month: "2-digit",
-              day: "2-digit",
-            })
-          : "لم يسجل حضور";
-
-        csvData += `"${servant.name}","${servant.phone}","${totalRecords}","${presentCount}","${absentCount}","${lateCount}","${attendanceRate}%","${lastAttendance}"\n`;
-      }
-
-      // Add summary statistics
-      const totalServants = servants.length;
-      const allRecords = await Attendance.find({
-        personModel: "User",
-      }).populate({
-        path: "person",
-        match: { role: "servant" },
-      });
-
-      const filteredRecords = allRecords.filter((record) => record.person);
-      const totalRecords = filteredRecords.length;
-      const totalPresent = filteredRecords.filter(
-        (r) => r.status === "present"
-      ).length;
-      const overallRate =
-        totalRecords > 0
-          ? ((totalPresent / totalRecords) * 100).toFixed(1)
-          : "0";
-
-      csvData += `\n"إحصائيات عامة","","","","","","",""\n`;
-      csvData += `"إجمالي الخدام","${totalServants}","","","","","",""\n`;
-      csvData += `"إجمالي سجلات الحضور","${totalRecords}","","","","","",""\n`;
-      csvData += `"النسبة العامة للحضور","${overallRate}%","","","","","",""\n`;
-      csvData += `"تاريخ التقرير","${todayFormatted}","","","","","",""\n`;
-
-      res.json({
-        success: true,
-        data: csvData,
-        message: "تم تصدير تقرير إحصائيات الخدام بنجاح",
-      });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({
-        success: false,
-        error: "حدث خطأ في تصدير التقرير",
-      });
-    }
-  }
-);
+});
 
 // @route   GET /api/servants/statistics/follow-up
-// @desc    Get servants who have been absent for consecutive weeks (افتقاد الخدام)
+// @desc    Get servants requiring follow-up
 // @access  Protected (Admin only)
-router.get(
-  "/statistics/follow-up",
-  authMiddleware,
-  adminOnly,
-  async (req, res) => {
-    try {
-      console.log(
-        "🔍 Servants follow-up API called by:",
-        req.user.name,
-        req.user.role
-      );
-
-      // Get the last 12 Friday dates
-      const fridayDates = getFridayDatesBack(12);
-      // Sort dates from newest to oldest (most recent Friday first)
-      fridayDates.sort((a, b) => new Date(b) - new Date(a));
-
-      console.log("📅 Friday dates (newest first):", fridayDates);
-
-      // Get all servants
-      const servants = await User.find({ role: "servant" }).select("-password");
-
-      const followUpResults = {};
-
-      // Check each servant's consecutive absence
-      for (const servant of servants) {
-        // Get attendance records for this servant (sorted by date descending - newest first)
-        const attendanceRecords = await Attendance.find({
-          person: servant._id,
-          personModel: "User",
-          date: { $in: fridayDates },
-        }).sort({ date: -1 });
-
-        // Create a map of dates to status
-        const attendanceMap = {};
-        attendanceRecords.forEach((record) => {
-          const dateStr = record.date.toISOString().split("T")[0];
-          attendanceMap[dateStr] = record.status;
-        });
-
-        console.log(`👤 Checking servant: ${servant.name}`);
-        console.log(`📊 Attendance map:`, attendanceMap);
-
-        // Count consecutive absences from the most recent Friday
-        // This counts CURRENT consecutive absences only - any attendance breaks the streak
-        let consecutiveAbsences = 0;
-        for (const date of fridayDates) {
-          const status = attendanceMap[date];
-          if (status === "absent" || !status) {
-            // Count as absent if marked absent OR if no record exists
-            consecutiveAbsences++;
-            console.log(
-              `   ❌ ${date}: ${
-                status || "no record"
-              } (consecutive: ${consecutiveAbsences})`
-            );
-          } else if (status === "present") {
-            // ANY attendance breaks the consecutive absence streak
-            // This servant attended recently, so they don't need follow-up
-            console.log(
-              `   ✅ ${date}: present - servant attended recently, no follow-up needed`
-            );
-            consecutiveAbsences = 0; // Reset to 0 since they attended
-            break; // Stop counting - servant is not in follow-up list
+router.get("/statistics/follow-up", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    console.log("🔍 Servants follow-up API called by:", req.user.name, req.user.role);
+    
+    const servants = await User.find({ role: "servant" })
+      .select("name phone")
+      .sort({ name: 1 });
+    
+    // Get Friday dates for the last 12 weeks (3 months)
+    const fridayDates = getFridayDatesBack(12);
+    console.log("📅 Friday dates (newest first):", fridayDates);
+    
+    const servantsNeedingFollowUp = [];
+    
+    for (const servant of servants) {
+      console.log(`👤 Checking servant: ${servant.name}`);
+      
+      // Get all attendance records for this servant
+      const attendanceRecords = await Attendance.find({
+        person: servant._id,
+        personModel: "User",
+      });
+      
+      // Create a map of attendance by date
+      const attendanceMap = {};
+      attendanceRecords.forEach(record => {
+        attendanceMap[record.date] = record.status;
+      });
+      
+      console.log(`📊 Attendance map:`, attendanceMap);
+      
+      // Check consecutive absences starting from the most recent Friday
+      let consecutiveAbsences = 0;
+      let lastPresentDate = null;
+      
+      for (const fridayDate of fridayDates) {
+        const status = attendanceMap[fridayDate];
+        if (status === "present") {
+          console.log(`   ✅ ${fridayDate}: present (breaking streak)`);
+          if (!lastPresentDate) {
+            lastPresentDate = fridayDate;
           }
-        }
-
-        console.log(
-          `🔢 ${servant.name}: ${consecutiveAbsences} consecutive absences (current streak)`
-        );
-
-        // Only include servants with 2+ consecutive absences
-        if (consecutiveAbsences >= 2) {
-          if (!followUpResults[consecutiveAbsences]) {
-            followUpResults[consecutiveAbsences] = [];
-          }
-
-          // Get the last attendance date for this servant
-          const lastPresentRecord = attendanceRecords.find(
-            (r) => r.status === "present"
-          );
-
-          followUpResults[consecutiveAbsences].push({
-            _id: servant._id,
-            name: servant.name,
-            phone: servant.phone,
-            consecutiveAbsences,
-            lastAttendance: lastPresentRecord ? lastPresentRecord.date : null,
-            assignedClass: servant.assignedClass || null,
-          });
+          break; // Found a present record, break the streak
+        } else if (status === "absent") {
+          consecutiveAbsences++;
+          console.log(`   ❌ ${fridayDate}: absent (consecutive: ${consecutiveAbsences})`);
+        } else {
+          // No record found - count as absent for follow-up purposes
+          consecutiveAbsences++;
+          console.log(`   ❌ ${fridayDate}: no record (consecutive: ${consecutiveAbsences})`);
         }
       }
+      
+      console.log(`🔢 ${servant.name}: ${consecutiveAbsences} consecutive absences${consecutiveAbsences > 0 ? ' (current streak)' : ''}`);
+      
+      // If 3 or more consecutive absences, add to follow-up list
+      if (consecutiveAbsences >= 3) {
+        servantsNeedingFollowUp.push({
+          _id: servant._id,
+          name: servant.name,
+          phone: servant.phone,
+          consecutiveAbsences,
+          lastPresentDate: lastPresentDate,
+        });
+      }
+    }
+    
+    console.log(`📊 Found ${servantsNeedingFollowUp.length} servants needing follow-up`);
+    
+    res.json({
+      success: true,
+      data: servantsNeedingFollowUp,
+      criteria: "3+ consecutive Friday absences",
+      totalServantsChecked: servants.length,
+    });
+  } catch (error) {
+    console.error("❌ Error in servants follow-up statistics:", error);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
+  }
+});
 
-      // Sort each group by name
-      Object.keys(followUpResults).forEach((key) => {
-        followUpResults[key].sort((a, b) => a.name.localeCompare(b.name, "ar"));
-      });
-
-      // Calculate summary statistics
-      const totalFollowUpServants = Object.values(followUpResults).reduce(
-        (sum, group) => sum + group.length,
-        0
-      );
-
-      const groupSummary = Object.keys(followUpResults)
-        .map((weeks) => ({
-          consecutiveWeeks: parseInt(weeks),
-          count: followUpResults[weeks].length,
-          servants: followUpResults[weeks],
-        }))
-        .sort((a, b) => a.consecutiveWeeks - b.consecutiveWeeks);
-
-      console.log(
-        `📊 Found ${totalFollowUpServants} servants needing follow-up`
-      );
-
-      res.json({
-        success: true,
-        data: {
-          summary: {
-            totalFollowUpServants,
-            groupsCount: Object.keys(followUpResults).length,
-            userRole: req.user.role,
-          },
-          groups: groupSummary,
-          lastUpdated: new Date(),
-          note: "الخدام الذين غابوا جمعتين متتاليتين أو أكثر",
-        },
-      });
-    } catch (error) {
-      console.error("❌ Error in servants follow-up route:", error);
-      res.status(500).json({
+// @route   GET /api/servants/:id
+// @desc    Get single servant details
+// @access  Protected (Admin only)
+router.get("/:id", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    // Add a check to ensure the ID is a valid ObjectId
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
         success: false,
-        error: "خطأ في الخادم",
+        error: "Invalid servant ID format",
       });
     }
+
+    const servant = await User.findById(req.params.id).select("-password");
+
+    if (!servant || servant.role !== "servant") {
+      return res.status(404).json({
+        success: false,
+        error: "Servant not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      data: servant,
+    });
+  } catch (error) {
+    console.error("❌ Error in GET /api/servants/:id route:", error);
+    // Check for CastError specifically
+    if (error.name === 'CastError') {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid ID format. Please check the servant ID.",
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
   }
-);
+});
+
+// @route   POST /api/servants
+// @desc    Create new servant
+// @access  Protected (Admin only)
+router.post("/", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { name, phone } = req.body;
+
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        error: "Name is required",
+      });
+    }
+
+    // Generate username from name (remove spaces, make lowercase, add timestamp for uniqueness)
+    let baseUsername = name.toLowerCase().replace(/\s+/g, '');
+    let username = baseUsername;
+    let counter = 1;
+    
+    // Ensure username is unique
+    while (await User.findOne({ username })) {
+      username = `${baseUsername}${counter}`;
+      counter++;
+    }
+
+    // Check if phone already exists (if provided)
+    if (phone) {
+      const existingPhone = await User.findOne({ phone });
+      if (existingPhone) {
+        return res.status(400).json({
+          success: false,
+          error: "Phone number already exists",
+        });
+      }
+    }
+
+    const servant = new User({
+      name,
+      username,
+      password: "servant123", // Default password
+      phone: phone || "",
+      role: "servant",
+    });
+
+    await servant.save();
+
+    res.status(201).json({
+      success: true,
+      data: {
+        _id: servant._id,
+        name: servant.name,
+        username: servant.username,
+        phone: servant.phone,
+        role: servant.role,
+      },
+      message: "Servant created successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
+  }
+});
+
+// @route   PUT /api/servants/:id
+// @desc    Update servant
+// @access  Protected (Admin only)
+router.put("/:id", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const { name, phone } = req.body;
+
+    const servant = await User.findById(req.params.id);
+    if (!servant || servant.role !== "servant") {
+      return res.status(404).json({
+        success: false,
+        error: "Servant not found",
+      });
+    }
+
+    // Check if phone already exists for other users
+    if (phone && phone !== servant.phone) {
+      const existingPhone = await User.findOne({
+        phone,
+        _id: { $ne: req.params.id },
+      });
+      if (existingPhone) {
+        return res.status(400).json({
+          success: false,
+          error: "Phone number already exists",
+        });
+      }
+    }
+
+    // Update servant fields
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (phone !== undefined) updateData.phone = phone;
+
+    const updatedServant = await User.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true }
+    ).select("-password");
+
+    res.json({
+      success: true,
+      data: updatedServant,
+      message: "Servant updated successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
+  }
+});
+
+// @route   DELETE /api/servants/:id
+// @desc    Delete servant
+// @access  Protected (Admin only)
+router.delete("/:id", authMiddleware, adminOnly, async (req, res) => {
+  try {
+    const servant = await User.findById(req.params.id);
+    if (!servant || servant.role !== "servant") {
+      return res.status(404).json({
+        success: false,
+        error: "Servant not found",
+      });
+    }
+
+    await User.findByIdAndDelete(req.params.id);
+
+    res.json({
+      success: true,
+      message: "Servant deleted successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
+  }
+});
 
 module.exports = router;

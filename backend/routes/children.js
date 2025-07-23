@@ -10,16 +10,26 @@ const router = express.Router();
 // @access  Protected
 router.get("/", authMiddleware, async (req, res) => {
   try {
+    console.log("\n" + "=".repeat(50));
+    console.log("🔍 GET /children API CALLED");
+    console.log("👤 User:", req.user?.username || "UNKNOWN");
+    console.log("🔐 Role:", req.user?.role || "UNKNOWN");
+    console.log("🏫 Assigned Class:", req.user?.assignedClass || "NONE");
+    console.log("=".repeat(50));
+
     let childrenQuery = {};
 
     // Role-based access control
     if (req.user.role === "admin") {
       // Admin sees all children
       childrenQuery = {};
-    } else if (req.user.role === "servant" && req.user.assignedClass) {
-      // Servant sees only their class children
+      console.log("👑 Admin access - showing all children");
+    } else if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
+      // Servant or Class Teacher sees only their class children
       childrenQuery = { class: req.user.assignedClass._id };
+      console.log("👤 Servant/ClassTeacher access - filtering by class:", req.user.assignedClass._id);
     } else {
+      console.log("❌ Access denied - role:", req.user.role, "assignedClass:", req.user.assignedClass);
       return res.status(403).json({
         success: false,
         error: "Access denied",
@@ -139,8 +149,8 @@ router.post("/", authMiddleware, async (req, res) => {
 
     // تحديد الفصل تلقائياً حسب المستخدم
     let targetClassId = classId;
-    if (req.user.role === "servant" && req.user.assignedClass) {
-      // الخادم يضيف في فصله فقط
+    if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
+      // الخادم أو المدرس يضيف في فصله فقط
       targetClassId = req.user.assignedClass._id;
     } else if (!targetClassId) {
       // إذا لم يحدد فصل، استخدم أول فصل متاح (للأدمن)

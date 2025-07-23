@@ -18,7 +18,7 @@ const attendanceSchema = new mongoose.Schema(
       enum: ["Child", "User"],
     },
     date: {
-      type: Date,
+      type: String, // Changed from Date to String
       required: true,
       index: true,
     },
