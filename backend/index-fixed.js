@@ -57,6 +57,16 @@ app.get("/health", (req, res) => {
   });
 });
 
+// API Health check endpoint  
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: "healthy", 
+    timestamp: new Date().toISOString(),
+    server: "church-management-api",
+    database: mongoose.connection.readyState === 1 ? "connected" : "disconnected"
+  });
+});
+
 // Connect to MongoDB
 mongoose
   .connect(process.env.MONGODB_URI)
