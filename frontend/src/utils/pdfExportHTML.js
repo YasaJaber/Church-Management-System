@@ -380,9 +380,12 @@ export const prepareAttendanceDataForExport = (statisticsData) => {
   }
 };
 
-export const fetchAttendanceDataForExport = async (attendanceAPI, selectedClass, selectedPeriod) => {
+export const fetchAttendanceDataForExport = async (attendanceAPI, selectedClass, selectedPeriod, selectedClassName = null) => {
   try {
     console.log("🔍 جلب بيانات الحضور للتصدير...");
+    console.log("📋 الفصل المختار:", selectedClass);
+    console.log("📚 اسم الفصل المختار:", selectedClassName);
+    console.log("📅 الفترة المختارة:", selectedPeriod);
     
     const endDate = new Date();
     const startDate = new Date();
@@ -403,18 +406,44 @@ export const fetchAttendanceDataForExport = async (attendanceAPI, selectedClass,
         const dateString = currentDate.toISOString().split('T')[0];
         
         try {
+          console.log(`📅 جلب بيانات تاريخ ${dateString} للفصل ${selectedClass || 'جميع الفصول'}`);
           const response = await attendanceAPI.getAttendanceByDate(dateString, selectedClass);
           
           if (response.success && response.data && Array.isArray(response.data)) {
-            response.data.forEach(record => {
+            console.log(`✅ تم جلب ${response.data.length} سجل لتاريخ ${dateString}`);
+            
+            // فلتر إضافي للتأكد من الفصل المختار (في حالة وجود مشكلة في الـ backend)
+            let filteredData = response.data;
+            if (selectedClass && selectedClass !== "") {
+              filteredData = response.data.filter(record => {
+                const recordClassId = record.child?.class?._id || record.classId;
+                const recordClassName = record.child?.class?.name || record.className;
+                
+                // فلتر بحسب ID أولاً، ثم بحسب اسم الفصل كاحتياط
+                const matchesById = recordClassId === selectedClass;
+                const matchesByName = selectedClassName && recordClassName === selectedClassName;
+                
+                return matchesById || matchesByName;
+              });
+              console.log(`🔍 بعد فلتر الفصل: ${filteredData.length} سجل من أصل ${response.data.length}`);
+            }
+            
+            filteredData.forEach(record => {
+              const childName = record.child?.name || record.childName || "غير محدد";
+              const className = record.child?.class?.name || record.className || "غير محدد";
+              
+              console.log(`👤 إضافة سجل: ${childName} - ${className}`);
+              
               exportData.push({
-                childName: record.child?.name || record.childName || "غير محدد",
-                className: record.child?.class?.name || record.className || "غير محدد",
+                childName: childName,
+                className: className,
                 date: dateString,
                 status: record.status || "absent",
                 notes: record.notes || ""
               });
             });
+          } else {
+            console.log(`❌ لا توجد بيانات لتاريخ ${dateString}`);
           }
         } catch (apiError) {
           console.log(`تعذر جلب بيانات ${dateString}:`, apiError.message);
@@ -424,31 +453,55 @@ export const fetchAttendanceDataForExport = async (attendanceAPI, selectedClass,
       currentDate.setDate(currentDate.getDate() + 1);
     }
     
-    // بيانات تجريبية إذا لم توجد بيانات
-    if (exportData.length === 0) {
-      console.log("📋 إنشاء بيانات تجريبية للاختبار...");
-      const sampleData = [
-        { childName: "أحمد محمد علي السيد", className: "ابتدائي - الصف الأول", date: "2025-01-17", status: "present", notes: "حضور ممتاز ومشاركة فعالة" },
-        { childName: "فاطمة عبد الرحمن محمود", className: "ابتدائي - الصف الأول", date: "2025-01-17", status: "absent", notes: "عذر مرضي - تم التواصل مع الأسرة" },
-        { childName: "محمد أحمد السيد إبراهيم", className: "ابتدائي - الصف الثاني", date: "2025-01-17", status: "present", notes: "تحسن ملحوظ في الحضور" },
-        { childName: "عائشة محمود أحمد علي", className: "إعدادي - الصف الأول", date: "2025-01-10", status: "present", notes: "قيادة ممتازة للأنشطة الجماعية" },
-        { childName: "يوسف إبراهيم محمد حسن", className: "إعدادي - الصف الثاني", date: "2025-01-10", status: "absent", notes: "سفر عائلي - عودة الأسبوع القادم" },
-        { childName: "مريم سعد الدين محمد", className: "ثانوي - الصف الأول", date: "2025-01-03", status: "present", notes: "تفوق دراسي وروحي متميز" },
-        { childName: "عمر علي محمود أحمد", className: "ثانوي - الصف الثاني", date: "2024-12-27", status: "present", notes: "مشاركة إيجابية في الأنشطة" },
-        { childName: "زينب محمد عبد الله", className: "جامعي - السنة الأولى", date: "2024-12-27", status: "absent", notes: "امتحانات الفصل الدراسي" }
-      ];
+    console.log(`✅ تم جلب ${exportData.length} سجل حضور إجمالي`);
+    
+    // إضافة تسجيل للتحقق من تنوع الفصول
+    if (exportData.length > 0) {
+      const uniqueClasses = [...new Set(exportData.map(record => record.className))];
+      console.log(`📊 الفصول الموجودة في البيانات: ${uniqueClasses.join(', ')}`);
       
-      exportData.push(...sampleData);
+      if (selectedClass && selectedClass !== "" && uniqueClasses.length > 1) {
+        console.warn(`⚠️ تحذير: يوجد أكثر من فصل في البيانات رغم اختيار فصل واحد!`);
+        console.warn(`🔍 الفصل المختار: ${selectedClass}`);
+        console.warn(`📚 الفصول الموجودة: ${uniqueClasses.join(', ')}`);
+        
+        // فلتر نهائي للبيانات للتأكد من عرض الفصل المختار فقط
+        if (selectedClassName && selectedClassName !== "جميع الفصول") {
+          console.log("🧹 تطبيق فلتر نهائي للبيانات حسب اسم الفصل...");
+          const originalLength = exportData.length;
+          exportData = exportData.filter(record => record.className === selectedClassName);
+          console.log(`🔍 تم تصفية البيانات: ${exportData.length} من أصل ${originalLength}`);
+        }
+      }
     }
     
-    console.log(`✅ تم جلب ${exportData.length} سجل حضور`);
+    // فلتر نهائي إضافي للتأكد من تنظيف البيانات
+    if (selectedClass && selectedClass !== "" && selectedClassName && selectedClassName !== "جميع الفصول") {
+      const finalFilteredData = exportData.filter(record => record.className === selectedClassName);
+      if (finalFilteredData.length !== exportData.length) {
+        console.log(`🧹 تطبيق فلتر نهائي إضافي: ${finalFilteredData.length} من أصل ${exportData.length}`);
+        exportData = finalFilteredData;
+      }
+    }
+    
+    console.log(`📊 البيانات النهائية للتصدير: ${exportData.length} سجل`);
+    
+    // تحقق نهائي من البيانات
+    if (exportData.length > 0 && selectedClass && selectedClass !== "") {
+      const finalUniqueClasses = [...new Set(exportData.map(record => record.className))];
+      if (finalUniqueClasses.length > 1) {
+        console.error(`❌ خطأ: ما زالت البيانات تحتوي على فصول متعددة: ${finalUniqueClasses.join(', ')}`);
+        console.error(`❌ الفصل المطلوب: ${selectedClassName || selectedClass}`);
+      } else {
+        console.log(`✅ تأكيد: جميع البيانات تخص فصل واحد: ${finalUniqueClasses[0]}`);
+      }
+    }
+    
     return exportData;
     
   } catch (error) {
     console.error("❌ خطأ في جلب بيانات الحضور للتصدير:", error);
     
-    return [
-      { childName: "بيانات تجريبية", className: "اختبار النظام", date: new Date().toISOString().split('T')[0], status: "present", notes: "اختبار دعم العربية الجديد" }
-    ];
+    return [];
   }
 };

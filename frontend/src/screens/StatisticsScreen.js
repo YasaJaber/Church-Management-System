@@ -167,22 +167,23 @@ const StatisticsScreen = () => {
       // عرض رسالة بدء التصدير
       Alert.alert("تصدير PDF", "جاري تحضير تقرير الحضور...", [], { cancelable: false });
       
+      // الحصول على اسم الفصل للعرض
+      const selectedClassName = selectedClass && classes.length > 0 
+        ? classes.find(c => c._id === selectedClass)?.name || "جميع الفصول"
+        : "جميع الفصول";
+      
       // جلب بيانات الحضور للتصدير
       const attendanceData = await fetchAttendanceDataForExport(
         attendanceAPI, 
         selectedClass, 
-        selectedPeriod
+        selectedPeriod,
+        selectedClassName
       );
       
       if (attendanceData.length === 0) {
         Alert.alert("تنبيه", "لا توجد بيانات حضور للتصدير في الفترة المحددة");
         return;
       }
-      
-      // الحصول على اسم الفصل للعرض
-      const selectedClassName = selectedClass && classes.length > 0 
-        ? classes.find(c => c._id === selectedClass)?.name || "جميع الفصول"
-        : "جميع الفصول";
       
       // تصدير البيانات إلى PDF
       const result = await exportAttendanceToPDF(
