@@ -519,6 +519,9 @@ const HomeScreen = ({ navigation }) => {
           })}
         </Text>
         <Text style={styles.copticDateText}>
+          {getCopticDate()}
+        </Text>
+        <Text style={styles.copticDateText}>
           {getCopticDate()} أ.م
         </Text>
       </View>
@@ -593,6 +596,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#95a5a6",
     textAlign: "center",
+  },
+  copticDateText: {
+    fontSize: 11,
+    color: "#e67e22",
+    textAlign: "center",
+    marginTop: 2,
+    fontWeight: "600",
   },
   copticDateText: {
     fontSize: 11,
