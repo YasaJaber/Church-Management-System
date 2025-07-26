@@ -13,6 +13,89 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { statisticsAPI, attendanceAPI, servantsAPI } from "../services/api";
 
+// دالة لحساب التاريخ القبطي
+const getCopticDate = () => {
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = today.getMonth() + 1; // JavaScript months are 0-indexed
+  const day = today.getDate();
+  
+  // تحديد إذا كانت السنة الميلادية كبيسة
+  const isGregorianLeapYear = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+  
+  // تحديد تاريخ بداية السنة القبطية (11 سبتمبر في السنة العادية، 12 سبتمبر في الكبيسة)
+  const copticNewYearDay = isGregorianLeapYear ? 12 : 11;
+  
+  // حساب السنة القبطية
+  let copticYear;
+  if (month > 9 || (month === 9 && day >= copticNewYearDay)) {
+    copticYear = year - 283; // إذا كنا بعد بداية السنة القبطية
+  } else {
+    copticYear = year - 284; // إذا كنا قبل بداية السنة القبطية
+  }
+  
+  // الأشهر القبطية مع التواريخ الميلادية المقابلة
+  const copticMonths = [
+    { name: "توت", startMonth: 9, startDay: copticNewYearDay },
+    { name: "بابه", startMonth: 10, startDay: copticNewYearDay },
+    { name: "هاتور", startMonth: 11, startDay: copticNewYearDay - 1 },
+    { name: "كيهك", startMonth: 12, startDay: copticNewYearDay - 1 },
+    { name: "طوبه", startMonth: 1, startDay: copticNewYearDay - 2 },
+    { name: "أمشير", startMonth: 2, startDay: copticNewYearDay - 3 },
+    { name: "برمهات", startMonth: 3, startDay: copticNewYearDay - 1 },
+    { name: "برموده", startMonth: 4, startDay: copticNewYearDay - 2 },
+    { name: "بشنس", startMonth: 5, startDay: copticNewYearDay - 2 },
+    { name: "بؤونه", startMonth: 6, startDay: copticNewYearDay - 3 },
+    { name: "أبيب", startMonth: 7, startDay: copticNewYearDay - 3 },
+    { name: "مسرى", startMonth: 8, startDay: copticNewYearDay - 4 },
+    { name: "النسئ", startMonth: 9, startDay: copticNewYearDay - 5 }
+  ];
+  
+  // تحديد الشهر والاسم القبطي
+  let copticMonth = "";
+  let copticDay = 0;
+  
+  // البحث عن الشهر القبطي المناسب
+  for (let i = 0; i < copticMonths.length; i++) {
+    const currentMonth = copticMonths[i];
+    const nextMonth = copticMonths[i + 1];
+    
+    if (month === currentMonth.startMonth && day >= currentMonth.startDay) {
+      copticMonth = currentMonth.name;
+      copticDay = day - currentMonth.startDay + 1;
+      break;
+    } else if (nextMonth && month === nextMonth.startMonth && day < nextMonth.startDay) {
+      copticMonth = currentMonth.name;
+      // حساب الأيام من بداية الشهر القبطي
+      const daysInGregorianMonth = new Date(year, currentMonth.startMonth, 0).getDate();
+      const remainingDaysInStartMonth = daysInGregorianMonth - currentMonth.startDay + 1;
+      copticDay = remainingDaysInStartMonth + day;
+      break;
+    }
+  }
+  
+  // معالجة الحالات الخاصة
+  if (!copticMonth) {
+    if (month === 9 && day < copticNewYearDay) {
+      // أواخر شهر مسرى
+      copticMonth = "مسرى";
+      copticDay = day + (30 - (copticNewYearDay - 7));
+    } else if (month === 9 && day >= (copticNewYearDay - 5) && day < copticNewYearDay) {
+      // شهر النسئ
+      copticMonth = "النسئ";
+      copticDay = day - (copticNewYearDay - 6);
+    }
+  }
+  
+  // التأكد من صحة البيانات
+  if (!copticMonth || copticDay <= 0) {
+    copticMonth = "توت";
+    copticDay = 1;
+  }
+  
+  return `${copticDay} ${copticMonth} ${copticYear}`;
+};
+
 const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -435,6 +518,9 @@ const HomeScreen = ({ navigation }) => {
             day: "numeric",
           })}
         </Text>
+        <Text style={styles.copticDateText}>
+          {getCopticDate()} أ.م
+        </Text>
       </View>
 
       {renderQuickStats()}
@@ -507,6 +593,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#95a5a6",
     textAlign: "center",
+  },
+  copticDateText: {
+    fontSize: 11,
+    color: "#7f8c8d",
+    textAlign: "center",
+    marginTop: 2,
+    fontStyle: "italic",
   },
   quickStats: {
     backgroundColor: "#fff",
