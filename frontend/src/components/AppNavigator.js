@@ -12,6 +12,7 @@ import AttendanceScreen from "../screens/AttendanceScreen";
 import StatisticsScreen from "../screens/StatisticsScreen";
 import ServantsScreen from "../screens/ServantsScreen";
 import ProfileScreen from "../screens/ProfileScreen";
+import PastoralCareScreen from "../screens/PastoralCareScreen";
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -81,6 +82,16 @@ const ServantTabs = () => {
           title: "الإحصائيات",
           tabBarIcon: ({ color, size }) => (
             <Text style={{ color, fontSize: size }}>📊</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="PastoralCare"
+        component={PastoralCareScreen}
+        options={{
+          title: "الافتقاد",
+          tabBarIcon: ({ color, size }) => (
+            <Text style={{ color, fontSize: size }}>🤝</Text>
           ),
         }}
       />
@@ -163,6 +174,16 @@ const AdminTabs = () => {
           title: "الإحصائيات",
           tabBarIcon: ({ color, size }) => (
             <Text style={{ color, fontSize: size }}>📊</Text>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="PastoralCare"
+        component={PastoralCareScreen}
+        options={{
+          title: "الافتقاد",
+          tabBarIcon: ({ color, size }) => (
+            <Text style={{ color, fontSize: size }}>🤝</Text>
           ),
         }}
       />

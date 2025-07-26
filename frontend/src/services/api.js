@@ -954,4 +954,53 @@ export const cacheManager = {
   }
 };
 
+// Pastoral Care API calls
+export const pastoralCareAPI = {
+  getAbsentChildren: async () => {
+    try {
+      console.log("📋 API: Getting absent children for pastoral care...");
+      console.log("📋 API: Making request to /pastoral-care/absent-children");
+      
+      const response = await api.get("/pastoral-care/absent-children");
+      
+      console.log("📋 API: Response status:", response.status);
+      console.log("📋 API: Response headers:", response.headers);
+      console.log("📋 API: Full response data:", response.data);
+      console.log("📋 API: Response data type:", typeof response.data);
+      console.log("📋 API: Response.data.success:", response.data?.success);
+      console.log("📋 API: Response.data.data length:", response.data?.data?.length);
+      
+      // The backend returns { success: true, data: [...], date: "...", totalAbsent: ..., message: "..." }
+      // Return it directly without wrapping
+      console.log("📋 API: Returning response.data directly");
+      return response.data;
+    } catch (error) {
+      console.error("❌ API: Error getting absent children:", error);
+      console.error("❌ API: Error response:", error.response?.data);
+      console.error("❌ API: Error status:", error.response?.status);
+      return {
+        success: false,
+        error: error.response?.data?.error || "حدث خطأ في جلب قائمة الافتقاد",
+      };
+    }
+  },
+
+  removeChild: async (childId, reason = "") => {
+    try {
+      console.log(`🗑️ Removing child ${childId} from pastoral care with reason: ${reason}`);
+      const response = await api.delete(`/pastoral-care/remove-child/${childId}`, {
+        data: { reason }
+      });
+      console.log("✅ Child removed from pastoral care:", response.data);
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error("❌ Error removing child from pastoral care:", error);
+      return {
+        success: false,
+        error: error.response?.data?.error || "حدث خطأ في إزالة الطفل من قائمة الافتقاد",
+      };
+    }
+  },
+};
+
 export default api;
