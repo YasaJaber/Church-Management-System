@@ -939,4 +939,140 @@ router.get("/class/:classId", authMiddleware, async (req, res) => {
   }
 });
 
+// @route   GET /api/statistics/export-attendance
+// @desc    Export attendance data for PDF generation
+// @access  Protected
+router.get("/export-attendance", authMiddleware, async (req, res) => {
+  try {
+    const { startDate, endDate, classId } = req.query;
+    
+    console.log("📊 Export attendance request:", { startDate, endDate, classId });
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: "تواريخ البداية والنهاية مطلوبة"
+      });
+    }
+
+    // Build match criteria
+    const matchCriteria = {
+      date: {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      }
+    };
+
+    if (classId && classId !== 'all') {
+      matchCriteria.classId = classId;
+    }
+
+    // Get attendance data with populated information
+    const attendanceData = await Attendance.find(matchCriteria)
+      .populate('classId', 'name')
+      .populate('presentChildren.childId', 'name')
+      .populate('absentChildren.childId', 'name')
+      .sort({ date: -1 })
+      .lean();
+
+    console.log(`📊 Found ${attendanceData.length} attendance records`);
+
+    // Format the data for PDF export
+    const formattedData = attendanceData.map(record => ({
+      date: record.date,
+      className: record.classId?.name || 'Unknown Class',
+      presentCount: record.presentChildren?.length || 0,
+      absentCount: record.absentChildren?.length || 0,
+      totalChildren: (record.presentChildren?.length || 0) + (record.absentChildren?.length || 0),
+      presentChildren: record.presentChildren?.map(child => ({
+        name: child.childId?.name || 'Unknown Child',
+        hasExcuse: child.hasExcuse || false,
+        excuse: child.excuse || ''
+      })) || [],
+      absentChildren: record.absentChildren?.map(child => ({
+        name: child.childId?.name || 'Unknown Child',
+        hasExcuse: child.hasExcuse || false,
+        excuse: child.excuse || ''
+      })) || []
+    }));
+
+    res.json({
+      success: true,
+      data: formattedData,
+      totalRecords: formattedData.length,
+      period: { startDate, endDate },
+      classFilter: classId === 'all' ? 'جميع الفصول' : classId
+    });
+
+  } catch (error) {
+    console.error("Error exporting attendance data:", error);
+    res.status(500).json({
+      success: false,
+      error: "خطأ في تصدير بيانات الحضور",
+      details: error.message
+    });
+  }
+});
+
+// @route   GET /api/statistics/export-class-attendance
+// @desc    Export specific class attendance data
+// @access  Protected
+router.get("/export-class-attendance", authMiddleware, async (req, res) => {
+  try {
+    const { classId, startDate, endDate } = req.query;
+    
+    if (!classId || !startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        error: "معرف الفصل وتواريخ البداية والنهاية مطلوبة"
+      });
+    }
+
+    const attendanceData = await Attendance.find({
+      classId: classId,
+      date: {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      }
+    })
+    .populate('classId', 'name')
+    .populate('presentChildren.childId', 'name')
+    .populate('absentChildren.childId', 'name')
+    .sort({ date: -1 })
+    .lean();
+
+    const formattedData = attendanceData.map(record => ({
+      date: record.date,
+      className: record.classId?.name || 'Unknown Class',
+      presentCount: record.presentChildren?.length || 0,
+      absentCount: record.absentChildren?.length || 0,
+      totalChildren: (record.presentChildren?.length || 0) + (record.absentChildren?.length || 0),
+      presentChildren: record.presentChildren?.map(child => ({
+        name: child.childId?.name || 'Unknown Child',
+        hasExcuse: child.hasExcuse || false,
+        excuse: child.excuse || ''
+      })) || [],
+      absentChildren: record.absentChildren?.map(child => ({
+        name: child.childId?.name || 'Unknown Child',
+        hasExcuse: child.hasExcuse || false,
+        excuse: child.excuse || ''
+      })) || []
+    }));
+
+    res.json({
+      success: true,
+      data: formattedData,
+      totalRecords: formattedData.length,
+      className: formattedData[0]?.className || 'Unknown Class'
+    });
+
+  } catch (error) {
+    console.error("Error exporting class attendance:", error);
+    res.status(500).json({
+      success: false,
+      error: "خطأ في تصدير بيانات حضور الفصل"
+    });
+  }
+});
+
 module.exports = router;
