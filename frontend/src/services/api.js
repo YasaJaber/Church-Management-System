@@ -7,7 +7,7 @@ import { Platform } from "react-native";
 let BASE_URL;
 
 // Force use production backend for testing
-const USE_PRODUCTION_BACKEND = true; // Set to false to use local backend
+const USE_PRODUCTION_BACKEND = false; // Set to false to use local backend
 
 if (__DEV__ && !USE_PRODUCTION_BACKEND) {
   // Development mode - use the actual IP address for all platforms

@@ -13,12 +13,10 @@ import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { useAuth } from "../context/AuthContext";
 import { statisticsAPI, classesAPI, attendanceAPI } from "../services/api";
-import { 
-  exportAttendanceToPDF, 
-  fetchAttendanceDataForExport 
+import {
+  exportAttendanceToPDF
 } from "../utils/pdfExportHTML";
-
-const StatisticsScreen = () => {
+import { fetchAttendanceDataForExport } from "../utils/fixedPdfExport";const StatisticsScreen = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
