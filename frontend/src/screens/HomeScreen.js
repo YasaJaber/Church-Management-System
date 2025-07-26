@@ -521,9 +521,7 @@ const HomeScreen = ({ navigation }) => {
         <Text style={styles.copticDateText}>
           {getCopticDate()}
         </Text>
-        <Text style={styles.copticDateText}>
-          {getCopticDate()} أ.م
-        </Text>
+
       </View>
 
       {renderQuickStats()}
