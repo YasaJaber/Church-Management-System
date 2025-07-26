@@ -10,6 +10,7 @@ const classRoutes = require("./routes/classes");
 const attendanceRoutes = require("./routes/attendance");
 const statisticsRoutes = require("./routes/statistics-fresh");
 const servantsRoutes = require("./routes/servants");
+const pastoralCareRoutes = require("./routes/pastoral-care");
 
 // Load environment variables
 dotenv.config();
@@ -42,6 +43,7 @@ app.use("/api/classes", classRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/statistics", statisticsRoutes);
 app.use("/api/servants", servantsRoutes);
+app.use("/api/pastoral-care", pastoralCareRoutes);
 
 // Basic test route
 app.get("/", (req, res) => {

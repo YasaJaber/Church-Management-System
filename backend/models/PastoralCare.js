@@ -1,0 +1,52 @@
+const mongoose = require("mongoose");
+
+const pastoralCareSchema = new mongoose.Schema(
+  {
+    child: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Child",
+      required: true,
+    },
+    absentDate: {
+      type: String, // YYYY-MM-DD format
+      required: true,
+    },
+    addedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    removedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    removedDate: {
+      type: Date,
+      default: null,
+    },
+    removalReason: {
+      type: String,
+      enum: ["attended", "contacted", "manual"], // attended = حضر, contacted = تم الاتصال, manual = إزالة يدوية
+      default: null,
+    },
+    notes: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+  },
+  {
+    timestamps: true,
+  }
+);
+
+// Index for better performance
+pastoralCareSchema.index({ child: 1, absentDate: 1 });
+pastoralCareSchema.index({ isActive: 1 });
+
+module.exports = mongoose.model("PastoralCare", pastoralCareSchema);

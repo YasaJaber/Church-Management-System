@@ -2,6 +2,7 @@ const express = require("express");
 const Child = require("../models/Child");
 const Attendance = require("../models/Attendance");
 const User = require("../models/User");
+const PastoralCare = require("../models/PastoralCare");
 const { authMiddleware } = require("../middleware/auth");
 
 const router = express.Router();
@@ -237,6 +238,35 @@ router.post("/", authMiddleware, async (req, res) => {
     console.log(
       `   Class: ${attendanceRecord.person.class?.name || "Unknown"}`
     );
+
+    // ✨ PASTORAL CARE: Automatically remove child from pastoral care list if they attended
+    if (status === "present" || status === "late") {
+      try {
+        console.log(`🤝 Checking if child ${attendanceRecord.person.name} needs to be removed from pastoral care...`);
+        
+        const activePastoralCareRecord = await PastoralCare.findOne({
+          child: childId,
+          isActive: true
+        });
+
+        if (activePastoralCareRecord) {
+          activePastoralCareRecord.isActive = false;
+          activePastoralCareRecord.removedBy = req.user._id;
+          activePastoralCareRecord.removedDate = new Date();
+          activePastoralCareRecord.removalReason = "attended";
+          activePastoralCareRecord.notes += `\n\nتم حذفه تلقائياً من قائمة الافتقاد عند الحضور في ${date} بواسطة ${req.user.name}`;
+          
+          await activePastoralCareRecord.save();
+          
+          console.log(`✅ Child ${attendanceRecord.person.name} automatically removed from pastoral care (attended on ${date})`);
+        } else {
+          console.log(`ℹ️ Child ${attendanceRecord.person.name} was not in pastoral care list`);
+        }
+      } catch (pastoralCareError) {
+        console.error("❌ Error updating pastoral care:", pastoralCareError);
+        // Don't fail the attendance recording if pastoral care update fails
+      }
+    }
 
     res.json({
       success: true,
