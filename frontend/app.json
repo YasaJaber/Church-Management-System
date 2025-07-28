@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/saint-george.png",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "splash": {
       "image": "./assets/saint-george.png",
       "resizeMode": "contain",
@@ -28,9 +28,6 @@
         "foregroundImage": "./assets/saint-george.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": false,
-      "usesCleartextTraffic": true,
-      "allowBackup": false,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",

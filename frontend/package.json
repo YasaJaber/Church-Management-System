@@ -43,5 +43,13 @@
   "devDependencies": {
     "@babel/core": "^7.20.0"
   },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": ["react-native-fs", "pdfmake", "pdfmake-arabic", "react-native-vector-icons"],
+        "listUnknownPackages": false
+      }
+    }
+  },
   "private": true
 }
