@@ -67,48 +67,27 @@ export default function App() {
 
   useEffect(() => {
     let isMounted = true;
+    let timeoutId = null;
 
     const initializeApp = async () => {
       try {
         console.log('🚀 بدء تحميل التطبيق...');
         
-        // إعداد معالجات الإشعارات عند بدء التطبيق
-        const initializeNotifications = async () => {
-          try {
-            // إعداد معالجات الإشعارات
-            NotificationService.setupNotificationHandlers();
-            
-            // طلب الأذونات إذا كانت الإشعارات مفعلة
-            const notificationsEnabled = await NotificationService.areNotificationsEnabled();
-            if (notificationsEnabled) {
-              await NotificationService.requestPermissions();
-            }
-            
-            console.log('✅ تم إعداد خدمة الإشعارات بنجاح');
-          } catch (error) {
-            console.error('❌ خطأ في إعداد خدمة الإشعارات:', error);
-            // لا نوقف التطبيق بسبب خطأ في الإشعارات
-          }
-        };
-
-        // إعداد خدمة التحديثات التلقائية (معطلة مؤقتاً)
-        const initializeUpdates = async () => {
-          try {
-            console.log('🔄 تخطي فحص التحديثات (معطل مؤقتاً)...');
-            // await UpdateService.checkForUpdatesOnStart();
-            console.log('✅ تم تخطي خدمة التحديثات');
-          } catch (error) {
-            console.error('❌ خطأ في إعداد خدمة التحديثات:', error);
-            // لا نوقف التطبيق بسبب خطأ في التحديثات
-          }
-        };
-
-        // تشغيل الخدمات
-        await initializeNotifications();
-        await initializeUpdates();
+        // تأخير قصير للسماح للنظام بالتحميل
+        await new Promise(resolve => setTimeout(resolve, 100));
         
-        // تأخير قصير للتأكد من اكتمال التحميل
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // تهيئة الخدمات بشكل مبسط
+        try {
+          // تهيئة الإشعارات (غير إجبارية)
+          console.log('🔔 إعداد الإشعارات...');
+          NotificationService.setupNotificationHandlers();
+          console.log('✅ تم إعداد الإشعارات');
+        } catch (error) {
+          console.warn('⚠️ تخطي إعداد الإشعارات:', error.message);
+        }
+
+        // تخطي خدمة التحديثات تماماً
+        console.log('✅ تخطي خدمة التحديثات');
         
         if (isMounted) {
           setIsLoading(false);
@@ -117,20 +96,34 @@ export default function App() {
       } catch (error) {
         console.error('❌ خطأ في تحميل التطبيق:', error);
         if (isMounted) {
-          setLoadingError(error);
+          // في حالة الخطأ، تشغيل التطبيق رغم ذلك
           setIsLoading(false);
+          console.warn('⚠️ تم تشغيل التطبيق رغم الخطأ');
         }
       }
     };
 
-    initializeApp();
+    // إعداد timeout للأمان - إذا لم يكتمل التحميل خلال 5 ثوانٍ
+    timeoutId = setTimeout(() => {
+      if (isMounted && isLoading) {
+        console.warn('⏱️ انتهت مهلة التحميل - تشغيل التطبيق قسرياً');
+        setIsLoading(false);
+      }
+    }, 5000);
+
+    // تشغيل التهيئة مع تأخير قصير
+    const timer = setTimeout(initializeApp, 50);
 
     return () => {
       isMounted = false;
+      clearTimeout(timer);
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
     };
   }, []);
 
-  // Loading Screen
+  // Loading Screen مع timeout للأمان
   if (isLoading) {
     return (
       <View style={{
@@ -146,6 +139,14 @@ export default function App() {
           textAlign: 'center'
         }}>
           جاري تحميل التطبيق...
+        </Text>
+        <Text style={{
+          marginTop: 10,
+          fontSize: 12,
+          color: 'gray',
+          textAlign: 'center'
+        }}>
+          إذا استغرق الأمر وقتاً طويلاً، أعد تشغيل التطبيق
         </Text>
       </View>
     );
