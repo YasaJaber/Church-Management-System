@@ -20,20 +20,18 @@ router.get("/children", authMiddleware, async (req, res) => {
     console.log("🏫 ClassId:", classId);
     console.log("👤 User:", req.user?.username || "UNKNOWN");
     console.log("🔐 Role:", req.user?.role || "UNKNOWN");
+    console.log("🆕 FIXED VERSION - EXACT STRING MATCHING ONLY");
     console.log("=".repeat(50));
 
-    // Build query - handle date range for both Date objects and strings
+    // Build query - handle date matching precisely
     let query = { type: "child" };
     if (date) {
-      // نبدأ من 00:00:00 للتاريخ
-      const dayStart = new Date(date + "T00:00:00.000Z");
-      // ننهي عند بداية اليوم التالي
-      const dayEnd = new Date(dayStart);
-      dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
-      query.date = { $gte: dayStart, $lt: dayEnd };
-      console.log("📅 Date range query:");
-      console.log("   Start:", dayStart.toISOString());
-      console.log("   End:", dayEnd.toISOString());
+      // Convert input date to exact string match only
+      query.date = date; // Exact string match for YYYY-MM-DD format only
+      
+      console.log("📅 Exact date query:");
+      console.log("   Target date (string):", date);
+      console.log("   Query:", JSON.stringify(query));
     }
 
     // Apply role-based filtering
@@ -146,22 +144,32 @@ router.post("/", authMiddleware, async (req, res) => {
       });
     }
 
-    // Parse date to midnight UTC for consistency with stored data
-    const attendanceDate = new Date(date + "T00:00:00.000Z"); // Midnight UTC
+    // Parse date to string format for consistency with model
+    const attendanceDate = date; // Keep as string to match model schema
 
-    // Check if attendance already exists using date range
+    // Check if attendance already exists using both string and range checks
     const dayStart = new Date(date + "T00:00:00.000Z");
     const dayEnd = new Date(dayStart);
     dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
 
-    const existingRecord = await Attendance.findOne({
+    let existingRecord = await Attendance.findOne({
       person: childId,
-      date: { $gte: dayStart, $lt: dayEnd },
+      date: date, // First check with exact string match
       type: "child",
     });
 
+    // If not found with string, try with date range
+    if (!existingRecord) {
+      existingRecord = await Attendance.findOne({
+        person: childId,
+        date: { $gte: dayStart, $lt: dayEnd },
+        type: "child",
+      });
+    }
+
     console.log("🔍 Checking for existing attendance record:");
     console.log("   Child ID:", childId);
+    console.log("   Date (string):", date);
     console.log(
       "   Date range:",
       dayStart.toISOString(),
@@ -174,23 +182,66 @@ router.post("/", authMiddleware, async (req, res) => {
 
     if (existingRecord) {
       // Update existing record
+      console.log("🔄 Updating existing attendance record");
       existingRecord.status = status;
       existingRecord.notes = notes || "";
       existingRecord.recordedBy = req.user._id; // Update who modified it
       attendanceRecord = await existingRecord.save();
     } else {
-      // Create new record
-      attendanceRecord = new Attendance({
-        type: "child",
+      // Create new record with extra validation
+      console.log("🆕 Creating new attendance record");
+      
+      // Final check to prevent race conditions
+      const lastMinuteCheck = await Attendance.findOne({
         person: childId,
-        personModel: "Child",
-        date: attendanceDate,
-        status: status,
-        notes: notes || "",
-        recordedBy: req.user._id, // The user who is recording attendance
-        class: child.class, // Add class for better tracking
+        date: date,
+        type: "child",
       });
-      await attendanceRecord.save();
+      
+      if (lastMinuteCheck) {
+        console.log("⚠️ Race condition detected - record was just created, updating instead");
+        lastMinuteCheck.status = status;
+        lastMinuteCheck.notes = notes || "";
+        lastMinuteCheck.recordedBy = req.user._id;
+        attendanceRecord = await lastMinuteCheck.save();
+      } else {
+        attendanceRecord = new Attendance({
+          type: "child",
+          person: childId,
+          personModel: "Child",
+          date: date, // Store as string to match model
+          status: status,
+          notes: notes || "",
+          recordedBy: req.user._id, // The user who is recording attendance
+          class: child.class, // Add class for better tracking
+        });
+        
+        try {
+          await attendanceRecord.save();
+          console.log("✅ New attendance record created successfully");
+        } catch (saveError) {
+          // Check if it's a duplicate key error
+          if (saveError.code === 11000) {
+            console.log("🔄 Duplicate key error - finding and updating existing record");
+            const duplicateRecord = await Attendance.findOne({
+              person: childId,
+              date: date,
+              type: "child",
+            });
+            
+            if (duplicateRecord) {
+              duplicateRecord.status = status;
+              duplicateRecord.notes = notes || "";
+              duplicateRecord.recordedBy = req.user._id;
+              attendanceRecord = await duplicateRecord.save();
+            } else {
+              throw saveError; // Re-throw if we can't find the duplicate
+            }
+          } else {
+            throw saveError; // Re-throw other errors
+          }
+        }
+      }
     }
 
     // Populate the response with all necessary details
@@ -296,6 +347,14 @@ router.delete("/:childId/:date", authMiddleware, async (req, res) => {
   try {
     const { childId, date } = req.params;
 
+    console.log("\n" + "=".repeat(50));
+    console.log("🗑️ DELETE ATTENDANCE API CALLED");
+    console.log("👶 Child ID:", childId);
+    console.log("📅 Date:", date);
+    console.log("👤 User:", req.user?.username || "UNKNOWN");
+    console.log("🆕 FIXED VERSION - EXACT STRING MATCHING ONLY");
+    console.log("=".repeat(50));
+
     if (!childId || !date) {
       return res.status(400).json({
         success: false,
@@ -303,19 +362,25 @@ router.delete("/:childId/:date", authMiddleware, async (req, res) => {
       });
     }
 
-    // Parse date to match stored format using date range
-    const dayStart = new Date(date + "T00:00:00.000Z");
-    const dayEnd = new Date(dayStart);
-    dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
-
-    // Find and delete the attendance record using date range
-    const deletedRecord = await Attendance.findOneAndDelete({
+    // Use exact string matching instead of date range
+    const deleteQuery = {
       person: childId,
-      date: { $gte: dayStart, $lt: dayEnd },
+      date: date, // Exact string match for YYYY-MM-DD format
       type: "child",
-    });
+    };
+
+    console.log("🔍 Delete query (exact string match):");
+    console.log("   Query:", JSON.stringify(deleteQuery));
+
+    // Find and delete the attendance record using exact string matching
+    const deletedRecord = await Attendance.findOneAndDelete(deleteQuery);
 
     if (!deletedRecord) {
+      console.log("❌ No attendance record found to delete");
+      console.log("   Child ID:", childId);
+      console.log("   Date:", date);
+      console.log("   Query used:", JSON.stringify(deleteQuery));
+      
       return res.status(404).json({
         success: false,
         error: "لا يوجد تسجيل حضور لهذا الطفل في هذا التاريخ",
@@ -323,10 +388,11 @@ router.delete("/:childId/:date", authMiddleware, async (req, res) => {
     }
 
     // Log the deletion
-    console.log(`🗑️ Attendance record deleted:`);
+    console.log(`🗑️ Attendance record deleted successfully:`);
     console.log(`   Child ID: ${childId}`);
     console.log(`   Date: ${date}`);
     console.log(`   Previous Status: ${deletedRecord.status}`);
+    console.log(`   Record ID: ${deletedRecord._id}`);
     console.log(`   Deleted by: ${req.user.name} (${req.user._id})`);
 
     res.json({

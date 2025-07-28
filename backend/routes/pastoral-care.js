@@ -6,60 +6,93 @@ const { authMiddleware } = require("../middleware/auth");
 
 const router = express.Router();
 
-// Helper function to get the most recent date with attendance records
+// Helper function to get the most recent date with actual attendance records
 const getMostRecentAttendanceDate = async (childrenIds) => {
   try {
-    // Find all attendance records for children (no sorting first)
+    console.log("📅 Getting last 4 actual attendance dates");
+    
+    // Get all attendance records for children (no filters)
     const allAttendanceRecords = await Attendance.find({
       type: "child",
       person: { $in: childrenIds }
     })
-    .select('date');
+    .select('date')
+    .lean(); // Use lean for better performance
     
     if (allAttendanceRecords.length === 0) {
+      console.log("📅 No attendance records found at all");
       return null;
     }
     
-    // Convert all dates to comparable format and find the most recent
-    let mostRecentDate = null;
-    let mostRecentTimestamp = 0;
+    // Convert all dates to YYYY-MM-DD format and collect unique dates
+    const uniqueDates = new Set();
     
     for (const record of allAttendanceRecords) {
       let dateStr;
-      let timestamp;
       
       if (record.date instanceof Date) {
         // Actual Date object
         dateStr = record.date.toISOString().split('T')[0];
-        timestamp = record.date.getTime();
       } else if (typeof record.date === 'string') {
         if (record.date.match(/^\d{4}-\d{2}-\d{2}$/)) {
           // Already in YYYY-MM-DD format
           dateStr = record.date;
-          timestamp = new Date(record.date).getTime();
         } else {
           // String representation of Date object
           const dateObj = new Date(record.date);
           if (!isNaN(dateObj.getTime())) {
             dateStr = dateObj.toISOString().split('T')[0];
-            timestamp = dateObj.getTime();
           } else {
-            console.warn(`Invalid date format: ${record.date}`);
+            console.warn(`⚠️ Invalid date format: ${record.date}`);
             continue;
           }
         }
       }
       
-      if (dateStr && timestamp > mostRecentTimestamp) {
-        mostRecentTimestamp = timestamp;
-        mostRecentDate = dateStr;
+      if (dateStr) {
+        uniqueDates.add(dateStr);
       }
     }
     
-    console.log(`📅 Most recent attendance date found: ${mostRecentDate}`);
-    return mostRecentDate;
+    // Convert to array and sort (most recent first)
+    const sortedDates = Array.from(uniqueDates).sort((a, b) => {
+      return new Date(b).getTime() - new Date(a).getTime();
+    });
+    
+    console.log(`📊 Found ${sortedDates.length} recent attendance dates:`, sortedDates.slice(0, 4));
+    
+    // Return the most recent date that actually has attendance records
+    const mostRecentDate = sortedDates[0] || null;
+    
+    if (mostRecentDate) {
+      // Verify this date actually has attendance records
+      const recordsForDate = await Attendance.countDocuments({
+        $or: [
+          { date: mostRecentDate }, // YYYY-MM-DD format
+          { date: new Date(mostRecentDate + 'T00:00:00.000Z') }, // Date object
+          { date: new Date(mostRecentDate).toString() } // String format
+        ],
+        type: "child",
+        person: { $in: childrenIds }
+      });
+      
+      console.log(`� Most recent date ${mostRecentDate} has ${recordsForDate} attendance records`);
+      
+      if (recordsForDate > 0) {
+        return mostRecentDate;
+      } else {
+        console.log(`⚠️ Most recent date ${mostRecentDate} has no actual records, trying next date`);
+        // Try the next date if available
+        if (sortedDates.length > 1) {
+          return sortedDates[1];
+        }
+      }
+    }
+    
+    console.log(`📅 No valid attendance date found`);
+    return null;
   } catch (error) {
-    console.error("Error finding recent attendance date:", error);
+    console.error("❌ Error finding recent attendance date:", error);
     return null;
   }
 };
@@ -124,19 +157,20 @@ router.get("/absent-children", authMiddleware, async (req, res) => {
     
     console.log(`📅 Most recent attendance date: ${mostRecentAttendanceDate}`);
     
-    // Get attendance records for the most recent attendance date
-    // Since dates are stored in mixed formats, we need to search for both formats
+    // Get attendance records for the most recent attendance date using exact matching
+    console.log(`🔍 Searching for attendance records on date: ${mostRecentAttendanceDate}`);
+    
     const attendanceRecords = await Attendance.find({
-      $or: [
-        { date: mostRecentAttendanceDate }, // YYYY-MM-DD format
-        { date: new Date(mostRecentAttendanceDate + 'T00:00:00.000Z') }, // Date object
-        { date: new Date(mostRecentAttendanceDate).toString() } // String format
-      ],
+      date: mostRecentAttendanceDate, // Use exact string match only
       type: "child",
       person: { $in: allChildren.map(child => child._id) }
     });
     
     console.log(`📊 Found ${attendanceRecords.length} attendance records for ${mostRecentAttendanceDate}`);
+    console.log(`📊 Records breakdown:`, attendanceRecords.map(r => ({ 
+      child: r.person.toString().slice(-4), 
+      status: r.status 
+    })));
 
     // Find children who were explicitly marked as ABSENT (status = "absent")
     const absentChildIds = attendanceRecords

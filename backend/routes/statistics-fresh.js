@@ -1063,6 +1063,11 @@ router.get("/export-class-attendance", authMiddleware, async (req, res) => {
   try {
     const { classId, startDate, endDate } = req.query;
     
+    console.log("📊 Export class attendance API called:");
+    console.log("   classId:", classId);
+    console.log("   startDate:", startDate);
+    console.log("   endDate:", endDate);
+    
     if (!classId || !startDate || !endDate) {
       return res.status(400).json({
         success: false,
@@ -1070,36 +1075,68 @@ router.get("/export-class-attendance", authMiddleware, async (req, res) => {
       });
     }
 
-    const attendanceData = await Attendance.find({
-      classId: classId,
+    // استخدام نفس مودل Attendance المستخدم في POST
+    const attendanceRecords = await Attendance.find({
+      type: "child",
+      class: classId,
       date: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
+        $gte: startDate,
+        $lte: endDate
       }
     })
-    .populate('classId', 'name')
-    .populate('presentChildren.childId', 'name')
-    .populate('absentChildren.childId', 'name')
+    .populate({
+      path: 'person',
+      model: 'Child',
+      populate: {
+        path: 'class',
+        model: 'Class'
+      }
+    })
+    .populate('recordedBy', 'name')
     .sort({ date: -1 })
     .lean();
 
-    const formattedData = attendanceData.map(record => ({
-      date: record.date,
-      className: record.classId?.name || 'Unknown Class',
-      presentCount: record.presentChildren?.length || 0,
-      absentCount: record.absentChildren?.length || 0,
-      totalChildren: (record.presentChildren?.length || 0) + (record.absentChildren?.length || 0),
-      presentChildren: record.presentChildren?.map(child => ({
-        name: child.childId?.name || 'Unknown Child',
-        hasExcuse: child.hasExcuse || false,
-        excuse: child.excuse || ''
-      })) || [],
-      absentChildren: record.absentChildren?.map(child => ({
-        name: child.childId?.name || 'Unknown Child',
-        hasExcuse: child.hasExcuse || false,
-        excuse: child.excuse || ''
-      })) || []
+    console.log(`📊 Found ${attendanceRecords.length} attendance records`);
+
+    // تنظيم البيانات حسب التاريخ
+    const dateGroups = {};
+    
+    attendanceRecords.forEach(record => {
+      const dateKey = typeof record.date === 'string' ? record.date : record.date.toISOString().split('T')[0];
+      
+      if (!dateGroups[dateKey]) {
+        dateGroups[dateKey] = {
+          date: dateKey,
+          className: record.person?.class?.name || 'Unknown Class',
+          presentChildren: [],
+          absentChildren: []
+        };
+      }
+      
+      const childData = {
+        name: record.person?.name || 'Unknown Child',
+        hasExcuse: !!record.notes,
+        excuse: record.notes || ''
+      };
+      
+      if (record.status === 'present') {
+        dateGroups[dateKey].presentChildren.push(childData);
+      } else {
+        dateGroups[dateKey].absentChildren.push(childData);
+      }
+    });
+
+    const formattedData = Object.values(dateGroups).map(group => ({
+      date: group.date,
+      className: group.className,
+      presentCount: group.presentChildren.length,
+      absentCount: group.absentChildren.length,
+      totalChildren: group.presentChildren.length + group.absentChildren.length,
+      presentChildren: group.presentChildren,
+      absentChildren: group.absentChildren
     }));
+
+    console.log(`📊 Formatted ${formattedData.length} date groups`);
 
     res.json({
       success: true,
