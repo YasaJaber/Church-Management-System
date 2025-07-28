@@ -12,6 +12,8 @@ import {
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { statisticsAPI, attendanceAPI, servantsAPI } from "../services/api";
+import NotificationManagementScreen from "./NotificationManagementScreen";
+import NotificationService from "../services/notificationService";
 
 // دالة لحساب التاريخ القبطي
 const getCopticDate = () => {
@@ -100,6 +102,7 @@ const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [statistics, setStatistics] = useState({
     totalChildren: 0,
     todayPresent: 0,
@@ -110,6 +113,9 @@ const HomeScreen = ({ navigation }) => {
 
   useEffect(() => {
     loadDashboardData();
+    
+    // إعداد معالجات الإشعارات عند تحميل الشاشة
+    NotificationService.setupNotificationHandlers();
   }, []);
 
   const loadDashboardData = async () => {
@@ -297,6 +303,9 @@ const HomeScreen = ({ navigation }) => {
       case "statistics":
         navigation.navigate("Statistics");
         break;
+      case "notifications":
+        setShowNotificationModal(true);
+        break;
       case "export":
         if (user?.role === "admin") {
           handleQuickExport();
@@ -458,6 +467,13 @@ const HomeScreen = ({ navigation }) => {
         <Text style={styles.actionButtonText}>📊 عرض الإحصائيات</Text>
       </TouchableOpacity>
 
+      <TouchableOpacity
+        style={[styles.actionButton, { backgroundColor: "#e67e22" }]}
+        onPress={() => handleQuickAction("notifications")}
+      >
+        <Text style={styles.actionButtonText}>🔔 إشعارات الآيات اليومية</Text>
+      </TouchableOpacity>
+
       {user?.role === "admin" && (
         <TouchableOpacity
           style={[styles.actionButton, { backgroundColor: "#f39c12" }]}
@@ -529,6 +545,12 @@ const HomeScreen = ({ navigation }) => {
       {renderQuickActions()}
 
       <View style={styles.bottomPadding} />
+
+      {/* شاشة إدارة الإشعارات */}
+      <NotificationManagementScreen
+        visible={showNotificationModal}
+        onClose={() => setShowNotificationModal(false)}
+      />
     </ScrollView>
   );
 };

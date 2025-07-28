@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "St. George Church Management",
+    "slug": "st-george-church-management",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/saint-george.png",
@@ -13,7 +13,10 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "UIBackgroundModes": ["background-processing", "background-fetch"]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -24,11 +27,34 @@
       "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.INTERNET",
-        "android.permission.ACCESS_NETWORK_STATE"
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE"
       ]
     },
     "web": {
       "favicon": "./assets/saint-george.png"
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/saint-george.png",
+          "color": "#ffffff",
+          "defaultChannel": "daily-verses"
+        }
+      ]
+    ],
+    "notification": {
+      "icon": "./assets/saint-george.png",
+      "color": "#ffffff",
+      "androidMode": "default",
+      "androidCollapsedTitle": "آية اليوم"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "your-project-id"
+      }
     }
   }
 }

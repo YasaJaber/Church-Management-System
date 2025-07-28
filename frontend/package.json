@@ -19,6 +19,7 @@
     "expo": "~53.0.17",
     "expo-document-picker": "^13.1.6",
     "expo-file-system": "~18.1.11",
+    "expo-notifications": "~0.28.0",
     "expo-print": "^14.1.4",
     "expo-sharing": "^13.1.5",
     "expo-status-bar": "~2.2.3",

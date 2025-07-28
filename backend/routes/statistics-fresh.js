@@ -102,7 +102,43 @@ const getMostRecentAttendanceDate = async (classId = null) => {
   }
 };
 
-// Helper function to get Friday dates going back N weeks
+// Helper function to get actual attendance dates going back N periods
+const getRecentAttendanceDates = async (count, classId = null) => {
+  try {
+    console.log(`📅 Getting last ${count} actual attendance dates${classId ? ' for class' : ''}`);
+    
+    let query = { type: "child" };
+    if (classId) {
+      const childrenInClass = await Child.find({ class: classId, isActive: true });
+      query.person = { $in: childrenInClass.map(c => c._id) };
+    }
+
+    const distinctDates = await Attendance.distinct('date', query);
+    
+    // Sort dates in descending order and take the most recent ones
+    const sortedDates = distinctDates
+      .map(date => {
+        if (typeof date === 'string') {
+          return date;
+        } else if (date instanceof Date) {
+          return date.toISOString().split('T')[0];
+        } else {
+          return new Date(date).toISOString().split('T')[0];
+        }
+      })
+      .sort((a, b) => new Date(b) - new Date(a))
+      .slice(0, count);
+
+    console.log(`📊 Found ${sortedDates.length} recent attendance dates:`, sortedDates);
+    return sortedDates;
+  } catch (error) {
+    console.error('❌ Error getting recent attendance dates:', error);
+    // Fallback to Friday dates if there's an error
+    return getFridayDatesBack(count);
+  }
+};
+
+// Helper function to get Friday dates going back N weeks (kept as fallback)
 const getFridayDatesBack = (weeksBack) => {
   const fridays = [];
   const today = new Date();
@@ -139,6 +175,10 @@ router.get("/combined", async (req, res) => {
   try {
     const { classId, days = 7 } = req.query;
     
+    // Get the most recent attendance date instead of using today
+    const mostRecentAttendanceDate = await getMostRecentAttendanceDate(classId);
+    console.log(`📅 Using most recent attendance date: ${mostRecentAttendanceDate}`);
+    
     // Prepare all promises to run in parallel
     const promises = [];
     
@@ -154,22 +194,23 @@ router.get("/combined", async (req, res) => {
               isActive: true 
             });
             
-            const today = new Date().toISOString().split("T")[0];
-            const todayAttendance = await Attendance.find({
+            // Use most recent attendance date instead of today
+            const recentAttendance = await Attendance.find({
               type: "child",
-              date: today,
+              date: mostRecentAttendanceDate,
               person: { $in: childrenInClass.map(c => c._id) },
               status: "present"
             });
 
             return {
               totalChildren: childrenInClass.length,
-              presentToday: todayAttendance.length,
+              presentToday: recentAttendance.length,
               attendanceRate: childrenInClass.length > 0 
-                ? Math.round((todayAttendance.length / childrenInClass.length) * 100) 
+                ? Math.round((recentAttendance.length / childrenInClass.length) * 100) 
                 : 0,
               averageAttendance: 0, // Will calculate if needed
-              className: classDoc.name
+              className: classDoc.name,
+              lastAttendanceDate: mostRecentAttendanceDate
             };
           })
       );
@@ -179,22 +220,23 @@ router.get("/combined", async (req, res) => {
           Child.countDocuments({ isActive: true }),
           Attendance.countDocuments({
             type: "child",
-            date: new Date().toISOString().split("T")[0],
+            date: mostRecentAttendanceDate,
             status: "present"
           })
         ]).then(([totalChildren, presentToday]) => ({
           totalChildren,
           presentToday,
           attendanceRate: totalChildren > 0 ? Math.round((presentToday / totalChildren) * 100) : 0,
-          averageAttendance: 100
+          averageAttendance: 100,
+          lastAttendanceDate: mostRecentAttendanceDate
         }))
       );
     }
 
-    // 2. Attendance stats for the last N days
-    const fridayDates = getFridayDatesBack(parseInt(days));
+    // 2. Attendance stats for the last N actual attendance dates
+    const recentAttendanceDates = await getRecentAttendanceDates(parseInt(days), classId);
     promises.push(
-      Promise.all(fridayDates.map(async (date) => {
+      Promise.all(recentAttendanceDates.map(async (date) => {
         let query = { type: "child", date };
         
         if (classId) {
@@ -223,12 +265,12 @@ router.get("/combined", async (req, res) => {
         .limit(50) // Limit for performance
         .then(children => 
           Promise.all(children.slice(0, 10).map(async (child) => {
-            // Check for last 4 Fridays for proper consecutive attendance
-            const recentFridays = getFridayDatesBack(4);
+            // Check for last 4 actual attendance dates for proper consecutive attendance
+            const recentAttendanceDates = await getRecentAttendanceDates(4, classId);
             const attendanceRecords = await Attendance.find({
               type: "child",
               person: child._id,
-              date: { $in: recentFridays },
+              date: { $in: recentAttendanceDates },
             }).sort({ date: -1 });
 
             // Count consecutive present days from most recent
@@ -526,29 +568,29 @@ router.get("/church", authMiddleware, async (req, res) => {
       const attendanceRate = children.length > 0 ? 
         Math.round((presentToday / children.length) * 100) : 0;
 
-      // Calculate average attendance over last 12 weeks for this class
-      const last12Fridays = getFridayDatesBack(12);
+      // Calculate average attendance over last 12 actual attendance dates for this class
+      const last12AttendanceDates = await getRecentAttendanceDates(12, classId);
       
-      // Calculate average attendance properly: sum all present days / (total fridays * total children)
+      // Calculate average attendance properly: sum all present days / (total dates * total children)
       let totalPresentSum = 0;
-      let fridaysWithData = 0;
+      let datesWithData = 0;
       
-      for (const friday of last12Fridays) {
-        const fridayAttendance = await Attendance.find({
-          date: friday,
+      for (const attendanceDate of last12AttendanceDates) {
+        const dateAttendance = await Attendance.find({
+          date: attendanceDate,
           type: "child",
           person: { $in: children.map(c => c._id) },
         });
         
-        if (fridayAttendance.length > 0) {
-          const presentCount = fridayAttendance.filter(r => r.status === "present").length;
+        if (dateAttendance.length > 0) {
+          const presentCount = dateAttendance.filter(r => r.status === "present").length;
           totalPresentSum += presentCount;
-          fridaysWithData++;
+          datesWithData++;
         }
       }
 
-      const averageAttendance = fridaysWithData > 0 && children.length > 0 ? 
-        parseFloat(((totalPresentSum / fridaysWithData) / children.length * 100).toFixed(1)) : 0;
+      const averageAttendance = datesWithData > 0 && children.length > 0 ? 
+        parseFloat(((totalPresentSum / datesWithData) / children.length * 100).toFixed(1)) : 0;
 
       console.log(`📊 Class statistics calculated (based on ${mostRecentAttendanceDate}):`, {
         totalChildren,
@@ -592,26 +634,26 @@ router.get("/church", authMiddleware, async (req, res) => {
     const attendanceRate = totalChildren > 0 ? 
       ((presentToday / totalChildren) * 100).toFixed(1) : "0";
 
-    // Calculate average attendance over last 12 weeks properly
-    const last12Fridays = getFridayDatesBack(12);
+    // Calculate average attendance over last 12 weeks using actual attendance dates
+    const last12Dates = await getRecentAttendanceDates(12);
     let totalPresentSum = 0;
-    let fridaysWithData = 0;
+    let datesWithData = 0;
     
-    for (const friday of last12Fridays) {
-      const fridayAttendance = await Attendance.find({
-        date: friday,
+    for (const date of last12Dates) {
+      const dateAttendance = await Attendance.find({
+        date: date,
         type: "child",
       });
       
-      if (fridayAttendance.length > 0) {
-        const presentCount = fridayAttendance.filter(r => r.status === "present").length;
+      if (dateAttendance.length > 0) {
+        const presentCount = dateAttendance.filter(r => r.status === "present").length;
         totalPresentSum += presentCount;
-        fridaysWithData++;
+        datesWithData++;
       }
     }
 
-    const averageAttendance = fridaysWithData > 0 && totalChildren > 0 ? 
-      ((totalPresentSum / fridaysWithData) / totalChildren * 100).toFixed(1) : "0";
+    const averageAttendance = datesWithData > 0 && totalChildren > 0 ? 
+      ((totalPresentSum / datesWithData) / totalChildren * 100).toFixed(1) : "0";
 
     console.log(`📊 Church statistics calculated (based on ${mostRecentAttendanceDate}):`, {
       totalChildren,
@@ -650,9 +692,9 @@ router.get("/attendance", authMiddleware, async (req, res) => {
     console.log("🔐 Role:", req.user?.role || "UNKNOWN");
     console.log("🏫 Assigned Class:", req.user?.assignedClass || "NONE");
 
-    // Get the last N Fridays
-    const fridayDates = getFridayDatesBack(parseInt(days));
-    console.log("📅 Friday dates:", fridayDates);
+    // Get the last N actual attendance dates instead of assumed Fridays
+    const attendanceDates = await getRecentAttendanceDates(parseInt(days));
+    console.log("📅 Actual attendance dates:", attendanceDates);
 
     const attendanceData = [];
     let classId = null;
@@ -671,7 +713,7 @@ router.get("/attendance", authMiddleware, async (req, res) => {
       });
     }
 
-    for (const date of fridayDates) {
+    for (const date of attendanceDates) {
       let query = {
         date: date,
         type: "child",
@@ -751,11 +793,11 @@ router.get("/consecutive-attendance", authMiddleware, async (req, res) => {
     let processedCount = 0;
     for (const child of children) {
       try {
-        // Get last 4 Fridays attendance for this child
-        const last4Fridays = getFridayDatesBack(4);
+        // Get last 4 actual attendance dates for this child
+        const last4Dates = await getRecentAttendanceDates(4);
         const childAttendance = await Attendance.find({
           person: child._id,
-          date: { $in: last4Fridays },
+          date: { $in: last4Dates },
           type: "child",
         }).sort({ date: -1 });
 
@@ -895,11 +937,11 @@ router.get("/class/:classId", authMiddleware, async (req, res) => {
     const presentRecords = allAttendance.filter(a => a.status === "present").length;
     const attendanceRate = totalRecords > 0 ? Math.round((presentRecords / totalRecords) * 100) : 0;
 
-    // Calculate average weekly attendance (last 7 weeks)
-    const fridayDates = getFridayDatesBack(7);
+    // Calculate average weekly attendance (last 7 weeks using actual attendance dates)
+    const attendanceDates = await getRecentAttendanceDates(7);
     let totalWeeklyPresent = 0;
     
-    for (const date of fridayDates) {
+    for (const date of attendanceDates) {
       const weekAttendance = await Attendance.find({
         date: date,
         type: "child",
@@ -909,8 +951,8 @@ router.get("/class/:classId", authMiddleware, async (req, res) => {
       totalWeeklyPresent += weekAttendance.length;
     }
 
-    const averageAttendance = fridayDates.length > 0 ? 
-      Math.round((totalWeeklyPresent / fridayDates.length / totalChildren) * 100) : 0;
+    const averageAttendance = attendanceDates.length > 0 ? 
+      Math.round((totalWeeklyPresent / attendanceDates.length / totalChildren) * 100) : 0;
 
     console.log(`📊 Class statistics calculated:`, {
       totalChildren,
