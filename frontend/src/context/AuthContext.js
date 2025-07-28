@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { authAPI } from "../services/api";
+import NotificationService from "../services/notificationService";
 
 // Initial state
 const initialState = {
@@ -91,6 +92,16 @@ export const AuthProvider = ({ children }) => {
   // Restore token on app start
   useEffect(() => {
     restoreToken();
+    
+    // تهيئة الإشعارات بشكل آمن
+    try {
+      console.log("🔔 Initializing notifications...");
+      NotificationService.setupNotificationHandlers();
+      console.log("✅ Notifications initialized successfully");
+    } catch (error) {
+      console.warn("⚠️ Failed to initialize notifications:", error.message);
+      // لا نوقف التطبيق بسبب خطأ في الإشعارات
+    }
   }, []);
 
   const restoreToken = async () => {

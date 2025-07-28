@@ -35,7 +35,10 @@
         "android.permission.VIBRATE"
       ],
       "allowBackup": false,
-      "softwareKeyboardLayoutMode": "pan"
+      "softwareKeyboardLayoutMode": "pan",
+      "jsEngine": "hermes",
+      "enableProguardInReleaseBuilds": true,
+      "enableHermes": true
     },
     "web": {
       "favicon": "./assets/saint-george.png"
@@ -59,9 +62,10 @@
     "updates": {
       "enabled": false,
       "checkAutomatically": "ON_ERROR_RECOVERY",
-      "fallbackToCacheTimeout": 5000
+      "fallbackToCacheTimeout": 3000
     },
     "runtimeVersion": "1.0.0",
+    "jsEngine": "hermes",
     "extra": {
       "eas": {
         "projectId": "18d49dd0-a722-4f4e-b86b-1fc587806b0a"

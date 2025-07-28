@@ -49,6 +49,13 @@
         "exclude": ["react-native-fs", "pdfmake", "pdfmake-arabic", "react-native-vector-icons"],
         "listUnknownPackages": false
       }
+    },
+    "install": {
+      "exclude": [
+        "react-native-fs",
+        "pdfmake",
+        "pdfmake-arabic"
+      ]
     }
   },
   "private": true
