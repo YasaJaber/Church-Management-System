@@ -9,15 +9,10 @@ let BASE_URL;
 // Force use production backend for testing
 const USE_PRODUCTION_BACKEND = true; // Set to false to use local backend
 
-if (__DEV__ && !USE_PRODUCTION_BACKEND) {
-  // Development mode - use the actual IP address for all platforms
-  BASE_URL = "http://192.168.1.4:5000/api";
-} else {
-  // Production mode OR forced production - use the deployed Render backend
-  BASE_URL = "https://church-management-system-b6h7.onrender.com/api";
-}
+// FORCE LOCAL SERVER FOR DEBUGGING
+BASE_URL = "http://192.168.1.4:5000/api";
 
-console.log("API Base URL:", BASE_URL);
+console.log("API Base URL (FORCED LOCAL):", BASE_URL);
 console.log("Platform:", Platform.OS);
 console.log("Development mode:", __DEV__);
 
@@ -685,7 +680,18 @@ export const statisticsAPI = {
 
   exportClassAttendance: async (classId) => {
     try {
-      const response = await api.get(`/statistics/export/class/${classId}`);
+      // استخدام endpoint الصحيح مع فترة زمنية افتراضية
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - 30); // آخر 30 يوم
+      
+      const params = new URLSearchParams({
+        classId: classId,
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0]
+      });
+      
+      const response = await api.get(`/statistics/export-class-attendance?${params.toString()}`);
       return { success: true, data: response.data };
     } catch (error) {
       console.error("Error exporting class attendance:", error);
@@ -698,7 +704,18 @@ export const statisticsAPI = {
 
   exportAllClassesAttendance: async () => {
     try {
-      const response = await api.get("/statistics/export/all");
+      // استخدام endpoint الصحيح مع فترة زمنية افتراضية
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - 30); // آخر 30 يوم
+      
+      const params = new URLSearchParams({
+        startDate: startDate.toISOString().split('T')[0],
+        endDate: endDate.toISOString().split('T')[0],
+        classId: 'all'
+      });
+      
+      const response = await api.get(`/statistics/export-attendance?${params.toString()}`);
       return { success: true, data: response.data };
     } catch (error) {
       console.error("Error exporting all classes attendance:", error);

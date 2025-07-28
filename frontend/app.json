@@ -15,10 +15,14 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "UIBackgroundModes": ["background-processing", "background-fetch"]
+        "UIBackgroundModes": [
+          "background-processing",
+          "background-fetch"
+        ]
       }
     },
     "android": {
+      "package": "com.stgeorge.churchmanagement",
       "adaptiveIcon": {
         "foregroundImage": "./assets/saint-george.png",
         "backgroundColor": "#ffffff"
@@ -51,10 +55,17 @@
       "androidMode": "default",
       "androidCollapsedTitle": "آية اليوم"
     },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 10000
+    },
+    "runtimeVersion": "1.0.0",
     "extra": {
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "18d49dd0-a722-4f4e-b86b-1fc587806b0a"
       }
-    }
+    },
+    "owner": "yasa_jaber"
   }
 }

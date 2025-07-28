@@ -13,6 +13,7 @@ import StatisticsScreen from "../screens/StatisticsScreen";
 import ServantsScreen from "../screens/ServantsScreen";
 import ProfileScreen from "../screens/ProfileScreen";
 import PastoralCareScreen from "../screens/PastoralCareScreen";
+import UpdateSettingsScreen from "../screens/UpdateSettingsScreen";
 
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -221,6 +222,23 @@ const MainStack = () => {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       <Stack.Screen name="MainTabs" component={TabNavigator} />
+      <Stack.Screen 
+        name="UpdateSettings" 
+        component={UpdateSettingsScreen}
+        options={{
+          headerShown: true,
+          title: "إعدادات التحديث",
+          headerStyle: {
+            backgroundColor: "#3498db",
+          },
+          headerTintColor: "#fff",
+          headerTitleStyle: {
+            fontWeight: "bold",
+            fontSize: 18,
+          },
+          headerTitleAlign: "center",
+        }}
+      />
     </Stack.Navigator>
   );
 };

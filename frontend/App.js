@@ -3,6 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { AuthProvider } from "./src/context/AuthContext";
 import AppNavigator from "./src/components/AppNavigator";
 import NotificationService from "./src/services/notificationService";
+import UpdateService from "./src/services/updateService";
 
 export default function App() {
   useEffect(() => {
@@ -24,7 +25,20 @@ export default function App() {
       }
     };
 
+    // إعداد خدمة التحديثات التلقائية
+    const initializeUpdates = async () => {
+      try {
+        console.log('🔄 بدء فحص التحديثات...');
+        await UpdateService.checkForUpdatesOnStart();
+        console.log('✅ تم إعداد خدمة التحديثات بنجاح');
+      } catch (error) {
+        console.error('❌ خطأ في إعداد خدمة التحديثات:', error);
+      }
+    };
+
+    // تشغيل الخدمات
     initializeNotifications();
+    initializeUpdates();
   }, []);
 
   return (

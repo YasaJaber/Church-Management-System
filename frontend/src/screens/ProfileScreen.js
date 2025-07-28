@@ -9,9 +9,11 @@ import {
   Image,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
+import { useNavigation } from "@react-navigation/native";
 
 const ProfileScreen = () => {
   const { user, logout } = useAuth();
+  const navigation = useNavigation();
 
   const handleLogout = () => {
     Alert.alert("تسجيل الخروج", "هل أنت متأكد من تسجيل الخروج؟", [
@@ -77,6 +79,13 @@ const ProfileScreen = () => {
       </View>
 
       <View style={styles.actionsSection}>
+        <TouchableOpacity 
+          style={styles.updateButton} 
+          onPress={() => navigation.navigate('UpdateSettings')}
+        >
+          <Text style={styles.updateButtonText}>🔄 إعدادات التحديث</Text>
+        </TouchableOpacity>
+        
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>🚪 تسجيل الخروج</Text>
         </TouchableOpacity>
@@ -175,6 +184,18 @@ const styles = StyleSheet.create({
   },
   actionsSection: {
     margin: 15,
+  },
+  updateButton: {
+    backgroundColor: "#3498db",
+    padding: 15,
+    borderRadius: 8,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  updateButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
   logoutButton: {
     backgroundColor: "#e74c3c",
