@@ -10,7 +10,8 @@
     "splash": {
       "image": "./assets/saint-george.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#ffffff",
+      "hideExponentText": true
     },
     "ios": {
       "supportsTablet": true,
@@ -27,8 +28,9 @@
         "foregroundImage": "./assets/saint-george.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": false,
       "usesCleartextTraffic": true,
+      "allowBackup": false,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
@@ -56,9 +58,9 @@
       "androidCollapsedTitle": "آية اليوم"
     },
     "updates": {
-      "enabled": true,
-      "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 10000
+      "enabled": false,
+      "checkAutomatically": "ON_ERROR_RECOVERY",
+      "fallbackToCacheTimeout": 5000
     },
     "runtimeVersion": "1.0.0",
     "extra": {
