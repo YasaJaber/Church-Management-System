@@ -51,7 +51,11 @@
           "color": "#ffffff",
           "defaultChannel": "daily-verses"
         }
-      ]
+      ],
+      "expo-document-picker",
+      "expo-file-system",
+      "expo-print",
+      "expo-sharing"
     ],
     "notification": {
       "icon": "./assets/saint-george.png",
@@ -60,8 +64,8 @@
       "androidCollapsedTitle": "آية اليوم"
     },
     "updates": {
-      "enabled": false,
-      "checkAutomatically": "ON_ERROR_RECOVERY",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 3000
     },
     "runtimeVersion": "1.0.0",
