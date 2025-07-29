@@ -10,7 +10,8 @@ import {
   RefreshControl,
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
-import { statisticsAPI, classesAPI, attendanceAPI } from "../services/api";const StatisticsScreen = () => {
+import { statisticsAPI, classesAPI, attendanceAPI } from "../services/api";
+import { fetchAttendanceDataForExport } from "../utils/fixedPdfExport";const StatisticsScreen = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -153,8 +154,8 @@ import { statisticsAPI, classesAPI, attendanceAPI } from "../services/api";const
   };
 
   const handleExportPDF = async () => {
-    // Export functionality removed
-    Alert.alert("معلومات", "تم إزالة ميزة التصدير");
+    // Export functionality removed temporarily for build stability
+    Alert.alert("معلومات", "ميزة تصدير PDF مُعطّلة مؤقتاً لضمان استقرار التطبيق.\nسيتم إعادة تفعيلها قريباً.");
   };
 
   const renderStatCard = (
