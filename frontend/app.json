@@ -27,15 +27,6 @@
       ],
       "jsEngine": "hermes"
     },
-    "plugins": [
-      "expo-notifications"
-    ],
-    "updates": {
-      "enabled": true,
-      "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 3000
-    },
-    "runtimeVersion": "1.0.0",
     "extra": {
       "eas": {
         "projectId": "18d49dd0-a722-4f4e-b86b-1fc587806b0a"

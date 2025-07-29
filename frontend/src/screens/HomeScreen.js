@@ -12,7 +12,6 @@ import {
 } from "react-native";
 import { useAuth } from "../context/AuthContext";
 import { statisticsAPI, attendanceAPI, servantsAPI } from "../services/api";
-import NotificationManagementScreen from "./NotificationManagementScreen";
 import NotificationService from "../services/notificationService";
 
 // دالة لحساب التاريخ القبطي
@@ -102,7 +101,6 @@ const HomeScreen = ({ navigation }) => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [statistics, setStatistics] = useState({
     totalChildren: 0,
     todayPresent: 0,
@@ -304,7 +302,7 @@ const HomeScreen = ({ navigation }) => {
         navigation.navigate("Statistics");
         break;
       case "notifications":
-        setShowNotificationModal(true);
+        Alert.alert("الإشعارات", "ميزة الإشعارات مُعطّلة مؤقتاً");
         break;
       case "export":
         if (user?.role === "admin") {
@@ -545,12 +543,6 @@ const HomeScreen = ({ navigation }) => {
       {renderQuickActions()}
 
       <View style={styles.bottomPadding} />
-
-      {/* شاشة إدارة الإشعارات */}
-      <NotificationManagementScreen
-        visible={showNotificationModal}
-        onClose={() => setShowNotificationModal(false)}
-      />
     </ScrollView>
   );
 };
