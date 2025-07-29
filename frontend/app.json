@@ -25,7 +25,10 @@
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE"
       ],
-      "jsEngine": "hermes"
+      "jsEngine": "hermes",
+      "minSdkVersion": 23,
+      "compileSdkVersion": 34,
+      "targetSdkVersion": 34
     },
     "extra": {
       "eas": {

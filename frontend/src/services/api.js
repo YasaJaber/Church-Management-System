@@ -9,10 +9,14 @@ let BASE_URL;
 // Force use production backend for testing
 const USE_PRODUCTION_BACKEND = true; // Set to false to use local backend
 
-// FORCE LOCAL SERVER FOR DEBUGGING
-BASE_URL = "http://192.168.1.4:5000/api";
+if (USE_PRODUCTION_BACKEND) {
+  BASE_URL = "https://church-management-system-vk3m.onrender.com/api";
+} else {
+  // FORCE LOCAL SERVER FOR DEBUGGING
+  BASE_URL = "http://192.168.1.4:5000/api";
+}
 
-console.log("API Base URL (FORCED LOCAL):", BASE_URL);
+console.log("API Base URL:", BASE_URL);
 console.log("Platform:", Platform.OS);
 console.log("Development mode:", __DEV__);
 

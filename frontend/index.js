@@ -1,7 +1,13 @@
 import { registerRootComponent } from 'expo';
 import { LogBox } from 'react-native';
 
-import App from './App';
+console.log('Index.js loaded successfully');
+
+// Import simple test app first
+import SimpleApp from './SimpleApp';
+// import App from './App';
+
+console.log('SimpleApp component imported successfully');
 
 // تجاهل التحذيرات المعروفة التي قد تسبب مشاكل
 LogBox.ignoreLogs([
@@ -35,4 +41,9 @@ ErrorUtils.setGlobalHandler((error, isFatal) => {
 // registerRootComponent calls AppRegistry.registerComponent('main', () => App);
 // It also ensures that whether you load the app in Expo Go or in a native build,
 // the environment is set up appropriately
-registerRootComponent(App);
+
+console.log('Registering root component...');
+
+registerRootComponent(SimpleApp);
+
+console.log('Root component registered successfully');
