@@ -7,6 +7,9 @@
     "icon": "./assets/saint-george.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
+    "cli": {
+      "appVersionSource": "local"
+    },
     "splash": {
       "image": "./assets/saint-george.png",
       "resizeMode": "contain",
