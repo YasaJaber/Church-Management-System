@@ -4,18 +4,15 @@
   },
   "build": {
     "development": {
-      "distribution": "internal",
-      "channel": "development"
+      "distribution": "internal"
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview",
       "android": {
         "buildType": "apk"
       }
     },
     "production": {
-      "channel": "production",
       "env": {
         "NODE_ENV": "production"
       }
