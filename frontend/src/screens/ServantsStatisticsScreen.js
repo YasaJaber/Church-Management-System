@@ -10,8 +10,6 @@ import {
   RefreshControl,
   Linking,
 } from "react-native";
-import * as FileSystem from "expo-file-system";
-import * as Sharing from "expo-sharing";
 import { useAuth } from "../context/AuthContext";
 import { servantsAPI } from "../services/api";
 

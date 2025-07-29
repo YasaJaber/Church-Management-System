@@ -9,14 +9,8 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from "react-native";
-import * as FileSystem from "expo-file-system";
-import * as Sharing from "expo-sharing";
 import { useAuth } from "../context/AuthContext";
-import { statisticsAPI, classesAPI, attendanceAPI } from "../services/api";
-import {
-  exportAttendanceToPDF
-} from "../utils/pdfExportHTML";
-import { fetchAttendanceDataForExport } from "../utils/fixedPdfExport";const StatisticsScreen = () => {
+import { statisticsAPI, classesAPI, attendanceAPI } from "../services/api";const StatisticsScreen = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -159,56 +153,8 @@ import { fetchAttendanceDataForExport } from "../utils/fixedPdfExport";const Sta
   };
 
   const handleExportPDF = async () => {
-    try {
-      setLoading(true);
-      
-      // عرض رسالة بدء التصدير
-      Alert.alert("تصدير PDF", "جاري تحضير تقرير الحضور...", [], { cancelable: false });
-      
-      // الحصول على اسم الفصل للعرض
-      const selectedClassName = selectedClass && classes.length > 0 
-        ? classes.find(c => c._id === selectedClass)?.name || "جميع الفصول"
-        : "جميع الفصول";
-      
-      // جلب بيانات الحضور للتصدير
-      const attendanceData = await fetchAttendanceDataForExport(
-        attendanceAPI, 
-        selectedClass, 
-        selectedPeriod,
-        selectedClassName
-      );
-      
-      if (attendanceData.length === 0) {
-        Alert.alert("تنبيه", "لا توجد بيانات حضور للتصدير في الفترة المحددة");
-        return;
-      }
-      
-      // تصدير البيانات إلى PDF
-      const result = await exportAttendanceToPDF(
-        attendanceData, 
-        selectedClassName, 
-        selectedPeriod
-      );
-      
-      if (result.success) {
-        Alert.alert(
-          "نجح التصدير! 📄", 
-          `تم إنشاء تقرير الحضور بنجاح.\n\nعدد السجلات: ${attendanceData.length}\nالفترة: ${periods.find(p => p.id === selectedPeriod)?.label}\n\nتم حفظ الملف وفتح خيارات المشاركة.`,
-          [{ text: "موافق", style: "default" }]
-        );
-      } else {
-        Alert.alert("خطأ في التصدير", result.message || "حدث خطأ غير متوقع");
-      }
-      
-    } catch (error) {
-      console.error("خطأ في تصدير PDF:", error);
-      Alert.alert(
-        "خطأ", 
-        "حدث خطأ أثناء تصدير التقرير: " + (error.message || "خطأ غير معروف")
-      );
-    } finally {
-      setLoading(false);
-    }
+    // Export functionality removed
+    Alert.alert("معلومات", "تم إزالة ميزة التصدير");
   };
 
   const renderStatCard = (
