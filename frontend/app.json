@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "St. George Church Management",
+    "slug": "st-george-church-management", 
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/saint-george.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "cli": {
+      "appVersionSource": "local"
+    },
+    "splash": {
+      "image": "./assets/saint-george.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "android": {
+      "package": "com.stgeorge.churchmanagement",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/saint-george.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE"
+      ],
+      "jsEngine": "hermes"
+    },
+    "plugins": [
+      "expo-notifications"
+    ],
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 3000
+    },
+    "runtimeVersion": "1.0.0",
+    "extra": {
+      "eas": {
+        "projectId": "18d49dd0-a722-4f4e-b86b-1fc587806b0a"
+      }
+    },
+    "owner": "yasa_jaber"
+  }
+}
