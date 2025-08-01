@@ -2,18 +2,87 @@
 
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import { api } from '@/services/api'
+
+interface DashboardStats {
+  totalChildren: number
+  todayAttendance: number
+  todayAbsence: number
+  attendanceRate: number
+  totalClasses?: number
+  totalServants?: number
+}
 
 export default function DashboardPage() {
   const { user, isAuthenticated, isLoading, logout } = useAuth()
   const router = useRouter()
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [loadingStats, setLoadingStats] = useState(true)
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push('/login')
     }
   }, [isAuthenticated, isLoading, router])
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      fetchDashboardStats()
+    }
+  }, [isAuthenticated, user])
+
+  const fetchDashboardStats = async () => {
+    try {
+      setLoadingStats(true)
+      
+      // جلب إحصائيات الأطفال
+      const childrenResponse = await api.get('/children')
+      const totalChildren = childrenResponse.data.length
+
+      // جلب إحصائيات الحضور لليوم
+      const today = new Date().toISOString().split('T')[0]
+      const attendanceResponse = await api.get(`/attendance?date=${today}`)
+      const todayAttendance = attendanceResponse.data.filter((record: any) => record.isPresent).length
+      const todayAbsence = attendanceResponse.data.filter((record: any) => !record.isPresent).length
+      
+      // حساب متوسط الحضور
+      const attendanceRate = totalChildren > 0 ? Math.round((todayAttendance / totalChildren) * 100) : 0
+
+      const dashboardStats: DashboardStats = {
+        totalChildren,
+        todayAttendance,
+        todayAbsence,
+        attendanceRate
+      }
+
+      // للأدمن وأمين الخدمة - جلب إحصائيات إضافية
+      if (user?.role === 'admin' || user?.role === 'serviceLeader') {
+        try {
+          const classesResponse = await api.get('/classes')
+          const servantsResponse = await api.get('/servants')
+          dashboardStats.totalClasses = classesResponse.data.length
+          dashboardStats.totalServants = servantsResponse.data.length
+        } catch (error) {
+          console.log('Could not fetch additional stats')
+        }
+      }
+
+      setStats(dashboardStats)
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error)
+      // في حالة الخطأ، استخدم قيم افتراضية
+      setStats({
+        totalChildren: 0,
+        todayAttendance: 0,
+        todayAbsence: 0,
+        attendanceRate: 0
+      })
+    } finally {
+      setLoadingStats(false)
+    }
+  }
 
   const handleLogout = async () => {
     await logout()
@@ -74,6 +143,7 @@ export default function DashboardPage() {
 
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {/* إجمالي الأطفال */}
           <div className="bg-white p-6 rounded-lg shadow">
             <div className="flex items-center">
               <div className="flex-shrink-0">
@@ -87,13 +157,14 @@ export default function DashboardPage() {
                     إجمالي الأطفال
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    --
+                    {loadingStats ? '--' : stats?.totalChildren || 0}
                   </dd>
                 </dl>
               </div>
             </div>
           </div>
 
+          {/* الحضور اليوم */}
           <div className="bg-white p-6 rounded-lg shadow">
             <div className="flex items-center">
               <div className="flex-shrink-0">
@@ -107,52 +178,100 @@ export default function DashboardPage() {
                     الحضور اليوم
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    --
+                    {loadingStats ? '--' : stats?.todayAttendance || 0}
                   </dd>
                 </dl>
               </div>
             </div>
           </div>
 
+          {/* الغياب اليوم */}
+          <div className="bg-white p-6 rounded-lg shadow">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-red-500 rounded-md flex items-center justify-center">
+                  <span className="text-white text-sm">❌</span>
+                </div>
+              </div>
+              <div className="mr-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">
+                    الغياب اليوم
+                  </dt>
+                  <dd className="text-lg font-medium text-gray-900">
+                    {loadingStats ? '--' : stats?.todayAbsence || 0}
+                  </dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+
+          {/* متوسط الحضور */}
           <div className="bg-white p-6 rounded-lg shadow">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
-                  <span className="text-white text-sm">📚</span>
+                  <span className="text-white text-sm">📊</span>
                 </div>
               </div>
               <div className="mr-5 w-0 flex-1">
                 <dl>
                   <dt className="text-sm font-medium text-gray-500 truncate">
-                    الفصول
+                    متوسط الحضور
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    --
+                    {loadingStats ? '--' : `${stats?.attendanceRate || 0}%`}
                   </dd>
                 </dl>
               </div>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-lg shadow">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="w-8 h-8 bg-yellow-500 rounded-md flex items-center justify-center">
-                  <span className="text-white text-sm">👨‍🏫</span>
+          {/* الفصول - لأمين الخدمة والأدمن فقط */}
+          {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
+            <div className="bg-white p-6 rounded-lg shadow">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 bg-indigo-500 rounded-md flex items-center justify-center">
+                    <span className="text-white text-sm">📚</span>
+                  </div>
+                </div>
+                <div className="mr-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">
+                      الفصول
+                    </dt>
+                    <dd className="text-lg font-medium text-gray-900">
+                      {loadingStats ? '--' : stats?.totalClasses || 0}
+                    </dd>
+                  </dl>
                 </div>
               </div>
-              <div className="mr-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    الخدام
-                  </dt>
-                  <dd className="text-lg font-medium text-gray-900">
-                    --
-                  </dd>
-                </dl>
+            </div>
+          )}
+
+          {/* الخدام - لأمين الخدمة والأدمن فقط */}
+          {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
+            <div className="bg-white p-6 rounded-lg shadow">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <div className="w-8 h-8 bg-yellow-500 rounded-md flex items-center justify-center">
+                    <span className="text-white text-sm">👨‍🏫</span>
+                  </div>
+                </div>
+                <div className="mr-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">
+                      الخدام
+                    </dt>
+                    <dd className="text-lg font-medium text-gray-900">
+                      {loadingStats ? '--' : stats?.totalServants || 0}
+                    </dd>
+                  </dl>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Navigation Grid */}
@@ -209,7 +328,7 @@ export default function DashboardPage() {
           </button>
 
           {/* إدارة الخدام - لأمين الخدمة فقط */}
-          {(user.role === 'admin' || user.role === 'serviceLeader') && (
+          {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
             <button
               onClick={() => router.push('/servants')}
               className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
@@ -229,7 +348,7 @@ export default function DashboardPage() {
           )}
 
           {/* إدارة الفصول - لأمين الخدمة فقط */}
-          {(user.role === 'admin' || user.role === 'serviceLeader') && (
+          {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
             <button
               onClick={() => router.push('/classes')}
               className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
