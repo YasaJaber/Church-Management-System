@@ -23,6 +23,7 @@ interface Child {
   isPresent?: boolean
   attendanceId?: string
   notes?: string
+  hasAttendanceRecord?: boolean // جديد: لمعرفة إذا كان له تسجيل حضور أصلاً
 }
 
 interface Class {
@@ -113,9 +114,10 @@ export default function AttendancePage() {
           age: child.age || 0,
           classId: child.class?._id || child.classId,
           className: child.className,
-          isPresent: child.attendance?.status === 'present',
+          isPresent: child.attendance?.status === 'present', // إذا لم يكن له تسجيل حضور = undefined (لا حضور ولا غياب)
           attendanceId: child.attendance?._id,
-          notes: child.attendance?.notes || ''
+          notes: child.attendance?.notes || '',
+          hasAttendanceRecord: !!child.attendance // لمعرفة إذا كان له تسجيل أصلاً
         }))
         
         setChildren(childrenWithAttendance)
@@ -134,52 +136,87 @@ export default function AttendancePage() {
     }
   }
 
-  const toggleAttendance = async (childId: string) => {
+  const markPresent = async (childId: string) => {
     if (saving) return
 
     const childIndex = children.findIndex(c => c._id === childId)
     if (childIndex === -1) return
 
     const child = children[childIndex]
-    const newStatus = !child.isPresent
 
     // Optimistically update UI
     const updatedChildren = [...children]
-    updatedChildren[childIndex] = { ...child, isPresent: newStatus }
+    updatedChildren[childIndex] = { 
+      ...child, 
+      isPresent: true, 
+      hasAttendanceRecord: true 
+    }
     setChildren(updatedChildren)
 
     try {
-      if (newStatus) {
-        // Mark present
-        const response = await attendanceAPI.markAttendance({
-          childId,
-          date: selectedDate,
-          status: 'present',
-          classId: selectedClass
-        })
+      const response = await attendanceAPI.markAttendance({
+        childId,
+        date: selectedDate,
+        status: 'present',
+        classId: selectedClass
+      })
 
-        if (!response.success) {
-          throw new Error(response.error || 'فشل في تسجيل الحضور')
-        }
-      } else {
-        // Mark absent (delete attendance record)
-        const response = await attendanceAPI.deleteAttendance(childId, selectedDate)
-        
-        if (!response.success) {
-          throw new Error(response.error || 'فشل في مسح تسجيل الحضور')
-        }
+      if (!response.success) {
+        throw new Error(response.error || 'فشل في تسجيل الحضور')
       }
 
-      toast.success(newStatus ? 'تم تسجيل الحضور' : 'تم تسجيل الغياب')
+      toast.success('تم تسجيل الحضور')
     } catch (error: any) {
-      console.error('Error toggling attendance:', error)
+      console.error('Error marking present:', error)
       
       // Revert UI change on error
       const revertedChildren = [...children]
-      revertedChildren[childIndex] = { ...child, isPresent: !newStatus }
+      revertedChildren[childIndex] = child
       setChildren(revertedChildren)
       
-      toast.error(error.message || 'حدث خطأ في تحديث الحضور')
+      toast.error(error.message || 'حدث خطأ في تسجيل الحضور')
+    }
+  }
+
+  const markAbsent = async (childId: string) => {
+    if (saving) return
+
+    const childIndex = children.findIndex(c => c._id === childId)
+    if (childIndex === -1) return
+
+    const child = children[childIndex]
+
+    // Optimistically update UI
+    const updatedChildren = [...children]
+    updatedChildren[childIndex] = { 
+      ...child, 
+      isPresent: false, 
+      hasAttendanceRecord: true 
+    }
+    setChildren(updatedChildren)
+
+    try {
+      const response = await attendanceAPI.markAttendance({
+        childId,
+        date: selectedDate,
+        status: 'absent',
+        classId: selectedClass
+      })
+
+      if (!response.success) {
+        throw new Error(response.error || 'فشل في تسجيل الغياب')
+      }
+
+      toast.success('تم تسجيل الغياب')
+    } catch (error: any) {
+      console.error('Error marking absent:', error)
+      
+      // Revert UI change on error
+      const revertedChildren = [...children]
+      revertedChildren[childIndex] = child
+      setChildren(revertedChildren)
+      
+      toast.error(error.message || 'حدث خطأ في تسجيل الغياب')
     }
   }
 
@@ -204,7 +241,10 @@ export default function AttendancePage() {
     }
   }
 
-  const presentCount = children.filter(child => child.isPresent).length
+  // حساب الإحصائيات
+  const presentCount = children.filter(child => child.hasAttendanceRecord && child.isPresent).length
+  const absentCount = children.filter(child => child.hasAttendanceRecord && !child.isPresent).length  
+  const notRecordedCount = children.filter(child => !child.hasAttendanceRecord).length
   const totalCount = children.length
   const attendanceRate = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0
 
@@ -325,14 +365,18 @@ export default function AttendancePage() {
 
           {/* Statistics */}
           {selectedClass && children.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 pt-4 border-t">
               <div className="text-center">
                 <div className="text-2xl font-bold text-green-600">{presentCount}</div>
                 <div className="text-sm text-gray-600">حاضر</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-red-600">{totalCount - presentCount}</div>
+                <div className="text-2xl font-bold text-red-600">{absentCount}</div>
                 <div className="text-sm text-gray-600">غائب</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-gray-600">{notRecordedCount}</div>
+                <div className="text-sm text-gray-600">لم يُسجل</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-blue-600">{attendanceRate}%</div>
@@ -377,18 +421,24 @@ export default function AttendancePage() {
                 <div
                   key={child._id}
                   className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors ${
-                    child.isPresent ? 'bg-green-50 border-r-4 border-green-500' : ''
+                    child.hasAttendanceRecord
+                      ? child.isPresent 
+                        ? 'bg-green-50 border-r-4 border-green-500' 
+                        : 'bg-red-50 border-r-4 border-red-500'
+                      : 'bg-gray-50 border-r-4 border-gray-300'
                   }`}
                 >
                   <div className="flex items-center">
                     <div className="flex-shrink-0">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        child.isPresent 
-                          ? 'bg-green-100 text-green-600' 
-                          : 'bg-gray-100 text-gray-400'
-                      }`}>
-                        {child.name.charAt(0)}
-                      </div>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                    child.hasAttendanceRecord
+                      ? child.isPresent 
+                        ? 'bg-green-100 text-green-600' 
+                        : 'bg-red-100 text-red-600'
+                      : 'bg-gray-100 text-gray-400'
+                  }`}>
+                    {child.name.charAt(0)}
+                  </div>
                     </div>
                     <div className="mr-4">
                       <div className="text-sm font-medium text-gray-900">
@@ -401,30 +451,51 @@ export default function AttendancePage() {
                   </div>
 
                   <div className="flex items-center space-x-3 space-x-reverse">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      child.isPresent 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {child.isPresent ? 'حاضر' : 'غائب'}
-                    </span>
+                    {/* عرض حالة الحضور */}
+                    {child.hasAttendanceRecord ? (
+                      <span className={`px-2 py-1 text-xs rounded-full ${
+                        child.isPresent 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {child.isPresent ? 'حاضر' : 'غائب'}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
+                        لم يُسجل
+                      </span>
+                    )}
                     
-                    <button
-                      onClick={() => toggleAttendance(child._id)}
-                      disabled={saving}
-                      className={`p-2 rounded-full transition-colors ${
-                        child.isPresent
-                          ? 'text-green-600 hover:bg-green-100'
-                          : 'text-gray-400 hover:bg-gray-100'
-                      } disabled:opacity-50`}
-                      title={child.isPresent ? 'تسجيل غياب' : 'تسجيل حضور'}
-                    >
-                      {child.isPresent ? (
-                        <CheckCircleIcon className="w-6 h-6" />
-                      ) : (
-                        <XCircleIcon className="w-6 h-6" />
-                      )}
-                    </button>
+                    {/* أزرار الحضور والغياب */}
+                    <div className="flex space-x-1 space-x-reverse">
+                      {/* زر الحضور */}
+                      <button
+                        onClick={() => markPresent(child._id)}
+                        disabled={saving}
+                        className={`p-2 rounded-full transition-colors ${
+                          child.hasAttendanceRecord && child.isPresent
+                            ? 'text-green-600 bg-green-100'
+                            : 'text-gray-400 hover:bg-green-50 hover:text-green-600'
+                        } disabled:opacity-50`}
+                        title="تسجيل حضور"
+                      >
+                        <CheckCircleIcon className="w-5 h-5" />
+                      </button>
+                      
+                      {/* زر الغياب */}
+                      <button
+                        onClick={() => markAbsent(child._id)}
+                        disabled={saving}
+                        className={`p-2 rounded-full transition-colors ${
+                          child.hasAttendanceRecord && !child.isPresent
+                            ? 'text-red-600 bg-red-100'
+                            : 'text-gray-400 hover:bg-red-50 hover:text-red-600'
+                        } disabled:opacity-50`}
+                        title="تسجيل غياب"
+                      >
+                        <XCircleIcon className="w-5 h-5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
