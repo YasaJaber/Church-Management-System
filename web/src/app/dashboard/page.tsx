@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { api } from '@/services/api'
+import Cookies from 'js-cookie'
 
 interface DashboardStats {
   totalChildren: number
@@ -29,26 +30,59 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (isAuthenticated && user) {
+      console.log('🔐 المستخدم مسجل دخول:', user)
+      console.log('🎫 بدء جلب الإحصائيات...')
       fetchDashboardStats()
+    } else {
+      console.log('❌ المستخدم غير مسجل دخول أو البيانات غير متوفرة')
+      console.log('🔐 isAuthenticated:', isAuthenticated)
+      console.log('👤 user:', user)
     }
   }, [isAuthenticated, user])
 
   const fetchDashboardStats = async () => {
     try {
       setLoadingStats(true)
+      console.log('🔍 بدء جلب الإحصائيات...')
+      
+      // التحقق من وجود توكن
+      const token = Cookies.get('auth_token') || Cookies.get('userToken')
+      if (!token) {
+        console.log('❌ لا يوجد توكن مصادقة')
+        setStats({
+          totalChildren: 0,
+          todayAttendance: 0,
+          todayAbsence: 0,
+          attendanceRate: 0
+        })
+        return
+      }
+      console.log('✅ توكن المصادقة موجود')
       
       // جلب إحصائيات الأطفال
+      console.log('📊 جلب بيانات الأطفال...')
       const childrenResponse = await api.get('/children')
-      const totalChildren = childrenResponse.data.length
+      console.log('✅ استجابة الأطفال:', childrenResponse.data)
+      const totalChildren = Array.isArray(childrenResponse.data) ? childrenResponse.data.length : 0
 
       // جلب إحصائيات الحضور لليوم
       const today = new Date().toISOString().split('T')[0]
+      console.log('📅 تاريخ اليوم:', today)
       const attendanceResponse = await api.get(`/attendance?date=${today}`)
-      const todayAttendance = attendanceResponse.data.filter((record: any) => record.isPresent).length
-      const todayAbsence = attendanceResponse.data.filter((record: any) => !record.isPresent).length
+      console.log('✅ استجابة الحضور:', attendanceResponse.data)
+      const attendanceData = Array.isArray(attendanceResponse.data) ? attendanceResponse.data : []
+      const todayAttendance = attendanceData.filter((record: any) => record.isPresent).length
+      const todayAbsence = attendanceData.filter((record: any) => !record.isPresent).length
       
       // حساب متوسط الحضور
       const attendanceRate = totalChildren > 0 ? Math.round((todayAttendance / totalChildren) * 100) : 0
+
+      console.log('📈 الإحصائيات المحسوبة:', {
+        totalChildren,
+        todayAttendance, 
+        todayAbsence,
+        attendanceRate
+      })
 
       const dashboardStats: DashboardStats = {
         totalChildren,
@@ -62,16 +96,18 @@ export default function DashboardPage() {
         try {
           const classesResponse = await api.get('/classes')
           const servantsResponse = await api.get('/servants')
-          dashboardStats.totalClasses = classesResponse.data.length
-          dashboardStats.totalServants = servantsResponse.data.length
+          dashboardStats.totalClasses = Array.isArray(classesResponse.data) ? classesResponse.data.length : 0
+          dashboardStats.totalServants = Array.isArray(servantsResponse.data) ? servantsResponse.data.length : 0
+          console.log('✅ إحصائيات إضافية:', { classes: dashboardStats.totalClasses, servants: dashboardStats.totalServants })
         } catch (error) {
-          console.log('Could not fetch additional stats')
+          console.log('⚠️ Could not fetch additional stats:', error)
         }
       }
 
       setStats(dashboardStats)
+      console.log('✅ تم تحديث الإحصائيات بنجاح')
     } catch (error) {
-      console.error('Error fetching dashboard stats:', error)
+      console.error('❌ خطأ في جلب إحصائيات Dashboard:', error)
       // في حالة الخطأ، استخدم قيم افتراضية
       setStats({
         totalChildren: 0,
@@ -101,6 +137,7 @@ export default function DashboardPage() {
   }
 
   if (!isAuthenticated || !user) {
+    console.log('🚨 إعادة توجيه للتسجيل - isAuthenticated:', isAuthenticated, 'user:', user)
     return null
   }
 
@@ -157,7 +194,15 @@ export default function DashboardPage() {
                     إجمالي الأطفال
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {loadingStats ? '--' : stats?.totalChildren || 0}
+                    {loadingStats ? (
+                      <div className="animate-pulse">--</div>
+                    ) : (
+                      stats?.totalChildren === 0 ? (
+                        <span className="text-gray-400">لا توجد بيانات</span>
+                      ) : (
+                        stats?.totalChildren || 0
+                      )
+                    )}
                   </dd>
                 </dl>
               </div>
@@ -178,7 +223,11 @@ export default function DashboardPage() {
                     الحضور اليوم
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {loadingStats ? '--' : stats?.todayAttendance || 0}
+                    {loadingStats ? (
+                      <div className="animate-pulse">--</div>
+                    ) : (
+                      stats?.todayAttendance || 0
+                    )}
                   </dd>
                 </dl>
               </div>
