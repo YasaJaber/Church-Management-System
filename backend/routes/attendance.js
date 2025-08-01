@@ -7,6 +7,101 @@ const { authMiddleware } = require("../middleware/auth");
 
 const router = express.Router();
 
+// @route   GET /api/attendance/children-with-status
+// @desc    Get children with attendance status for a specific date (for attendance form)
+// @access  Protected
+router.get("/children-with-status", authMiddleware, async (req, res) => {
+  try {
+    const { date, classId } = req.query;
+
+    console.log("\n" + "=".repeat(50));
+    console.log("🔍 GET /children-with-status API CALLED");
+    console.log("📅 Date:", date);
+    console.log("🏫 ClassId:", classId);
+    console.log("👤 User:", req.user?.username || "UNKNOWN");
+    console.log("🔐 Role:", req.user?.role || "UNKNOWN");
+    console.log("=".repeat(50));
+
+    // Apply role-based filtering for class
+    let targetClassId = classId;
+    if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
+      // Servants and classTeachers can only see their assigned class
+      targetClassId = req.user.assignedClass._id.toString();
+      console.log("👤 Servant/ClassTeacher access - forced classId:", targetClassId);
+    } else if (req.user.role !== "admin" && !req.user.assignedClass) {
+      console.log("❌ Access denied for non-admin without class");
+      return res.status(403).json({
+        success: false,
+        error: "Access denied",
+      });
+    }
+
+    // Get children in the specified class (or all if admin)
+    let childQuery = { isActive: true };
+    if (targetClassId) {
+      childQuery.class = targetClassId;
+    }
+
+    const children = await Child.find(childQuery).populate("class").sort({ name: 1 });
+    console.log("👥 Found", children.length, "active children");
+
+    // Get attendance records for the specified date
+    let attendanceRecords = [];
+    if (date) {
+      const childIds = children.map(child => child._id);
+      attendanceRecords = await Attendance.find({
+        date: date,
+        type: "child",
+        person: { $in: childIds }
+      });
+      console.log("📊 Found", attendanceRecords.length, "attendance records for date:", date);
+    }
+
+    // Create attendance map for quick lookup
+    const attendanceMap = {};
+    attendanceRecords.forEach(record => {
+      attendanceMap[record.person.toString()] = {
+        status: record.status,
+        notes: record.notes,
+        _id: record._id
+      };
+    });
+
+    // Transform data to include attendance status
+    const childrenWithStatus = children.map(child => ({
+      _id: child._id,
+      name: child.name,
+      phone: child.phone,
+      parentName: child.parentName,
+      stage: child.stage,
+      grade: child.grade,
+      class: child.class,
+      className: child.class?.name || 'غير محدد',
+      notes: child.notes,
+      isActive: child.isActive,
+      // Attendance status for the specified date
+      attendance: attendanceMap[child._id.toString()] || {
+        status: 'absent',
+        notes: '',
+        _id: null
+      }
+    }));
+
+    console.log("✅ Returning", childrenWithStatus.length, "children with attendance status");
+
+    res.json({
+      success: true,
+      data: childrenWithStatus,
+    });
+  } catch (error) {
+    console.error("❌ Error in children-with-status:", error);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
+  }
+});
+
 // @route   GET /api/attendance/children
 // @desc    Get children attendance by date and class (role-based access)
 // @access  Protected

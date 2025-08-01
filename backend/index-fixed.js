@@ -19,10 +19,10 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:8082', 'http://192.168.1.4:8082', 'http://10.0.2.2:8082', 'exp://192.168.1.4:8082', 'http://localhost:8083', 'http://192.168.1.4:8083', 'exp://192.168.1.4:8083'],
+  origin: '*', // Allow all origins for testing
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
-  credentials: true
+  credentials: false // Set to false when using origin: '*'
 }));
 app.use(express.json());
 
@@ -48,6 +48,37 @@ app.use("/api/pastoral-care", pastoralCareRoutes);
 // Basic test route
 app.get("/", (req, res) => {
   res.json({ message: "Mar Gerges Church Attendance API Server - Fixed Version" });
+});
+
+// Health check endpoint
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "healthy",
+    timestamp: new Date().toISOString(),
+    server: "church-management-api",
+    database: "connected"
+  });
+});
+
+// Simple test endpoint for CORS testing
+app.get("/api/test", (req, res) => {
+  res.json({ 
+    message: "CORS test successful", 
+    timestamp: new Date().toISOString(),
+    headers: req.headers
+  });
+});
+
+// Test login endpoint with detailed logging
+app.post("/api/test-login", (req, res) => {
+  console.log("🔍 Test login endpoint called");
+  console.log("Body:", req.body);
+  res.json({
+    success: true,
+    message: "Test endpoint working",
+    received: req.body,
+    timestamp: new Date().toISOString()
+  });
 });
 
 // Health check endpoint

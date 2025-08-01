@@ -222,6 +222,14 @@ router.post("/", authMiddleware, async (req, res) => {
 // @access  Protected
 router.put("/:id", authMiddleware, async (req, res) => {
   try {
+    console.log("\n" + "=".repeat(50));
+    console.log("🔄 PUT /children/:id API CALLED");
+    console.log("👤 User:", req.user?.username || "UNKNOWN");
+    console.log("🔐 Role:", req.user?.role || "UNKNOWN");
+    console.log("📝 Child ID:", req.params.id);
+    console.log("📝 Update data:", req.body);
+    console.log("=".repeat(50));
+
     const child = await Child.findById(req.params.id).populate("class");
 
     if (!child) {
@@ -231,24 +239,27 @@ router.put("/:id", authMiddleware, async (req, res) => {
       });
     }
 
-    // Check if user has permission to edit this child
-    if (req.user.role !== "admin") {
-      if (
-        !req.user.assignedClass ||
-        child.class._id.toString() !== req.user.assignedClass._id.toString()
-      ) {
-        return res.status(403).json({
-          success: false,
-          error:
-            "Access denied. You can only edit children in your assigned class.",
-        });
-      }
+    console.log("👶 Found child:", child.name, "in class:", child.class?.name);
+
+    // Simplified permission check: Admin can edit all, others can edit only their class
+    const canEdit = req.user.role === "admin" || 
+                   (req.user.assignedClass && 
+                    child.class._id.toString() === req.user.assignedClass._id.toString());
+
+    if (!canEdit) {
+      console.log("❌ Access denied - user class:", req.user.assignedClass?._id, "child class:", child.class._id);
+      return res.status(403).json({
+        success: false,
+        error: "Access denied. You can only edit children in your assigned class.",
+      });
     }
 
-    const { name, age, phone, parentName, classId, notes } = req.body;
+    console.log("✅ Permission granted for editing");
 
-    // Find the class if classId is provided
-    if (classId) {
+    const { name, age, phone, parentName, classId, notes, stage, grade } = req.body;
+
+    // Handle class change
+    if (classId && classId !== child.class._id.toString()) {
       const newClass = await Class.findById(classId);
       if (!newClass) {
         return res.status(404).json({
@@ -257,19 +268,19 @@ router.put("/:id", authMiddleware, async (req, res) => {
         });
       }
 
-      // Check if user has permission to move child to this class
-      if (req.user.role !== "admin") {
-        if (
-          !req.user.assignedClass ||
-          req.user.assignedClass._id.toString() !== classId
-        ) {
-          return res.status(403).json({
-            success: false,
-            error:
-              "Access denied. You can only move children to your assigned class.",
-          });
-        }
+      // Check if user has permission to move child to new class
+      const canMoveToNewClass = req.user.role === "admin" || 
+                               (req.user.assignedClass && 
+                                req.user.assignedClass._id.toString() === classId);
+
+      if (!canMoveToNewClass) {
+        return res.status(403).json({
+          success: false,
+          error: "Access denied. You can only move children to your assigned class.",
+        });
       }
+
+      console.log("✅ Permission granted for class change to:", newClass.name);
     }
 
     // Update child fields
@@ -280,6 +291,10 @@ router.put("/:id", authMiddleware, async (req, res) => {
     if (parentName !== undefined) updateData.parentName = parentName;
     if (classId !== undefined) updateData.class = classId;
     if (notes !== undefined) updateData.notes = notes;
+    if (stage !== undefined) updateData.stage = stage;
+    if (grade !== undefined) updateData.grade = grade;
+
+    console.log("📝 Updating with data:", updateData);
 
     const updatedChild = await Child.findByIdAndUpdate(
       req.params.id,
@@ -287,13 +302,15 @@ router.put("/:id", authMiddleware, async (req, res) => {
       { new: true }
     ).populate("class");
 
+    console.log("✅ Child updated successfully:", updatedChild.name);
+
     res.json({
       success: true,
       data: updatedChild,
       message: "Child updated successfully",
     });
   } catch (error) {
-    console.error(error);
+    console.error("❌ Error updating child:", error);
     res.status(500).json({
       success: false,
       error: "Server error",

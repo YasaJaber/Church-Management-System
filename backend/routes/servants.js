@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const User = require("../models/User");
 const Attendance = require("../models/Attendance");
 const Class = require("../models/Class");
-const { authMiddleware, adminOnly } = require("../middleware/auth");
+const { authMiddleware, adminOnly, adminOrServiceLeader } = require("../middleware/auth");
 const { zonedTimeToUtc, utcToZonedTime, format } = require('date-fns-tz');
 const { subDays, getDay } = require('date-fns');
 
@@ -66,8 +66,8 @@ const getFridayDatesBack = (weeksBack) => {
 
 // @route   GET /api/servants
 // @desc    Get all individual servants
-// @access  Protected (Admin only)
-router.get("/", authMiddleware, adminOnly, async (req, res) => {
+// @access  Protected (Admin or Service Leader)
+router.get("/", authMiddleware, adminOrServiceLeader, async (req, res) => {
   try {
     // Find all servants (individual servants system)
     const servants = await User.find({
@@ -96,8 +96,8 @@ router.get("/", authMiddleware, adminOnly, async (req, res) => {
 
 // @route   GET /api/servants/attendance
 // @desc    Get servant attendance by date
-// @access  Protected (Admin only)
-router.get("/attendance", authMiddleware, adminOnly, async (req, res) => {
+// @access  Protected (Admin or Service Leader)
+router.get("/attendance", authMiddleware, adminOrServiceLeader, async (req, res) => {
   try {
     console.log("🔍 Servants attendance API called");
     console.log("📅 Request query:", req.query);

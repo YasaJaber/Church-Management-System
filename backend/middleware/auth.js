@@ -34,7 +34,7 @@ const authMiddleware = async (req, res, next) => {
         .json({ message: "Invalid token or inactive user." });
     }
 
-    req.user = user;
+    req.user = { ...user.toObject(), userId: decoded.userId };
     console.log('✅ Auth middleware passed for:', user.name);
     next();
   } catch (error) {
@@ -49,6 +49,16 @@ const adminOnly = (req, res, next) => {
     return res
       .status(403)
       .json({ message: "Access denied. Admin privileges required." });
+  }
+  next();
+};
+
+// Middleware to check if user is admin or service leader
+const adminOrServiceLeader = (req, res, next) => {
+  if (req.user.role !== "admin" && req.user.role !== "serviceLeader") {
+    return res
+      .status(403)
+      .json({ message: "Access denied. Admin or Service Leader privileges required." });
   }
   next();
 };
@@ -85,5 +95,6 @@ const classAccess = async (req, res, next) => {
 module.exports = {
   authMiddleware,
   adminOnly,
+  adminOrServiceLeader,
   classAccess,
 };

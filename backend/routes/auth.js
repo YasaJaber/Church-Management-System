@@ -213,14 +213,12 @@ router.post("/create-user", authMiddleware, async (req, res) => {
 // @route   GET /api/auth/me
 // @desc    Get current user
 // @access  Private
-router.get("/me", async (req, res) => {
+router.get("/me", authMiddleware, async (req, res) => {
   try {
-    // For now, return first admin user (in production would use JWT middleware)
-    const adminUser = await User.findOne({ role: "admin" }).populate(
-      "assignedClass"
-    );
+    // Get user from middleware (req.user is set by authMiddleware)
+    const user = await User.findById(req.user.userId).populate("assignedClass");
 
-    if (!adminUser) {
+    if (!user) {
       return res.status(404).json({
         success: false,
         error: "User not found",
@@ -228,17 +226,19 @@ router.get("/me", async (req, res) => {
     }
 
     const userResponse = {
-      _id: adminUser._id,
-      name: adminUser.name,
-      username: adminUser.username,
-      role: adminUser.role,
-      assignedClass: adminUser.assignedClass,
-      phone: adminUser.phone,
+      _id: user._id,
+      name: user.name,
+      username: user.username,
+      role: user.role,
+      assignedClass: user.assignedClass,
+      phone: user.phone,
     };
 
     res.json({
       success: true,
-      data: userResponse,
+      data: {
+        user: userResponse
+      },
     });
   } catch (error) {
     console.error(error);
