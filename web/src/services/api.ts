@@ -6,15 +6,10 @@ import Cookies from 'js-cookie'
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
 const LOCAL_URL = process.env.NEXT_PUBLIC_API_LOCAL || 'http://localhost:5000/api'
 
-// Check if we're in development mode on localhost
-const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+// Always use production backend
+const USE_PRODUCTION_BACKEND = true
 
-// Always use production backend for deployment, except when developing locally
-const USE_PRODUCTION_BACKEND = !isDevelopment
-
-const API_BASE_URL = USE_PRODUCTION_BACKEND ? 
-  (process.env.NEXT_PUBLIC_API_URL || 'https://church-management-system-b6h7.onrender.com/api') : 
-  'http://localhost:5000/api'
+const API_BASE_URL = 'https://church-management-system-b6h7.onrender.com/api'
 
 console.log('API Base URL:', API_BASE_URL)
 console.log('Environment:', process.env.NODE_ENV)
