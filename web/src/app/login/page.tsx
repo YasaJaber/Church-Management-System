@@ -83,16 +83,13 @@ export default function LoginPage() {
         <div className="text-center text-white">
           <div className="mb-8">
             <img 
-              src="/images/saint-george.png" 
-              alt="كنيسة مار جرجس" 
-              className="w-32 h-32 mx-auto mb-6"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none'
-              }}
+              src="/saint-george.png" 
+              alt="كنيسة مار جرجس - بأولاد علي" 
+              className="w-40 h-40 mx-auto mb-6 rounded-lg shadow-lg"
             />
           </div>
           <h1 className="text-4xl font-bold mb-4">
-            🏛️ كنيسة الشهيد مار جرجس
+            كنيسة الشهيد مار جرجس - بأولاد علي
           </h1>
           <p className="text-xl mb-6">
             نظام إدارة الكنيسة
@@ -113,16 +110,6 @@ export default function LoginPage() {
             <p className="text-gray-600">
               مرحباً بك، يرجى تسجيل الدخول للمتابعة
             </p>
-            
-            {/* Test Credentials Info */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-4">
-              <p className="text-xs text-blue-700 font-medium mb-2 text-center">بيانات الاختبار الصحيحة:</p>
-              <div className="text-xs text-blue-600 space-y-1 text-center">
-                <div>المستخدم: <span className="font-mono bg-white px-1 rounded">keroles</span> | كلمة المرور: <span className="font-mono bg-white px-1 rounded">keroles123</span> ✅</div>
-                <div>أو المستخدم: <span className="font-mono bg-white px-1 rounded">emad</span> | كلمة المرور: <span className="font-mono bg-white px-1 rounded">emad123</span> ✅</div>
-                <div className="text-red-600 text-xs mt-2">⚠️ هذين المستخدمين فقط يعملان حالياً</div>
-              </div>
-            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -209,7 +196,7 @@ export default function LoginPage() {
 
           <div className="mt-8 text-center">
             <p className="text-sm text-gray-600">
-              نظام إدارة كنيسة الشهيد مار جرجس - الإصدار 1.0
+              نظام إدارة كنيسة الشهيد مار جرجس - بأولاد علي - الإصدار 1.0
             </p>
           </div>
         </div>

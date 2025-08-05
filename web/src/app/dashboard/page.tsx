@@ -159,8 +159,13 @@ export default function DashboardPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
+              <img 
+                src="/saint-george.png" 
+                alt="كنيسة مار جرجس - بأولاد علي" 
+                className="w-8 h-8 ml-3 rounded"
+              />
               <h1 className="text-xl font-semibold text-gray-900">
-                نظام إدارة كنيسة مار جرجس
+                نظام إدارة كنيسة مار جرجس - بأولاد علي
               </h1>
             </div>
             <div className="flex items-center space-x-4 space-x-reverse">
