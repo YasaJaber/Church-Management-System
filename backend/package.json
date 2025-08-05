@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node index-fixed.js",
-    "dev": "nodemon index-fixed.js",
+    "start": "node index.js",
+    "dev": "nodemon index.js",
     "seed": "node scripts/seed.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },

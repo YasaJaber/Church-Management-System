@@ -1,7 +1,10 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const Child = require("../models/Child");
 const Class = require("../models/Class");
-const { authMiddleware } = require("../middleware/auth");
+const Attendance = require("../models/Attendance");
+const { authMiddleware, adminOrServiceLeader } = require("../middleware/auth");
+const { subDays, getDay } = require('date-fns');
 
 const router = express.Router();
 
@@ -20,10 +23,10 @@ router.get("/", authMiddleware, async (req, res) => {
     let childrenQuery = {};
 
     // Role-based access control
-    if (req.user.role === "admin") {
-      // Admin sees all children
+    if (req.user.role === "admin" || req.user.role === "serviceLeader") {
+      // Admin and Service Leader see all children
       childrenQuery = {};
-      console.log("👑 Admin access - showing all children");
+      console.log("👑 Admin/ServiceLeader access - showing all children");
     } else if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
       // Servant or Class Teacher sees only their class children
       childrenQuery = { class: req.user.assignedClass._id };
@@ -61,7 +64,7 @@ router.get("/class/:classId", authMiddleware, async (req, res) => {
     const { classId } = req.params;
 
     // Check if user has permission to view this class
-    if (req.user.role !== "admin") {
+    if (req.user.role !== "admin" && req.user.role !== "serviceLeader") {
       if (
         !req.user.assignedClass ||
         req.user.assignedClass._id.toString() !== classId
@@ -137,7 +140,7 @@ router.get("/:id", authMiddleware, async (req, res) => {
 // @access  Protected
 router.post("/", authMiddleware, async (req, res) => {
   try {
-    const { name, age, phone, parentName, classId, notes } = req.body;
+    const { name, phone, parentName, classId, notes } = req.body;
 
     // فقط الاسم مطلوب
     if (!name || !name.trim()) {
@@ -150,21 +153,17 @@ router.post("/", authMiddleware, async (req, res) => {
     // تحديد الفصل تلقائياً حسب المستخدم
     let targetClassId = classId;
     if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
-      // الخادم أو المدرس يضيف في فصله فقط
-      targetClassId = req.user.assignedClass._id;
-    } else if (!targetClassId) {
-      // إذا لم يحدد فصل، استخدم أول فصل متاح (للأدمن)
-      const firstClass = await Class.findOne({ isActive: true }).sort({
-        order: 1,
+      // المدرس والخادم يضيفان للفصل المخصص لهم
+      targetClassId = req.user.assignedClass._id.toString();
+      console.log(`🎯 تم تعيين الفصل تلقائياً للمستخدم ${req.user.username}: ${req.user.assignedClass.name}`);
+    }
+
+    // التحقق من وجود الفصل
+    if (!targetClassId) {
+      return res.status(400).json({
+        success: false,
+        error: "يجب تحديد الفصل",
       });
-      if (firstClass) {
-        targetClassId = firstClass._id;
-      } else {
-        return res.status(400).json({
-          success: false,
-          error: "لا يوجد فصول متاحة",
-        });
-      }
     }
 
     // Find the class
@@ -192,7 +191,6 @@ router.post("/", authMiddleware, async (req, res) => {
     // Create new child with default values
     const newChild = new Child({
       name: name.trim(),
-      age: age ? parseInt(age) : 8, // عمر افتراضي 8 سنوات
       phone: phone ? phone.trim() : "",
       parentName: parentName ? parentName.trim() : name.trim(), // اسم الطفل كولي أمر افتراضي
       class: targetClassId,
@@ -209,10 +207,21 @@ router.post("/", authMiddleware, async (req, res) => {
       message: "تم إضافة الطفل بنجاح",
     });
   } catch (error) {
-    console.error(error);
+    console.error("❌ Error creating child:", error);
+    
+    // التحقق من نوع الخطأ لإرسال رسالة مناسبة
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        error: "خطأ في التحقق من البيانات",
+        details: validationErrors.join(', ')
+      });
+    }
+    
     res.status(500).json({
       success: false,
-      error: "Server error",
+      error: "حدث خطأ في الخادم أثناء إضافة الطفل",
     });
   }
 });
@@ -256,7 +265,7 @@ router.put("/:id", authMiddleware, async (req, res) => {
 
     console.log("✅ Permission granted for editing");
 
-    const { name, age, phone, parentName, classId, notes, stage, grade } = req.body;
+    const { name, phone, parentName, classId, notes, stage, grade } = req.body;
 
     // Handle class change
     if (classId && classId !== child.class._id.toString()) {
@@ -286,7 +295,6 @@ router.put("/:id", authMiddleware, async (req, res) => {
     // Update child fields
     const updateData = {};
     if (name !== undefined) updateData.name = name;
-    if (age !== undefined) updateData.age = parseInt(age);
     if (phone !== undefined) updateData.phone = phone;
     if (parentName !== undefined) updateData.parentName = parentName;
     if (classId !== undefined) updateData.class = classId;
@@ -311,9 +319,20 @@ router.put("/:id", authMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error("❌ Error updating child:", error);
+    
+    // التحقق من نوع الخطأ لإرسال رسالة مناسبة
+    if (error.name === 'ValidationError') {
+      const validationErrors = Object.values(error.errors).map(err => err.message);
+      return res.status(400).json({
+        success: false,
+        error: "خطأ في التحقق من البيانات",
+        details: validationErrors.join(', ')
+      });
+    }
+    
     res.status(500).json({
       success: false,
-      error: "Server error",
+      error: "حدث خطأ في الخادم أثناء تحديث بيانات الطفل",
     });
   }
 });
@@ -354,6 +373,467 @@ router.delete("/:id", authMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
+  }
+});
+
+// Helper function to get Friday dates going back N weeks
+const getFridayDatesBack = (weeksBack) => {
+  const fridays = [];
+  
+  // Get the current date
+  const now = new Date();
+  
+  // Find the most recent Friday
+  let daysToSubtract = (now.getDay() - 5 + 7) % 7;
+  let mostRecentFriday = subDays(now, daysToSubtract);
+
+  // Generate Friday dates for the past N weeks
+  for (let i = 0; i < weeksBack; i++) {
+    const friday = subDays(mostRecentFriday, i * 7);
+    fridays.push(friday.toISOString().split('T')[0]);
+  }
+  
+  return fridays;
+};
+
+// @route   GET /api/children/statistics/by-class
+// @desc    Get children statistics grouped by class for service leader (optimized)
+// @access  Protected (Service Leader or Admin)
+router.get("/statistics/by-class", authMiddleware, adminOrServiceLeader, async (req, res) => {
+  try {
+    console.log("🔍 Children by class statistics API called by:", req.user.name, req.user.role);
+    
+    // Get all classes with their children in one query
+    const classes = await Class.aggregate([
+      { $match: { isActive: true } },
+      {
+        $lookup: {
+          from: 'children',
+          localField: '_id',
+          foreignField: 'class',
+          as: 'children',
+          pipeline: [
+            { $match: { isActive: true } },
+            { $project: { name: 1, phone: 1, parentName: 1 } }
+          ]
+        }
+      },
+      { $sort: { stage: 1, order: 1, name: 1 } }
+    ]);
+    
+    console.log(`📊 Found ${classes.length} classes, processing...`);
+    
+    const classStats = [];
+    
+    // Get Friday dates for consecutive absence check
+    const fridayDates = getFridayDatesBack(4);
+    console.log("📅 Checking Friday dates:", fridayDates);
+    
+    for (const classItem of classes) {
+      if (classItem.children.length === 0) {
+        classStats.push({
+          class: {
+            _id: classItem._id,
+            name: classItem.name,
+            stage: classItem.stage,
+            grade: classItem.grade
+          },
+          totalChildren: 0,
+          children: [],
+          message: "لا يوجد أطفال في هذا الفصل"
+        });
+        continue;
+      }
+      
+      console.log(`📊 Processing class: ${classItem.name} with ${classItem.children.length} children`);
+      
+      // Get all children IDs for this class
+      const childrenIds = classItem.children.map(child => child._id);
+      
+      // Get attendance statistics for all children in this class at once
+      const attendanceStats = await Attendance.aggregate([
+        {
+          $match: {
+            person: { $in: childrenIds },
+            personModel: "Child",
+            type: "child"
+          }
+        },
+        {
+          $group: {
+            _id: {
+              person: "$person",
+              status: "$status"
+            },
+            count: { $sum: 1 }
+          }
+        },
+        {
+          $group: {
+            _id: "$_id.person",
+            stats: {
+              $push: {
+                status: "$_id.status",
+                count: "$count"
+              }
+            },
+            totalRecords: { $sum: "$count" }
+          }
+        }
+      ]);
+      
+      // Get recent attendance for consecutive absence check
+      const recentAttendance = await Attendance.find({
+        person: { $in: childrenIds },
+        personModel: "Child",
+        type: "child",
+        date: { $in: fridayDates }
+      }, { person: 1, date: 1, status: 1 });
+      
+      // Create attendance map
+      const attendanceMap = {};
+      recentAttendance.forEach(record => {
+        const personId = record.person.toString();
+        if (!attendanceMap[personId]) {
+          attendanceMap[personId] = {};
+        }
+        attendanceMap[personId][record.date] = record.status;
+      });
+      
+      // Create stats map
+      const statsMap = {};
+      attendanceStats.forEach(stat => {
+        const personId = stat._id.toString();
+        statsMap[personId] = {
+          totalAttendance: stat.totalRecords,
+          presentCount: 0,
+          absentCount: 0
+        };
+        
+        stat.stats.forEach(s => {
+          if (s.status === "present") {
+            statsMap[personId].presentCount = s.count;
+          } else if (s.status === "absent") {
+            statsMap[personId].absentCount = s.count;
+          }
+        });
+      });
+      
+      const childrenWithStats = classItem.children.map(child => {
+        const childId = child._id.toString();
+        const stats = statsMap[childId] || { totalAttendance: 0, presentCount: 0, absentCount: 0 };
+        const childAttendance = attendanceMap[childId] || {};
+        
+        // Calculate attendance rate
+        const attendanceRate = stats.totalAttendance > 0 ? 
+          ((stats.presentCount / stats.totalAttendance) * 100).toFixed(1) : 0;
+        
+        // Calculate consecutive absences
+        let consecutiveAbsences = 0;
+        for (const fridayDate of fridayDates) {
+          const status = childAttendance[fridayDate];
+          if (status === "present") {
+            break;
+          } else if (status === "absent" || !status) {
+            consecutiveAbsences++;
+          }
+        }
+        
+        return {
+          _id: child._id,
+          name: child.name,
+          phone: child.phone,
+          parentName: child.parentName,
+          totalAttendance: stats.totalAttendance,
+          presentCount: stats.presentCount,
+          absentCount: stats.absentCount,
+          attendanceRate: parseFloat(attendanceRate),
+          consecutiveAbsences,
+          needsFollowUp: consecutiveAbsences >= 3
+        };
+      });
+      
+      classStats.push({
+        class: {
+          _id: classItem._id,
+          name: classItem.name,
+          stage: classItem.stage,
+          grade: classItem.grade
+        },
+        totalChildren: classItem.children.length,
+        children: childrenWithStats,
+        childrenNeedingFollowUp: childrenWithStats.filter(c => c.needsFollowUp).length
+      });
+      
+      console.log(`✅ Processed class: ${classItem.name}`);
+    }
+    
+    console.log(`📊 Completed statistics for ${classStats.length} classes`);
+    
+    res.json({
+      success: true,
+      data: classStats,
+      message: "إحصائيات الأطفال مقسمة حسب الفصول",
+      totalClasses: classStats.length,
+      totalChildrenChecked: classStats.reduce((sum, cls) => sum + cls.totalChildren, 0)
+    });
+  } catch (error) {
+    console.error("❌ Error in children by class statistics:", error);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
+  }
+});
+
+// @route   GET /api/children/statistics/by-class/simple
+// @desc    Get simplified children statistics by class (faster version)
+// @access  Protected (Service Leader or Admin)
+router.get("/statistics/by-class/simple", authMiddleware, adminOrServiceLeader, async (req, res) => {
+  try {
+    console.log("🔍 Simple children by class statistics API called");
+    
+    // Get all classes with children count
+    const classStats = await Class.aggregate([
+      { $match: { isActive: true } },
+      {
+        $lookup: {
+          from: 'children',
+          localField: '_id',
+          foreignField: 'class',
+          as: 'children',
+          pipeline: [
+            { $match: { isActive: true } },
+            { $project: { name: 1, phone: 1 } }
+          ]
+        }
+      },
+      {
+        $project: {
+          name: 1,
+          stage: 1,
+          grade: 1,
+          children: 1,
+          totalChildren: { $size: "$children" }
+        }
+      },
+      { $sort: { stage: 1, order: 1, name: 1 } }
+    ]);
+    
+    console.log(`📊 Found ${classStats.length} classes`);
+    
+    res.json({
+      success: true,
+      data: classStats.map(cls => ({
+        class: {
+          _id: cls._id,
+          name: cls.name,
+          stage: cls.stage,
+          grade: cls.grade
+        },
+        totalChildren: cls.totalChildren,
+        children: cls.children.map(child => ({
+          _id: child._id,
+          name: child.name,
+          phone: child.phone,
+          // Simplified stats for faster loading
+          totalAttendance: 0,
+          presentCount: 0,
+          absentCount: 0,
+          attendanceRate: 0,
+          consecutiveAbsences: 0,
+          needsFollowUp: false
+        })),
+        childrenNeedingFollowUp: 0
+      })),
+      message: "إحصائيات مبسطة للأطفال حسب الفصول",
+      totalClasses: classStats.length,
+      totalChildrenChecked: classStats.reduce((sum, cls) => sum + cls.totalChildren, 0)
+    });
+  } catch (error) {
+    console.error("❌ Error in simple children statistics:", error);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
+  }
+});
+
+// @route   GET /api/children/statistics/individual/:id
+// @desc    Get detailed statistics for a single child
+// @access  Protected (Service Leader or Admin)
+router.get("/statistics/individual/:id", authMiddleware, adminOrServiceLeader, async (req, res) => {
+  try {
+    const childId = req.params.id;
+    console.log("🔍 Individual child statistics API called for:", childId);
+    
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(childId)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid child ID format",
+      });
+    }
+    
+    // Find the child
+    const child = await Child.findById(childId).populate('class');
+    if (!child) {
+      return res.status(404).json({
+        success: false,
+        error: "Child not found",
+      });
+    }
+    
+    // Get all attendance records for this child
+    const attendanceRecords = await Attendance.find({
+      person: childId,
+      personModel: "Child",
+      type: "child",
+    }).sort({ date: -1 });
+    
+    // Calculate basic statistics
+    const totalRecords = attendanceRecords.length;
+    const presentCount = attendanceRecords.filter(r => r.status === "present").length;
+    const absentCount = attendanceRecords.filter(r => r.status === "absent").length;
+    const lateCount = attendanceRecords.filter(r => r.status === "late").length;
+    const attendanceRate = totalRecords > 0 ? ((presentCount / totalRecords) * 100).toFixed(1) : 0;
+    
+    // Calculate consecutive attendance/absence streaks
+    let currentStreak = 0;
+    let maxPresentStreak = 0;
+    let maxAbsentStreak = 0;
+    let currentStreakType = null;
+    
+    // Get recent Friday dates for streak calculation
+    const fridayDates = getFridayDatesBack(12);
+    const attendanceMap = {};
+    attendanceRecords.forEach(record => {
+      attendanceMap[record.date] = record.status;
+    });
+    
+    // Calculate current streak (from most recent Friday)
+    for (const fridayDate of fridayDates) {
+      const status = attendanceMap[fridayDate];
+      if (status === "present") {
+        if (currentStreakType === null) {
+          currentStreakType = "present";
+          currentStreak = 1;
+        } else if (currentStreakType === "present") {
+          currentStreak++;
+        } else {
+          break;
+        }
+      } else if (status === "absent" || !status) {
+        if (currentStreakType === null) {
+          currentStreakType = "absent";
+          currentStreak = 1;
+        } else if (currentStreakType === "absent") {
+          currentStreak++;
+        } else {
+          break;
+        }
+      } else {
+        break; // Late breaks the streak
+      }
+    }
+    
+    // Calculate max streaks from historical data
+    let tempPresentStreak = 0;
+    let tempAbsentStreak = 0;
+    
+    for (const record of attendanceRecords.reverse()) {
+      if (record.status === "present") {
+        tempPresentStreak++;
+        tempAbsentStreak = 0;
+        maxPresentStreak = Math.max(maxPresentStreak, tempPresentStreak);
+      } else if (record.status === "absent") {
+        tempAbsentStreak++;
+        tempPresentStreak = 0;
+        maxAbsentStreak = Math.max(maxAbsentStreak, tempAbsentStreak);
+      } else {
+        tempPresentStreak = 0;
+        tempAbsentStreak = 0;
+      }
+    }
+    
+    // Prepare recent activity (last 10 records)
+    const recentActivity = attendanceRecords.slice(0, 10).map(record => ({
+      date: record.date,
+      status: record.status,
+      dayName: new Date(record.date + 'T00:00:00').toLocaleDateString('ar-EG', { weekday: 'long' }),
+      notes: record.notes || ''
+    }));
+    
+    // Monthly breakdown for the current year
+    const currentYear = new Date().getFullYear();
+    const monthlyBreakdown = [];
+    
+    for (let month = 1; month <= 12; month++) {
+      const monthStart = `${currentYear}-${month.toString().padStart(2, '0')}-01`;
+      const monthEnd = `${currentYear}-${month.toString().padStart(2, '0')}-31`;
+      
+      const monthRecords = attendanceRecords.filter(record => 
+        record.date >= monthStart && record.date <= monthEnd
+      );
+      
+      const monthPresent = monthRecords.filter(r => r.status === "present").length;
+      const monthAbsent = monthRecords.filter(r => r.status === "absent").length;
+      const monthTotal = monthRecords.length;
+      const monthRate = monthTotal > 0 ? ((monthPresent / monthTotal) * 100).toFixed(1) : "0";
+      
+      if (monthTotal > 0) {
+        monthlyBreakdown.push({
+          month: month.toString().padStart(2, '0'),
+          monthName: new Date(currentYear, month - 1).toLocaleDateString('ar-EG', { month: 'long' }),
+          present: monthPresent,
+          absent: monthAbsent,
+          total: monthTotal,
+          rate: monthRate
+        });
+      }
+    }
+    
+    const result = {
+      child: {
+        _id: child._id,
+        name: child.name,
+        phone: child.phone,
+        parentName: child.parentName,
+        class: child.class,
+        createdAt: child.createdAt
+      },
+      summary: {
+        totalRecords,
+        presentCount,
+        absentCount,
+        lateCount,
+        attendanceRate: parseFloat(attendanceRate),
+        currentStreak,
+        currentStreakType,
+        maxPresentStreak,
+        maxAbsentStreak
+      },
+      dates: {
+        presentDates: attendanceRecords.filter(r => r.status === "present").map(r => r.date),
+        absentDates: attendanceRecords.filter(r => r.status === "absent").map(r => r.date),
+        lateDates: attendanceRecords.filter(r => r.status === "late").map(r => r.date)
+      },
+      recentActivity,
+      monthlyBreakdown
+    };
+    
+    console.log(`📊 Individual statistics compiled for child: ${child.name}`);
+    
+    res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    console.error("❌ Error in individual child statistics:", error);
     res.status(500).json({
       success: false,
       error: "Server error",

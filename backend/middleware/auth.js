@@ -7,6 +7,7 @@ const authMiddleware = async (req, res, next) => {
     console.log('🔐 Auth middleware called');
     const token = req.header("Authorization")?.replace("Bearer ", "");
     console.log('🔑 Token:', token ? 'Present' : 'Missing');
+    console.log('🔑 Full token:', token);
 
     if (!token) {
       console.log('❌ No token provided');
@@ -16,13 +17,17 @@ const authMiddleware = async (req, res, next) => {
     }
 
     console.log('🔍 Verifying token...');
-    const decoded = jwt.verify(
-      token,
-      process.env.JWT_SECRET || "fallback_secret_key"
-    );
-    console.log('✅ Token decoded successfully:', { userId: decoded.userId, role: decoded.role });
+    console.log('🔑 JWT_SECRET in middleware:', process.env.JWT_SECRET ? 'Found' : 'Not found');
+    console.log('🔑 Actual JWT_SECRET:', process.env.JWT_SECRET);
+    const secret = process.env.JWT_SECRET || "fallback_secret_key";
+    console.log('🔐 Using secret:', secret === process.env.JWT_SECRET ? 'ENV secret' : 'Fallback secret');
+    console.log('🔐 Secret value:', secret);
+    const decoded = jwt.verify(token, secret);
+    console.log('✅ Token decoded successfully:', { userId: decoded.userId || decoded.id, role: decoded.role });
     
-    const user = await User.findById(decoded.userId)
+    // Support both 'userId' and 'id' fields for backward compatibility
+    const userId = decoded.userId || decoded.id;
+    const user = await User.findById(userId)
       .select("-password")
       .populate("assignedClass");
 
@@ -34,7 +39,7 @@ const authMiddleware = async (req, res, next) => {
         .json({ message: "Invalid token or inactive user." });
     }
 
-    req.user = { ...user.toObject(), userId: decoded.userId };
+    req.user = { ...user.toObject(), userId: userId };
     console.log('✅ Auth middleware passed for:', user.name);
     next();
   } catch (error) {

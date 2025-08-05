@@ -12,7 +12,6 @@ interface Servant {
   phone?: string
   classesAssigned?: string[]
   role?: string
-  active: boolean
   createdAt: string
 }
 
@@ -27,8 +26,7 @@ export default function ServantsPage() {
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
-    role: '',
-    active: true
+    role: ''
   })
   const [searchTerm, setSearchTerm] = useState('')
 
@@ -56,9 +54,14 @@ export default function ServantsPage() {
       const response = await servantsAPI.getAll()
       if (response.success && response.data) {
         setServants(response.data)
+      } else {
+        toast.error('فشل في تحميل بيانات الخدام')
+        setServants([])
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching servants:', error)
+      toast.error('حدث خطأ في تحميل بيانات الخدام')
+      setServants([])
     } finally {
       setLoading(false)
     }
@@ -66,20 +69,31 @@ export default function ServantsPage() {
 
   const handleAddServant = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // التحقق من البيانات المطلوبة
+    if (!formData.name.trim()) {
+      toast.error('الاسم مطلوب')
+      return
+    }
+
     try {
       const response = await servantsAPI.create(formData)
       if (response.success) {
+        toast.success('تم إضافة الخادم بنجاح')
         setFormData({
           name: '',
           phone: '',
-          role: '',
-          active: true
+          role: ''
         })
         setShowAddModal(false)
         fetchServants()
+      } else {
+        toast.error(response.error || 'حدث خطأ في إضافة الخادم')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding servant:', error)
+      const errorMessage = error.response?.data?.error || 'حدث خطأ في إضافة الخادم'
+      toast.error(errorMessage)
     }
   }
 
@@ -87,20 +101,30 @@ export default function ServantsPage() {
     e.preventDefault()
     if (!editingServant) return
 
+    // التحقق من البيانات المطلوبة
+    if (!formData.name.trim()) {
+      toast.error('الاسم مطلوب')
+      return
+    }
+
     try {
       const response = await servantsAPI.update(editingServant._id, formData)
       if (response.success) {
+        toast.success('تم تحديث بيانات الخادم بنجاح')
         setEditingServant(null)
         setFormData({
           name: '',
           phone: '',
-          role: '',
-          active: true
+          role: ''
         })
         fetchServants()
+      } else {
+        toast.error(response.error || 'حدث خطأ في تحديث بيانات الخادم')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating servant:', error)
+      const errorMessage = error.response?.data?.error || 'حدث خطأ في تحديث بيانات الخادم'
+      toast.error(errorMessage)
     }
   }
 
@@ -110,10 +134,15 @@ export default function ServantsPage() {
     try {
       const response = await servantsAPI.delete(id)
       if (response.success) {
+        toast.success('تم حذف الخادم بنجاح')
         fetchServants()
+      } else {
+        toast.error(response.error || 'حدث خطأ في حذف الخادم')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting servant:', error)
+      const errorMessage = error.response?.data?.error || 'حدث خطأ في حذف الخادم'
+      toast.error(errorMessage)
     }
   }
 
@@ -122,8 +151,7 @@ export default function ServantsPage() {
     setFormData({
       name: servant.name,
       phone: servant.phone || '',
-      role: servant.role || '',
-      active: servant.active
+      role: servant.role || ''
     })
   }
 
@@ -183,9 +211,6 @@ export default function ServantsPage() {
                   الدور
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  الحالة
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   الإجراءات
                 </th>
               </tr>
@@ -209,27 +234,20 @@ export default function ServantsPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                      servant.active 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {servant.active ? 'نشط' : 'غير نشط'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => openEditModal(servant)}
-                      className="text-indigo-600 hover:text-indigo-900 ml-4"
-                    >
-                      تعديل
-                    </button>
-                    <button
-                      onClick={() => handleDeleteServant(servant._id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      حذف
-                    </button>
+                    <div className="flex space-x-2 space-x-reverse">
+                      <button
+                        onClick={() => openEditModal(servant)}
+                        className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700 transition-colors"
+                      >
+                        تعديل
+                      </button>
+                      <button
+                        onClick={() => handleDeleteServant(servant._id)}
+                        className="bg-red-600 text-white px-3 py-1 rounded text-sm hover:bg-red-700 transition-colors"
+                      >
+                        حذف
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -278,17 +296,6 @@ export default function ServantsPage() {
                     value={formData.role}
                     onChange={(e) => setFormData({...formData, role: e.target.value})}
                   />
-                </div>
-                <div className="flex items-center justify-center">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={formData.active}
-                      onChange={(e) => setFormData({...formData, active: e.target.checked})}
-                      className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                    />
-                    <span className="mr-2 text-sm text-gray-900">خادم نشط</span>
-                  </label>
                 </div>
                 <div className="flex gap-4">
                   <button
@@ -345,17 +352,6 @@ export default function ServantsPage() {
                     value={formData.role}
                     onChange={(e) => setFormData({...formData, role: e.target.value})}
                   />
-                </div>
-                <div className="flex items-center justify-center">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={formData.active}
-                      onChange={(e) => setFormData({...formData, active: e.target.checked})}
-                      className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                    />
-                    <span className="mr-2 text-sm text-gray-900">خادم نشط</span>
-                  </label>
                 </div>
                 <div className="flex gap-4">
                   <button

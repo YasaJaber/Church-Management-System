@@ -47,7 +47,7 @@ export default function StatisticsPage() {
   const [classStats, setClassStats] = useState<ClassStats[]>([])
   const [weeklyData, setWeeklyData] = useState<WeeklyData[]>([])
   const [loading, setLoading] = useState(true)
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  const [selectedDate, setSelectedDate] = useState('') // Will be set to most recent attendance date
   const [selectedPeriod, setSelectedPeriod] = useState('week')
   const [selectedClass, setSelectedClass] = useState('')
 
@@ -63,12 +63,43 @@ export default function StatisticsPage() {
         setSelectedClass(user.assignedClass._id)
       }
       
-      fetchStatistics()
+      // Get most recent attendance date and initialize the page
+      initializePage()
     }
   }, [isAuthenticated, isLoading, router, user])
 
+  const initializePage = async () => {
+    try {
+      // Get most recent attendance date
+      const token = localStorage.getItem('token') || localStorage.getItem('auth_token')
+      const response = await fetch('http://localhost:5000/api/attendance/recent-dates?limit=1', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      
+      let dateToUse = new Date().toISOString().split('T')[0] // Default to today
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.success && data.data && data.data.length > 0) {
+          dateToUse = data.data[0]
+          console.log('Using most recent attendance date:', dateToUse)
+        } else {
+          console.log('No attendance data found, using today\'s date')
+        }
+      } else {
+        console.log('Failed to fetch recent dates, using today\'s date')
+      }
+      
+      setSelectedDate(dateToUse)
+    } catch (error) {
+      console.error('Error initializing page:', error)
+      // Fallback to today's date
+      setSelectedDate(new Date().toISOString().split('T')[0])
+    }
+  }
+
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && selectedDate) {
       fetchStatistics()
     }
   }, [selectedDate, selectedClass])
@@ -93,12 +124,12 @@ export default function StatisticsPage() {
       if (childrenWithStatusResponse.success && childrenWithStatusResponse.data) {
         const childrenData = childrenWithStatusResponse.data
         const totalChildren = childrenData.length
-        const presentToday = childrenData.filter((child: any) => child.present).length
-        const absentToday = totalChildren - presentToday
+        const presentToday = childrenData.filter((child: any) => child.attendance?.status === 'present').length
+        const absentToday = childrenData.filter((child: any) => child.attendance?.status === 'absent').length
         const attendanceRate = totalChildren > 0 ? (presentToday / totalChildren) * 100 : 0
 
         // أمين الخدمة والأدمن يقدروا يشوفوا الإحصائيات المتقدمة
-        let weeklyStats = []
+        let weeklyStats: any[] = []
         let consecutiveData = { data: [] }
         let churchData = { data: null }
         
@@ -230,20 +261,29 @@ export default function StatisticsPage() {
         }
       })
 
-      // Calculate stats for each class
-      const classStatsArray: ClassStats[] = Object.keys(classGroups).map(classId => {
-        const classChildren = classGroups[classId]
-        const totalChildren = classChildren.length
-        const presentToday = classChildren.filter((child: any) => child.present).length
-        const attendanceRate = totalChildren > 0 ? (presentToday / totalChildren) * 100 : 0
-        
-        return {
-          className: classChildren[0]?.class?.name || classChildren[0]?.className || 'فصل غير محدد',
-          totalChildren,
-          presentToday,
-          attendanceRate
-        }
-      })
+      // Calculate stats for each class and filter out experimental classes
+      const classStatsArray: ClassStats[] = Object.keys(classGroups)
+        .map(classId => {
+          const classChildren = classGroups[classId]
+          const totalChildren = classChildren.length
+          const presentToday = classChildren.filter((child: any) => child.present).length
+          const attendanceRate = totalChildren > 0 ? (presentToday / totalChildren) * 100 : 0
+          
+          return {
+            className: classChildren[0]?.class?.name || classChildren[0]?.className || 'فصل غير محدد',
+            totalChildren,
+            presentToday,
+            attendanceRate
+          }
+        })
+        .filter(classData => {
+          // Filter out experimental/test classes
+          const name = classData.className.toLowerCase()
+          return !name.includes('تجريبي') && 
+                 !name.includes('اختبار') && 
+                 !name.includes('test') && 
+                 !name.includes('experimental')
+        })
 
       // Sort by attendance rate descending
       classStatsArray.sort((a, b) => b.attendanceRate - a.attendanceRate)

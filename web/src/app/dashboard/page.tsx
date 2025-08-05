@@ -23,27 +23,36 @@ export default function DashboardPage() {
   const [loadingStats, setLoadingStats] = useState(true)
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login')
+    console.log('🔄 Dashboard useEffect - Auth state changed:', { isLoading, isAuthenticated, hasUser: !!user })
+    
+    let isMounted = true
+    
+    if (!isLoading) {
+      if (!isAuthenticated) {
+        console.log('❌ المستخدم غير مسجل دخول - إعادة توجيه للتسجيل')
+        if (isMounted) {
+          router.push('/login')
+        }
+        return
+      }
+      
+      if (isAuthenticated && user && isMounted) {
+        console.log('✅ المستخدم مسجل دخول - جلب الإحصائيات')
+        fetchDashboardStats()
+      }
     }
-  }, [isAuthenticated, isLoading, router])
 
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      console.log('🔐 المستخدم مسجل دخول:', user)
-      console.log('🎫 بدء جلب الإحصائيات...')
-      fetchDashboardStats()
-    } else {
-      console.log('❌ المستخدم غير مسجل دخول أو البيانات غير متوفرة')
-      console.log('🔐 isAuthenticated:', isAuthenticated)
-      console.log('👤 user:', user)
+    return () => {
+      isMounted = false
     }
-  }, [isAuthenticated, user])
+  }, [isAuthenticated, isLoading, router, user])
 
   const fetchDashboardStats = async () => {
     try {
       setLoadingStats(true)
       console.log('🔍 بدء جلب الإحصائيات...')
+      console.log('👤 Current user:', user)
+      console.log('🔐 Is authenticated:', isAuthenticated)
       
       // التحقق من وجود توكن
       const token = Cookies.get('auth_token') || Cookies.get('userToken')
@@ -57,57 +66,52 @@ export default function DashboardPage() {
         })
         return
       }
-      console.log('✅ توكن المصادقة موجود')
+      console.log('✅ توكن المصادقة موجود:', token.substring(0, 20) + '...')
       
-      // جلب إحصائيات الأطفال
-      console.log('📊 جلب بيانات الأطفال...')
-      const childrenResponse = await api.get('/children')
-      console.log('✅ استجابة الأطفال:', childrenResponse.data)
-      const totalChildren = Array.isArray(childrenResponse.data) ? childrenResponse.data.length : 0
-
-      // جلب إحصائيات الحضور لليوم
-      const today = new Date().toISOString().split('T')[0]
-      console.log('📅 تاريخ اليوم:', today)
-      const attendanceResponse = await api.get(`/attendance?date=${today}`)
-      console.log('✅ استجابة الحضور:', attendanceResponse.data)
-      const attendanceData = Array.isArray(attendanceResponse.data) ? attendanceResponse.data : []
-      const todayAttendance = attendanceData.filter((record: any) => record.isPresent).length
-      const todayAbsence = attendanceData.filter((record: any) => !record.isPresent).length
+      // جلب الإحصائيات من API المخصص للكنيسة
+      console.log('📊 جلب إحصائيات الكنيسة من:', `${api.defaults.baseURL}/statistics/church`)
+      const statsResponse = await api.get('/statistics/church')
+      console.log('✅ استجابة الإحصائيات:', statsResponse.data)
       
-      // حساب متوسط الحضور
-      const attendanceRate = totalChildren > 0 ? Math.round((todayAttendance / totalChildren) * 100) : 0
-
-      console.log('📈 الإحصائيات المحسوبة:', {
-        totalChildren,
-        todayAttendance, 
-        todayAbsence,
-        attendanceRate
-      })
-
+      const statsData = statsResponse.data.data || {}
       const dashboardStats: DashboardStats = {
-        totalChildren,
-        todayAttendance,
-        todayAbsence,
-        attendanceRate
+        totalChildren: statsData.totalChildren || 0,
+        todayAttendance: statsData.presentToday || 0,
+        todayAbsence: statsData.absentToday || 0, // استخدم البيانات الفعلية من API
+        attendanceRate: Math.round(statsData.attendanceRate || 0)
       }
 
-      // للأدمن وأمين الخدمة - جلب إحصائيات إضافية
+      console.log('📈 الإحصائيات المحولة للعرض:', dashboardStats)
+
+      // للأدمن وأمين الخدمة - البيانات ستأتي من API الإحصائيات
       if (user?.role === 'admin' || user?.role === 'serviceLeader') {
-        try {
-          const classesResponse = await api.get('/classes')
-          const servantsResponse = await api.get('/servants')
-          dashboardStats.totalClasses = Array.isArray(classesResponse.data) ? classesResponse.data.length : 0
-          dashboardStats.totalServants = Array.isArray(servantsResponse.data) ? servantsResponse.data.length : 0
-          console.log('✅ إحصائيات إضافية:', { classes: dashboardStats.totalClasses, servants: dashboardStats.totalServants })
-        } catch (error) {
-          console.log('⚠️ Could not fetch additional stats:', error)
-        }
+        dashboardStats.totalClasses = statsData.totalClasses || 0
+        dashboardStats.totalServants = statsData.totalServants || 0
+        console.log('✅ إحصائيات إضافية من API الإحصائيات:', { classes: dashboardStats.totalClasses, servants: dashboardStats.totalServants })
       }
 
+      console.log('📈 النتيجة النهائية:', dashboardStats)
+      
+      // التأكد من أن المكون ما زال mounted قبل تحديث الحالة
       setStats(dashboardStats)
       console.log('✅ تم تحديث الإحصائيات بنجاح')
-    } catch (error) {
+    } catch (error: any) {
       console.error('❌ خطأ في جلب إحصائيات Dashboard:', error)
+      console.error('📝 Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data
+      })
+      
+      // تحقق من نوع الخطأ
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        console.log('🔐 خطأ في المصادقة - إعادة توجيه للتسجيل')
+        // إعادة توجيه للتسجيل
+        router.push('/login')
+        return
+      }
+      
       // في حالة الخطأ، استخدم قيم افتراضية
       setStats({
         totalChildren: 0,
@@ -138,11 +142,18 @@ export default function DashboardPage() {
 
   if (!isAuthenticated || !user) {
     console.log('🚨 إعادة توجيه للتسجيل - isAuthenticated:', isAuthenticated, 'user:', user)
-    return null
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="text-gray-600 mt-4">جاري إعادة التوجيه...</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50" dir="rtl">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -153,18 +164,58 @@ export default function DashboardPage() {
               </h1>
             </div>
             <div className="flex items-center space-x-4 space-x-reverse">
-              <span className="text-sm text-gray-700">
-                مرحباً، {user.name || user.username}
-              </span>
-              <button
-                onClick={handleLogout}
-                className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm"
-              >
-                تسجيل الخروج
-              </button>
+              {isAuthenticated && user ? (
+                <>
+                  <span className="text-sm text-gray-700">
+                    مرحباً خادم {user.name || user.username}
+                    {user.assignedClass && (
+                      <span className="text-gray-500 mr-2">- {user.assignedClass.name}</span>
+                    )}
+                  </span>
+                  <button
+                    onClick={handleLogout}
+                    className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm"
+                  >
+                    تسجيل الخروج
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => router.push('/login')}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm"
+                >
+                  تسجيل الدخول
+                </button>
+              )}
             </div>
           </div>
         </div>
+
+        {!isAuthenticated && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-8">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <div className="w-8 h-8 bg-amber-500 rounded-md flex items-center justify-center">
+                  <span className="text-white text-sm">⚠️</span>
+                </div>
+              </div>
+              <div className="mr-3">
+                <h3 className="text-sm font-medium text-amber-800">
+                  تسجيل الدخول مطلوب
+                </h3>
+                <div className="mt-1 text-sm text-amber-700">
+                  يرجى تسجيل الدخول لعرض الإحصائيات والبيانات الكاملة للنظام.
+                  <button 
+                    onClick={() => router.push('/login')}
+                    className="mr-2 font-medium underline hover:text-amber-800"
+                  >
+                    سجل دخولك الآن
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
       {/* Main Content */}
@@ -181,7 +232,7 @@ export default function DashboardPage() {
         {/* Quick Stats */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {/* إجمالي الأطفال */}
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div key="total-children" className="bg-white p-6 rounded-lg shadow">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className="w-8 h-8 bg-blue-500 rounded-md flex items-center justify-center">
@@ -196,12 +247,12 @@ export default function DashboardPage() {
                   <dd className="text-lg font-medium text-gray-900">
                     {loadingStats ? (
                       <div className="animate-pulse">--</div>
+                    ) : !isAuthenticated ? (
+                      <span className="text-amber-600">سجل دخولك لعرض البيانات</span>
+                    ) : stats?.totalChildren === 0 ? (
+                      <span className="text-gray-400">لا توجد بيانات</span>
                     ) : (
-                      stats?.totalChildren === 0 ? (
-                        <span className="text-gray-400">لا توجد بيانات</span>
-                      ) : (
-                        stats?.totalChildren || 0
-                      )
+                      stats?.totalChildren || 0
                     )}
                   </dd>
                 </dl>
@@ -210,7 +261,7 @@ export default function DashboardPage() {
           </div>
 
           {/* الحضور اليوم */}
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div key="today-attendance" className="bg-white p-6 rounded-lg shadow">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className="w-8 h-8 bg-green-500 rounded-md flex items-center justify-center">
@@ -225,6 +276,10 @@ export default function DashboardPage() {
                   <dd className="text-lg font-medium text-gray-900">
                     {loadingStats ? (
                       <div className="animate-pulse">--</div>
+                    ) : !isAuthenticated ? (
+                      <span className="text-amber-600">سجل دخولك لعرض البيانات</span>
+                    ) : stats?.todayAttendance === 0 && stats?.totalChildren === 0 ? (
+                      <span className="text-gray-400">لا توجد بيانات</span>
                     ) : (
                       stats?.todayAttendance || 0
                     )}
@@ -235,7 +290,7 @@ export default function DashboardPage() {
           </div>
 
           {/* الغياب اليوم */}
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div key="today-absence" className="bg-white p-6 rounded-lg shadow">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className="w-8 h-8 bg-red-500 rounded-md flex items-center justify-center">
@@ -248,7 +303,15 @@ export default function DashboardPage() {
                     الغياب اليوم
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {loadingStats ? '--' : stats?.todayAbsence || 0}
+                    {loadingStats ? (
+                      <div className="animate-pulse">--</div>
+                    ) : !isAuthenticated ? (
+                      <span className="text-amber-600">سجل دخولك لعرض البيانات</span>
+                    ) : stats?.todayAbsence === 0 && stats?.totalChildren === 0 ? (
+                      <span className="text-gray-400">لا توجد بيانات</span>
+                    ) : (
+                      stats?.todayAbsence || 0
+                    )}
                   </dd>
                 </dl>
               </div>
@@ -256,7 +319,7 @@ export default function DashboardPage() {
           </div>
 
           {/* متوسط الحضور */}
-          <div className="bg-white p-6 rounded-lg shadow">
+          <div key="attendance-rate" className="bg-white p-6 rounded-lg shadow">
             <div className="flex items-center">
               <div className="flex-shrink-0">
                 <div className="w-8 h-8 bg-purple-500 rounded-md flex items-center justify-center">
@@ -269,7 +332,15 @@ export default function DashboardPage() {
                     متوسط الحضور
                   </dt>
                   <dd className="text-lg font-medium text-gray-900">
-                    {loadingStats ? '--' : `${stats?.attendanceRate || 0}%`}
+                    {loadingStats ? (
+                      <div className="animate-pulse">--</div>
+                    ) : !isAuthenticated ? (
+                      <span className="text-amber-600">سجل دخولك لعرض البيانات</span>
+                    ) : stats?.attendanceRate === 0 && stats?.totalChildren === 0 ? (
+                      <span className="text-gray-400">لا توجد بيانات</span>
+                    ) : (
+                      `${stats?.attendanceRate || 0}%`
+                    )}
                   </dd>
                 </dl>
               </div>
@@ -278,7 +349,7 @@ export default function DashboardPage() {
 
           {/* الفصول - لأمين الخدمة والأدمن فقط */}
           {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
-            <div className="bg-white p-6 rounded-lg shadow">
+            <div key="total-classes" className="bg-white p-6 rounded-lg shadow">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
                   <div className="w-8 h-8 bg-indigo-500 rounded-md flex items-center justify-center">
@@ -301,7 +372,7 @@ export default function DashboardPage() {
 
           {/* الخدام - لأمين الخدمة والأدمن فقط */}
           {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
-            <div className="bg-white p-6 rounded-lg shadow">
+            <div key="total-servants" className="bg-white p-6 rounded-lg shadow">
               <div className="flex items-center">
                 <div className="flex-shrink-0">
                   <div className="w-8 h-8 bg-yellow-500 rounded-md flex items-center justify-center">
@@ -326,6 +397,7 @@ export default function DashboardPage() {
         {/* Navigation Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <button
+            key="nav-children"
             onClick={() => router.push('/children')}
             className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
           >
@@ -343,6 +415,7 @@ export default function DashboardPage() {
           </button>
 
           <button
+            key="nav-attendance"
             onClick={() => router.push('/attendance')}
             className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
           >
@@ -351,7 +424,7 @@ export default function DashboardPage() {
                 <span className="text-white text-xl">✅</span>
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                تسجيل الحضور
+                تسجيل حضور الأطفال
               </h3>
               <p className="text-sm text-gray-500">
                 تسجيل حضور الأطفال وإدارة الغياب
@@ -359,7 +432,29 @@ export default function DashboardPage() {
             </div>
           </button>
 
+          {/* حضور الخدام - لأمين الخدمة والأدمن فقط */}
+          {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
+            <button
+              key="nav-servants-attendance"
+              onClick={() => router.push('/servants-attendance')}
+              className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-cyan-500 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-xl">👨‍💼</span>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  تسجيل حضور الخدام
+                </h3>
+                <p className="text-sm text-gray-500">
+                  تسجيل حضور الخدام مع إمكانية الملاحظات
+                </p>
+              </div>
+            </button>
+          )}
+
           <button
+            key="nav-statistics"
             onClick={() => router.push('/statistics')}
             className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
           >
@@ -368,10 +463,28 @@ export default function DashboardPage() {
                 <span className="text-white text-xl">📊</span>
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                الإحصائيات
+                الإحصائيات الأساسية
               </h3>
               <p className="text-sm text-gray-500">
-                عرض تقارير الحضور والإحصائيات
+                عرض تقارير الحضور والإحصائيات الأساسية
+              </p>
+            </div>
+          </button>
+
+          <button
+            key="nav-advanced-statistics"
+            onClick={() => router.push('/advanced-statistics')}
+            className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
+          >
+            <div className="text-center">
+              <div className="w-12 h-12 bg-indigo-500 rounded-lg flex items-center justify-center mx-auto mb-4">
+                <span className="text-white text-xl">📈</span>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                الإحصائيات المتقدمة
+              </h3>
+              <p className="text-sm text-gray-500">
+                تحليلات متقدمة ومقارنات وتكرار أخذ الحضور
               </p>
             </div>
           </button>
@@ -379,6 +492,7 @@ export default function DashboardPage() {
           {/* إدارة الخدام - لأمين الخدمة فقط */}
           {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
             <button
+              key="nav-servants"
               onClick={() => router.push('/servants')}
               className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
             >
@@ -396,9 +510,94 @@ export default function DashboardPage() {
             </button>
           )}
 
+          {/* لوحة تحكم أمين الخدمة - لأمين الخدمة والأدمن فقط */}
+          {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
+            <button
+              key="nav-service-leader-dashboard"
+              onClick={() => router.push('/service-leader-dashboard')}
+              className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-xl">🎯</span>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  لوحة تحكم أمين الخدمة
+                </h3>
+                <p className="text-sm text-gray-500">
+                  نظرة شاملة على إحصائيات الخدمة والحضور
+                </p>
+              </div>
+            </button>
+          )}
+
+          {/* المواظبون على الحضور - لأمين الخدمة والأدمن فقط */}
+          {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
+            <button
+              key="nav-consecutive-attendance"
+              onClick={() => router.push('/consecutive-attendance')}
+              className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-xl">🏆</span>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  المواظبون على الحضور
+                </h3>
+                <p className="text-sm text-gray-500">
+                  تقرير الأطفال المواظبين لـ 4 أسابيع متتالية
+                </p>
+              </div>
+            </button>
+          )}
+
+          {/* المواظبون في فصلي - لمدرسي الفصول */}
+          {(user?.role === 'classTeacher' || user?.role === 'servant') && (
+            <button
+              key="nav-consecutive-attendance-class"
+              onClick={() => router.push('/consecutive-attendance')}
+              className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-xl">🌟</span>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  المواظبون في فصلي
+                </h3>
+                <p className="text-sm text-gray-500">
+                  أطفال فصلك المواظبين لـ 4 أسابيع متتالية
+                </p>
+              </div>
+            </button>
+          )}
+
+          {/* متابعة الخدام - لأمين الخدمة والأدمن فقط */}
+          {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
+            <button
+              key="nav-servants-follow-up"
+              onClick={() => router.push('/servants-follow-up')}
+              className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-red-500 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-xl">📞</span>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  متابعة الخدام
+                </h3>
+                <p className="text-sm text-gray-500">
+                  الخدام الذين يحتاجون للمتابعة والاتصال
+                </p>
+              </div>
+            </button>
+          )}
+
           {/* إدارة الفصول - لأمين الخدمة فقط */}
           {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
             <button
+              key="nav-classes"
               onClick={() => router.push('/classes')}
               className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
             >
@@ -417,21 +616,82 @@ export default function DashboardPage() {
           )}
 
           <button
+            key="nav-pastoral-care"
             onClick={() => router.push('/pastoral-care')}
             className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
           >
             <div className="text-center">
               <div className="w-12 h-12 bg-red-500 rounded-lg flex items-center justify-center mx-auto mb-4">
-                <span className="text-white text-xl">❤️</span>
+                <span className="text-white text-xl">📞</span>
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">
-                الرعاية الرعوية
+                الافتقاد
               </h3>
               <p className="text-sm text-gray-500">
-                متابعة الحالات الخاصة والرعاية
+                متابعة الأطفال الغائبين والاتصال بهم
               </p>
             </div>
           </button>
+
+          {/* المتابعة الفردية للأطفال - لأمين الخدمة ومدرس الفصل */}
+          {(user?.role === 'serviceLeader' || user?.role === 'classTeacher') && (
+            <button
+              onClick={() => router.push('/individual-tracking')}
+              className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-teal-500 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-xl">📈</span>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  المتابعة الفردية للأطفال
+                </h3>
+                <p className="text-sm text-gray-500">
+                  إحصائيات فردية تفصيلية لكل طفل
+                </p>
+              </div>
+            </button>
+          )}
+
+          {/* متابعة الخدام الفردية - لأمين الخدمة والأدمن فقط */}
+          {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
+            <button
+              onClick={() => router.push('/servants-tracking')}
+              className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-orange-500 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-xl">👥</span>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  متابعة الخدام الفردية
+                </h3>
+                <p className="text-sm text-gray-500">
+                  إحصائيات الخدام مقسمة حسب الفصول
+                </p>
+              </div>
+            </button>
+          )}
+
+          {/* متابعة الأطفال الفردية - لأمين الخدمة والأدمن فقط */}
+          {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
+            <button
+              onClick={() => router.push('/children-tracking')}
+              className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-purple-500 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-xl">👶</span>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  متابعة الأطفال الفردية
+                </h3>
+                <p className="text-sm text-gray-500">
+                  إحصائيات الأطفال مقسمة حسب الفصول
+                </p>
+              </div>
+            </button>
+          )}
         </div>
       </main>
     </div>

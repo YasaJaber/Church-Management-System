@@ -4,6 +4,7 @@ const Attendance = require("../models/Attendance");
 const Child = require("../models/Child");
 const Class = require("../models/Class");
 const User = require("../models/User");
+const GiftDelivery = require("../models/GiftDelivery");
 const { authMiddleware } = require("../middleware/auth");
 
 // @route   POST /api/statistics/clear-cache
@@ -459,7 +460,6 @@ router.get("/child/:childId", async (req, res) => {
         child: {
           _id: child._id,
           name: child.name,
-          age: child.age,
           class: child.class,
           parentName: child.parentName,
           phone: child.phone,
@@ -563,6 +563,7 @@ router.get("/church", authMiddleware, async (req, res) => {
       });
 
       const presentToday = todayAttendance.filter(a => a.status === "present").length;
+      const absentToday = todayAttendance.filter(a => a.status === "absent").length;
 
       // Calculate attendance rate for the most recent date - FIX: Use children.length not totalRecords
       const attendanceRate = children.length > 0 ? 
@@ -595,6 +596,7 @@ router.get("/church", authMiddleware, async (req, res) => {
       console.log(`📊 Class statistics calculated (based on ${mostRecentAttendanceDate}):`, {
         totalChildren,
         presentToday,
+        absentToday,
         attendanceRate,
         averageAttendance,
       });
@@ -604,6 +606,7 @@ router.get("/church", authMiddleware, async (req, res) => {
         data: {
           totalChildren,
           presentToday,
+          absentToday,
           attendanceRate,
           averageAttendance,
           className: `${classInfo.stage} - ${classInfo.grade}`,
@@ -628,6 +631,10 @@ router.get("/church", authMiddleware, async (req, res) => {
 
     const presentToday = todayAttendance.filter(
       (r) => r.status === "present"
+    ).length;
+
+    const absentToday = todayAttendance.filter(
+      (r) => r.status === "absent"
     ).length;
 
     // Calculate attendance rate for the most recent date - FIX: Use totalChildren not totalRecords
@@ -655,11 +662,24 @@ router.get("/church", authMiddleware, async (req, res) => {
     const averageAttendance = datesWithData > 0 && totalChildren > 0 ? 
       ((totalPresentSum / datesWithData) / totalChildren * 100).toFixed(1) : "0";
 
+    // For admin and service leaders, include total classes and servants counts
+    let totalClasses = 0;
+    let totalServants = 0;
+    
+    if (req.user.role === "admin" || req.user.role === "serviceLeader") {
+      totalClasses = await Class.countDocuments();
+      totalServants = await User.countDocuments({ role: "servant" });
+      console.log(`📊 Additional stats for admin/serviceLeader: ${totalClasses} classes, ${totalServants} servants`);
+    }
+
     console.log(`📊 Church statistics calculated (based on ${mostRecentAttendanceDate}):`, {
       totalChildren,
       presentToday,
+      absentToday,
       attendanceRate: parseFloat(attendanceRate),
       averageAttendance: parseFloat(averageAttendance),
+      totalClasses,
+      totalServants,
     });
 
     res.json({
@@ -667,8 +687,11 @@ router.get("/church", authMiddleware, async (req, res) => {
       data: {
         totalChildren,
         presentToday,
+        absentToday,
         averageAttendance: parseFloat(averageAttendance),
         attendanceRate: parseFloat(attendanceRate),
+        totalClasses,
+        totalServants,
       },
     });
   } catch (error) {
@@ -760,20 +783,28 @@ router.get("/attendance", authMiddleware, async (req, res) => {
 });
 
 // @route   GET /api/statistics/consecutive-attendance
-// @desc    Get consecutive attendance statistics (role-based filtering)
+// @desc    Get consecutive attendance statistics (role-based filtering) - OPTIMIZED
 // @access  Protected
 router.get("/consecutive-attendance", authMiddleware, async (req, res) => {
   try {
-    console.log("📊 Getting consecutive attendance stats");
+    console.log("📊 Getting consecutive attendance stats - OPTIMIZED VERSION");
     console.log("👤 User:", req.user?.username || "UNKNOWN");
     console.log("🔐 Role:", req.user?.role || "UNKNOWN");
     console.log("🏫 Assigned Class:", req.user?.assignedClass || "NONE");
 
+    const { classId } = req.query;
+    console.log("🔍 Requested classId filter:", classId);
+
     let childrenQuery = {};
     
     // Apply role-based filtering
-    if (req.user.role === "admin") {
-      console.log("👑 Admin access - showing church-wide consecutive attendance");
+    if (req.user.role === "admin" || req.user.role === "serviceLeader") {
+      console.log("👑 Admin/ServiceLeader access - showing church-wide consecutive attendance");
+      // إذا تم تحديد فصل معين، أضفه للفلتر
+      if (classId) {
+        childrenQuery.class = classId;
+        console.log("🎯 Filtering by specific class:", classId);
+      }
     } else if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
       childrenQuery.class = req.user.assignedClass._id;
       console.log("👤 Servant/ClassTeacher access - filtering by class:", req.user.assignedClass._id);
@@ -785,25 +816,74 @@ router.get("/consecutive-attendance", authMiddleware, async (req, res) => {
       });
     }
 
-    // Get children based on role filtering
+    console.log("🔍 Final children query:", JSON.stringify(childrenQuery));
+
+    // OPTIMIZATION: Get last 4 dates ONCE instead of for each child
+    const last4Dates = await getRecentAttendanceDates(4);
+    console.log(`📅 Using last 4 attendance dates: ${last4Dates}`);
+
+    // OPTIMIZATION: Get children based on role filtering
     const children = await Child.find(childrenQuery).populate('class');
     console.log(`👶 Found ${children.length} children`);
-    const consecutiveStats = [];
 
+    // OPTIMIZATION: Get ALL attendance records for the last 4 dates in ONE query
+    const allAttendanceRecords = await Attendance.find({
+      date: { $in: last4Dates },
+      type: "child",
+    }).lean();
+    console.log(`📊 Found ${allAttendanceRecords.length} total attendance records`);
+
+    // OPTIMIZATION: Get ALL gift delivery records for the children in ONE query
+    const allGiftDeliveries = await GiftDelivery.find({
+      child: { $in: children.map(c => c._id) }
+    }).lean();
+    console.log(`🎁 Found ${allGiftDeliveries.length} gift delivery records`);
+
+    // Group gift deliveries by child ID for quick lookup (get most recent delivery for each child)
+    const latestGiftDeliveryByChild = {};
+    allGiftDeliveries.forEach(delivery => {
+      const childId = delivery.child.toString();
+      if (!latestGiftDeliveryByChild[childId] || 
+          new Date(delivery.deliveryDate) > new Date(latestGiftDeliveryByChild[childId].deliveryDate)) {
+        latestGiftDeliveryByChild[childId] = delivery;
+      }
+    });
+
+    // Group attendance by child ID for quick lookup
+    const attendanceByChild = {};
+    allAttendanceRecords.forEach(record => {
+      const childId = record.person.toString();
+      if (!attendanceByChild[childId]) {
+        attendanceByChild[childId] = [];
+      }
+      attendanceByChild[childId].push(record);
+    });
+
+    const consecutiveStats = [];
     let processedCount = 0;
+
     for (const child of children) {
       try {
-        // Get last 4 actual attendance dates for this child
-        const last4Dates = await getRecentAttendanceDates(4);
-        const childAttendance = await Attendance.find({
-          person: child._id,
-          date: { $in: last4Dates },
-          type: "child",
-        }).sort({ date: -1 });
+        const childId = child._id.toString();
+        const childAttendance = attendanceByChild[childId] || [];
+        const lastGiftDelivery = latestGiftDeliveryByChild[childId];
+        
+        // Filter attendance records to only include those AFTER the last gift delivery
+        let relevantAttendance = childAttendance;
+        if (lastGiftDelivery) {
+          const deliveryDate = new Date(lastGiftDelivery.deliveryDate);
+          relevantAttendance = childAttendance.filter(record => {
+            return new Date(record.date) > deliveryDate;
+          });
+          console.log(`🎁 Child ${child.name} had gift delivery on ${deliveryDate.toDateString()}, filtering ${childAttendance.length} → ${relevantAttendance.length} records`);
+        }
+        
+        // Sort by date descending
+        relevantAttendance.sort((a, b) => new Date(b.date) - new Date(a.date));
 
         // Count consecutive present days from most recent
         let consecutiveCount = 0;
-        for (const record of childAttendance) {
+        for (const record of relevantAttendance) {
           if (record.status === "present") {
             consecutiveCount++;
           } else {
@@ -816,18 +896,19 @@ router.get("/consecutive-attendance", authMiddleware, async (req, res) => {
           consecutiveStats.push({
             name: child.name,
             consecutiveWeeks: consecutiveCount,
-            className: child.class?.name || child.class?.stage || 'غير محدد',
-            childId: child._id.toString()
+            className: child.class?.name || 'غير محدد',
+            childId: child._id.toString(),
+            lastGiftDelivery: lastGiftDelivery ? lastGiftDelivery.deliveryDate : null
           });
           
           // Debug log for first few children
           if (consecutiveStats.length <= 5) {
-            console.log(`📝 المواظب: ${child.name}, Class: ${child.class?.name || child.class?.stage}, Weeks: ${consecutiveCount}`);
+            console.log(`📝 المواظب: ${child.name}, Class: ${child.class?.name || 'غير محدد'}, Weeks: ${consecutiveCount}${lastGiftDelivery ? ' (after gift)' : ''}`);
           }
         }
         
         processedCount++;
-        if (processedCount % 50 === 0) {
+        if (processedCount % 100 === 0) {
           console.log(`📊 Processed ${processedCount}/${children.length} children`);
         }
       } catch (childError) {
@@ -844,7 +925,7 @@ router.get("/consecutive-attendance", authMiddleware, async (req, res) => {
 
     res.json({
       success: true,
-      data: consecutiveStats.slice(0, 10), // Top 10
+      data: consecutiveStats, // جميع النتائج
     });
   } catch (error) {
     console.error("Error fetching consecutive attendance:", error);
@@ -1150,6 +1231,273 @@ router.get("/export-class-attendance", authMiddleware, async (req, res) => {
     res.status(500).json({
       success: false,
       error: "خطأ في تصدير بيانات حضور الفصل"
+    });
+  }
+});
+
+// @route   GET /api/statistics/consecutive-attendance-by-classes
+// @desc    Get consecutive attendance statistics grouped by classes
+// @access  Protected
+router.get("/consecutive-attendance-by-classes", authMiddleware, async (req, res) => {
+  try {
+    console.log("📊 Getting consecutive attendance stats by classes");
+    console.log("👤 User:", req.user?.username || "UNKNOWN");
+    console.log("🔐 Role:", req.user?.role || "UNKNOWN");
+
+    let childrenQuery = {};
+    
+    // Apply role-based filtering
+    if (req.user.role === "admin" || req.user.role === "serviceLeader") {
+      console.log("👑 Admin/ServiceLeader access - showing all classes");
+    } else if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
+      childrenQuery.class = req.user.assignedClass._id;
+      console.log("👤 Servant/ClassTeacher access - filtering by class:", req.user.assignedClass._id);
+    } else {
+      console.log("❌ Access denied - invalid role or no assigned class");
+      return res.status(403).json({
+        success: false,
+        error: "Access denied. You can only view consecutive attendance for your assigned class.",
+      });
+    }
+
+    // Get last 4 dates
+    const last4Dates = await getRecentAttendanceDates(4);
+    console.log(`📅 Using last 4 attendance dates: ${last4Dates}`);
+
+    // Get children based on role filtering
+    const children = await Child.find(childrenQuery).populate('class');
+    console.log(`👶 Found ${children.length} children`);
+
+    // Get ALL attendance records for the last 4 dates
+    const allAttendanceRecords = await Attendance.find({
+      date: { $in: last4Dates },
+      type: "child",
+    }).lean();
+    console.log(`📊 Found ${allAttendanceRecords.length} total attendance records`);
+
+    // Get ALL gift delivery records for the children
+    const allGiftDeliveries = await GiftDelivery.find({
+      child: { $in: children.map(c => c._id) }
+    }).lean();
+    console.log(`🎁 Found ${allGiftDeliveries.length} gift delivery records`);
+
+    // Group gift deliveries by child ID (get most recent delivery for each child)
+    const latestGiftDeliveryByChild = {};
+    allGiftDeliveries.forEach(delivery => {
+      const childId = delivery.child.toString();
+      if (!latestGiftDeliveryByChild[childId] || 
+          new Date(delivery.deliveryDate) > new Date(latestGiftDeliveryByChild[childId].deliveryDate)) {
+        latestGiftDeliveryByChild[childId] = delivery;
+      }
+    });
+
+    // Group attendance by child ID
+    const attendanceByChild = {};
+    allAttendanceRecords.forEach(record => {
+      const childId = record.person.toString();
+      if (!attendanceByChild[childId]) {
+        attendanceByChild[childId] = [];
+      }
+      attendanceByChild[childId].push(record);
+    });
+
+    // Group children by class
+    const classesList = {};
+    
+    for (const child of children) {
+      try {
+        const childId = child._id.toString();
+        const childAttendance = attendanceByChild[childId] || [];
+        const lastGiftDelivery = latestGiftDeliveryByChild[childId];
+        
+        // Filter attendance records to only include those AFTER the last gift delivery
+        let relevantAttendance = childAttendance;
+        if (lastGiftDelivery) {
+          const deliveryDate = new Date(lastGiftDelivery.deliveryDate);
+          relevantAttendance = childAttendance.filter(record => {
+            return new Date(record.date) > deliveryDate;
+          });
+          console.log(`🎁 Child ${child.name} had gift delivery on ${deliveryDate.toDateString()}, filtering ${childAttendance.length} → ${relevantAttendance.length} records`);
+        }
+        
+        // Sort by date descending
+        relevantAttendance.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+        // Count consecutive present days from most recent
+        let consecutiveCount = 0;
+        for (const record of relevantAttendance) {
+          if (record.status === "present") {
+            consecutiveCount++;
+          } else {
+            break;
+          }
+        }
+
+        // Only include children with 4+ consecutive weeks
+        if (consecutiveCount >= 4) {
+          const className = child.class?.name || 'غير محدد';
+          const classId = child.class?._id || 'no-class';
+          
+          if (!classesList[classId]) {
+            classesList[classId] = {
+              className: className,
+              classId: classId,
+              children: []
+            };
+          }
+          
+          classesList[classId].children.push({
+            name: child.name,
+            consecutiveWeeks: consecutiveCount,
+            childId: child._id.toString(),
+            lastGiftDelivery: lastGiftDelivery ? lastGiftDelivery.deliveryDate : null
+          });
+        }
+      } catch (childError) {
+        console.error(`❌ Error processing child ${child.name}:`, childError.message);
+        continue;
+      }
+    }
+
+    // Sort children within each class by consecutive weeks
+    Object.values(classesList).forEach(classData => {
+      classData.children.sort((a, b) => b.consecutiveWeeks - a.consecutiveWeeks);
+    });
+
+    // Convert to array and sort by class name
+    const classesArray = Object.values(classesList).sort((a, b) => a.className.localeCompare(b.className, 'ar'));
+
+    console.log(`✅ Found ${classesArray.length} classes with consecutive attendance`);
+
+    res.json({
+      success: true,
+      data: classesArray
+    });
+  } catch (error) {
+    console.error("Error fetching consecutive attendance by classes:", error);
+    res.status(500).json({
+      success: false,
+      error: "خطأ في الخادم",
+      details: error.message,
+    });
+  }
+});
+
+// @route   POST /api/statistics/deliver-gift
+// @desc    Mark gift as delivered for a child and reset consecutive attendance count
+// @access  Protected
+router.post("/deliver-gift", authMiddleware, async (req, res) => {
+  try {
+    const { childId } = req.body;
+    
+    console.log("🎁 Gift delivery request for child:", childId);
+    console.log("👤 User:", req.user?.username || "UNKNOWN");
+    console.log("🔐 Role:", req.user?.role || "UNKNOWN");
+
+    // Validate childId
+    if (!childId || childId.length !== 24 || !/^[a-fA-F0-9]{24}$/.test(childId)) {
+      return res.status(400).json({
+        success: false,
+        error: "معرف الطفل غير صالح"
+      });
+    }
+
+    // Find the child
+    const child = await Child.findById(childId).populate('class');
+    if (!child) {
+      return res.status(404).json({
+        success: false,
+        error: "الطفل غير موجود"
+      });
+    }
+
+    // Role-based access control
+    if (req.user.role !== "admin" && req.user.role !== "serviceLeader") {
+      // Check if teacher/servant has access to this child's class
+      if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
+        if (!child.class || child.class._id.toString() !== req.user.assignedClass._id.toString()) {
+          console.log("❌ Access denied - child not in assigned class");
+          return res.status(403).json({
+            success: false,
+            error: "لا يمكنك تسليم هدية لطفل خارج فصلك"
+          });
+        }
+      } else {
+        console.log("❌ Access denied - invalid role or no assigned class");
+        return res.status(403).json({
+          success: false,
+          error: "غير مسموح لك بتسليم الهدايا"
+        });
+      }
+    }
+
+    // Get the most recent attendance date and check current consecutive weeks
+    const last4Dates = await getRecentAttendanceDates(4);
+    const childAttendance = await Attendance.find({
+      person: childId,
+      type: "child",
+      date: { $in: last4Dates }
+    }).sort({ date: -1 });
+
+    // Count current consecutive weeks
+    let consecutiveWeeks = 0;
+    for (const record of childAttendance) {
+      if (record.status === "present") {
+        consecutiveWeeks++;
+      } else {
+        break;
+      }
+    }
+
+    if (consecutiveWeeks < 4) {
+      return res.status(400).json({
+        success: false,
+        error: `الطفل ${child.name} ليس مواظب لـ 4 أسابيع متتالية (حالياً ${consecutiveWeeks} أسابيع فقط)`
+      });
+    }
+
+    // Create gift delivery record
+    const giftDelivery = new GiftDelivery({
+      child: childId,
+      deliveredBy: req.user._id,
+      consecutiveWeeksEarned: consecutiveWeeks,
+      notes: `تم تسليم الهدية لمواظبة ${consecutiveWeeks} أسابيع متتالية`
+    });
+
+    await giftDelivery.save();
+
+    // Update child's notes
+    const currentNotes = child.notes || '';
+    const giftNote = `🎁 تم تسليم الهدية بتاريخ ${new Date().toLocaleDateString('ar-EG')} بواسطة ${req.user.name || req.user.username} (${consecutiveWeeks} أسابيع)`;
+    const updatedNotes = currentNotes ? `${currentNotes}\n${giftNote}` : giftNote;
+    
+    await Child.findByIdAndUpdate(childId, {
+      notes: updatedNotes,
+      lastGiftDelivery: new Date()
+    });
+
+    console.log(`🎁 Gift delivered successfully for child: ${child.name} (${consecutiveWeeks} weeks)`);
+    console.log(`📝 Gift delivery recorded with ID: ${giftDelivery._id}`);
+
+    res.json({
+      success: true,
+      message: `تم تسليم الهدية لـ ${child.name} بنجاح! 🎁\n(مواظبة ${consecutiveWeeks} أسابيع متتالية)\nسيبدأ العد من جديد الآن.`,
+      data: {
+        childName: child.name,
+        className: child.class?.name || 'غير محدد',
+        deliveredBy: req.user.name || req.user.username,
+        consecutiveWeeksEarned: consecutiveWeeks,
+        deliveryDate: new Date().toISOString(),
+        giftDeliveryId: giftDelivery._id
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Error delivering gift:", error);
+    res.status(500).json({
+      success: false,
+      error: "خطأ في تسليم الهدية",
+      details: error.message
     });
   }
 });

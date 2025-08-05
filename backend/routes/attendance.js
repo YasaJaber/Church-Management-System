@@ -12,6 +12,7 @@ const router = express.Router();
 // @access  Protected
 router.get("/children-with-status", authMiddleware, async (req, res) => {
   try {
+    console.log("🚀🚀🚀 CHILDREN-WITH-STATUS API CALLED - TOP OF FUNCTION 🚀🚀🚀");
     const { date, classId } = req.query;
 
     console.log("\n" + "=".repeat(50));
@@ -28,8 +29,8 @@ router.get("/children-with-status", authMiddleware, async (req, res) => {
       // Servants and classTeachers can only see their assigned class
       targetClassId = req.user.assignedClass._id.toString();
       console.log("👤 Servant/ClassTeacher access - forced classId:", targetClassId);
-    } else if (req.user.role !== "admin" && !req.user.assignedClass) {
-      console.log("❌ Access denied for non-admin without class");
+    } else if (req.user.role !== "admin" && req.user.role !== "serviceLeader" && !req.user.assignedClass) {
+      console.log("❌ Access denied for non-admin/non-serviceLeader without class");
       return res.status(403).json({
         success: false,
         error: "Access denied",
@@ -67,6 +68,9 @@ router.get("/children-with-status", authMiddleware, async (req, res) => {
       };
     });
 
+    console.log("📊 Attendance map keys:", Object.keys(attendanceMap));
+    console.log("📊 Sample attendance map entry:", Object.values(attendanceMap)[0]);
+
     // Transform data to include attendance status
     const childrenWithStatus = children.map(child => ({
       _id: child._id,
@@ -79,20 +83,23 @@ router.get("/children-with-status", authMiddleware, async (req, res) => {
       className: child.class?.name || 'غير محدد',
       notes: child.notes,
       isActive: child.isActive,
-      // Attendance status for the specified date
-      attendance: attendanceMap[child._id.toString()] || {
-        status: 'absent',
-        notes: '',
-        _id: null
-      }
+      // **FIXED**: Attendance status for the specified date - null means NO RECORD
+      attendance: attendanceMap[child._id.toString()] || null  // MUST return null, not object
     }));
 
+    console.log("✅ Sample child data being returned:");
+    console.log("First child attendance value:", childrenWithStatus[0]?.attendance);
+    console.log("Is null?", childrenWithStatus[0]?.attendance === null);
+    console.log("Attendance map size:", Object.keys(attendanceMap).length);
     console.log("✅ Returning", childrenWithStatus.length, "children with attendance status");
 
-    res.json({
+    const responseData = {
       success: true,
       data: childrenWithStatus,
-    });
+    };
+
+    console.log("✅ FINAL RESPONSE - first child attendance:", responseData.data[0]?.attendance);
+    res.json(responseData);
   } catch (error) {
     console.error("❌ Error in children-with-status:", error);
     res.status(500).json({
@@ -135,8 +142,8 @@ router.get("/children", authMiddleware, async (req, res) => {
       // Servants and classTeachers can only see their assigned class
       targetClassId = req.user.assignedClass._id.toString();
       console.log("👤 Servant/ClassTeacher access - forced classId:", targetClassId);
-    } else if (req.user.role !== "admin" && !req.user.assignedClass) {
-      console.log("❌ Access denied for non-admin without class");
+    } else if (req.user.role !== "admin" && req.user.role !== "serviceLeader" && !req.user.assignedClass) {
+      console.log("❌ Access denied for non-admin/non-serviceLeader without class");
       return res.status(403).json({
         success: false,
         error: "Access denied",
@@ -600,8 +607,8 @@ router.get("/recent-activity", authMiddleware, async (req, res) => {
       // Servants and classTeachers can only see their assigned class
       targetClassId = req.user.assignedClass._id.toString();
       console.log("👤 Servant/ClassTeacher access - forced classId:", targetClassId);
-    } else if (req.user.role !== "admin" && !req.user.assignedClass) {
-      console.log("❌ Access denied for non-admin without class");
+    } else if (req.user.role !== "admin" && req.user.role !== "serviceLeader" && !req.user.assignedClass) {
+      console.log("❌ Access denied for non-admin/non-serviceLeader without class");
       return res.status(403).json({
         success: false,
         error: "Access denied",
@@ -640,6 +647,50 @@ router.get("/recent-activity", authMiddleware, async (req, res) => {
 
   } catch (error) {
     console.error("❌ Error in recent-activity:", error);
+    res.status(500).json({
+      success: false,
+      error: "Server error",
+    });
+  }
+});
+
+// @route   GET /api/attendance/recent-dates
+// @desc    Get most recent attendance dates
+// @access  Protected
+router.get("/recent-dates", authMiddleware, async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+
+    console.log("🔍 GET /recent-dates API CALLED");
+    console.log("📊 Limit:", limit);
+    console.log("👤 User:", req.user?.username || "UNKNOWN");
+
+    // Get distinct dates from attendance records, sorted descending
+    const dates = await Attendance.distinct('date', { type: 'child' });
+    
+    // Sort dates in descending order (newest first)
+    const sortedDates = dates
+      .map(date => {
+        if (typeof date === 'string') {
+          return date;
+        } else if (date instanceof Date) {
+          return date.toISOString().split('T')[0];
+        } else {
+          return new Date(date).toISOString().split('T')[0];
+        }
+      })
+      .sort((a, b) => new Date(b) - new Date(a))
+      .slice(0, parseInt(limit));
+
+    console.log("📅 Found recent attendance dates:", sortedDates);
+
+    res.json({
+      success: true,
+      data: sortedDates,
+    });
+
+  } catch (error) {
+    console.error("❌ Error in recent-dates:", error);
     res.status(500).json({
       success: false,
       error: "Server error",

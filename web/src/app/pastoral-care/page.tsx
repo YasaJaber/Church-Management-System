@@ -1,605 +1,467 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { pastoralCareAPI, childrenAPI } from '@/services/api'
+import { pastoralCareAPI } from '@/services/api'
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'next/navigation'
+import { toast } from 'react-hot-toast'
+import { 
+  PhoneIcon,
+  CheckCircleIcon,
+  XMarkIcon,
+  UserGroupIcon,
+  CalendarDaysIcon,
+  ClockIcon,
+  ExclamationTriangleIcon,
+  FunnelIcon,
+  MagnifyingGlassIcon,
+  ArrowPathIcon
+} from '@heroicons/react/24/outline'
+import LoadingSpinner from '@/components/ui/LoadingSpinner'
 
-interface PastoralCare {
-  _id: string
-  child: {
-    _id: string
-    name: string
-  }
-  type: string
-  description: string
-  date: string
-  status: string
-  followUpDate?: string
-  notes?: string
-  createdAt: string
-}
-
-interface Child {
+interface AbsentChild {
   _id: string
   name: string
-  class: string
+  phone: string | null
+  parentName: string
+  className: string
+  class: {
+    _id: string
+    name: string
+    stage: string
+    grade: string
+  } | null
+  pastoralCareId: string | null
+  hasBeenCalled: boolean
+  calledBy: string | null
+  calledAt: string | null
+  lastAbsentDate: string
+  notes: string
+  addedDate: string | null
+}
+
+interface ApiResponse {
+  success: boolean
+  data: AbsentChild[]
+  date: string
+  totalAbsent: number
+  totalChildren: number
+  message: string
 }
 
 export default function PastoralCarePage() {
-  const { user, isAuthenticated } = useAuth()
+  const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
-  const [pastoralCares, setPastoralCares] = useState<PastoralCare[]>([])
-  const [children, setChildren] = useState<Child[]>([])
+  
+  const [absentChildren, setAbsentChildren] = useState<AbsentChild[]>([])
   const [loading, setLoading] = useState(true)
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [editingCare, setEditingCare] = useState<PastoralCare | null>(null)
-  const [formData, setFormData] = useState({
-    child: '',
-    type: '',
-    description: '',
-    date: new Date().toISOString().split('T')[0],
-    status: 'pending',
-    followUpDate: '',
-    notes: ''
-  })
   const [searchTerm, setSearchTerm] = useState('')
-  const [filterStatus, setFilterStatus] = useState('all')
-  const [filterType, setFilterType] = useState('all')
+  const [classFilter, setClassFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all') // all, called, notCalled
+  const [lastAbsentDate, setLastAbsentDate] = useState('')
+  const [totalStats, setTotalStats] = useState({ totalAbsent: 0, totalChildren: 0 })
+  const [uniqueClasses, setUniqueClasses] = useState<string[]>([])
 
-  // إعادة توجيه إذا لم يكن المستخدم مؤهلاً
   useEffect(() => {
-    if (!isAuthenticated || !user) {
+    if (!isLoading && !isAuthenticated) {
       router.push('/login')
       return
     }
     
-    // فقط أمين الخدمة والإداري يمكنهم الوصول للرعاية الرعوية
-    if (user.role !== 'admin' && user.role !== 'serviceLeader') {
-      router.push('/dashboard')
-      return
+    // التحقق من الصلاحيات - فقط أمين الخدمة ومدرس الفصل والإداري
+    if (isAuthenticated && user) {
+      if (user.role === 'serviceLeader' || user.role === 'classTeacher' || user.role === 'admin') {
+        loadAbsentChildren()
+      } else {
+        toast.error('ليس لديك صلاحية للوصول لهذه الصفحة')
+        router.push('/dashboard')
+      }
     }
-  }, [isAuthenticated, user, router])
+  }, [isAuthenticated, isLoading, user, router])
 
-  useEffect(() => {
-    if (isAuthenticated && user && (user.role === 'admin' || user.role === 'serviceLeader')) {
-      fetchPastoralCares()
-      fetchChildren()
-    }
-  }, [isAuthenticated, user])
-
-  const fetchPastoralCares = async () => {
+  const loadAbsentChildren = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-      const response = await pastoralCareAPI.getAll()
-      if (response.success && response.data) {
-        setPastoralCares(response.data)
+      const response: ApiResponse = await pastoralCareAPI.getAbsentChildren()
+      
+      if (response.success) {
+        setAbsentChildren(response.data || [])
+        setLastAbsentDate(response.date || '')
+        setTotalStats({
+          totalAbsent: response.totalAbsent || 0,
+          totalChildren: response.totalChildren || 0
+        })
+        
+        // استخراج الفصول الفريدة للفلتر
+        const classes = response.data
+          ?.map(child => child.className)
+          .filter((className, index, array) => array.indexOf(className) === index)
+          .sort() || []
+        setUniqueClasses(classes)
+      } else {
+        toast.error(response.message || 'فشل في تحميل قائمة الافتقاد')
       }
     } catch (error) {
-      console.error('Error fetching pastoral care records:', error)
+      console.error('Error loading absent children:', error)
+      toast.error('حدث خطأ في تحميل البيانات')
     } finally {
       setLoading(false)
     }
   }
 
-  const fetchChildren = async () => {
-    try {
-      const response = await childrenAPI.getAll()
-      if (response.success && response.data) {
-        setChildren(response.data)
-      }
-    } catch (error) {
-      console.error('Error fetching children:', error)
+  const handlePhoneCall = async (child: AbsentChild) => {
+    if (!child.phone) {
+      toast.error('لا يوجد رقم هاتف مسجل لهذا الطفل')
+      return
     }
-  }
 
-  const handleAddPastoralCare = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      const response = await pastoralCareAPI.create(formData)
-      if (response.success) {
-        setFormData({
-          child: '',
-          type: '',
-          description: '',
-          date: new Date().toISOString().split('T')[0],
-          status: 'pending',
-          followUpDate: '',
-          notes: ''
-        })
-        setShowAddModal(false)
-        fetchPastoralCares()
-      }
-    } catch (error) {
-      console.error('Error adding pastoral care record:', error)
-    }
-  }
-
-  const handleEditPastoralCare = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!editingCare) return
-
-    try {
-      const response = await pastoralCareAPI.update(editingCare._id, formData)
-      if (response.success) {
-        setEditingCare(null)
-        setFormData({
-          child: '',
-          type: '',
-          description: '',
-          date: new Date().toISOString().split('T')[0],
-          status: 'pending',
-          followUpDate: '',
-          notes: ''
-        })
-        fetchPastoralCares()
-      }
-    } catch (error) {
-      console.error('Error updating pastoral care record:', error)
-    }
-  }
-
-  const handleDeletePastoralCare = async (id: string) => {
-    if (!confirm('هل أنت متأكد من حذف هذا السجل؟')) return
-
-    try {
-      const response = await pastoralCareAPI.delete(id)
-      if (response.success) {
-        fetchPastoralCares()
-      }
-    } catch (error) {
-      console.error('Error deleting pastoral care record:', error)
-    }
-  }
-
-  const openEditModal = (care: PastoralCare) => {
-    setEditingCare(care)
-    setFormData({
-      child: care.child._id,
-      type: care.type,
-      description: care.description,
-      date: care.date.split('T')[0],
-      status: care.status,
-      followUpDate: care.followUpDate ? care.followUpDate.split('T')[0] : '',
-      notes: care.notes || ''
-    })
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800'
-      case 'in-progress': return 'bg-blue-100 text-blue-800'
-      case 'resolved': return 'bg-green-100 text-green-800'
-      case 'follow-up': return 'bg-purple-100 text-purple-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'pending': return 'في الانتظار'
-      case 'in-progress': return 'قيد المتابعة'
-      case 'resolved': return 'تم الحل'
-      case 'follow-up': return 'متابعة مطلوبة'
-      default: return status
-    }
-  }
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'spiritual': return 'bg-purple-100 text-purple-800'
-      case 'behavioral': return 'bg-orange-100 text-orange-800'
-      case 'family': return 'bg-blue-100 text-blue-800'
-      case 'academic': return 'bg-green-100 text-green-800'
-      case 'health': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
-    }
-  }
-
-  const getTypeText = (type: string) => {
-    switch (type) {
-      case 'spiritual': return 'روحية'
-      case 'behavioral': return 'سلوكية'
-      case 'family': return 'أسرية'
-      case 'academic': return 'دراسية'
-      case 'health': return 'صحية'
-      default: return type
-    }
-  }
-
-  const filteredPastoralCares = pastoralCares.filter(care => {
-    const matchesSearch = care.child.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         care.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (care.notes && care.notes.toLowerCase().includes(searchTerm.toLowerCase()))
+    // فتح رابط الاتصال
+    const phoneNumber = child.phone.replace(/\s+/g, '').replace(/[^0-9+]/g, '')
+    window.open(`tel:${phoneNumber}`, '_self')
     
-    const matchesStatus = filterStatus === 'all' || care.status === filterStatus
-    const matchesType = filterType === 'all' || care.type === filterType
+    // تسجيل أنه تم الاتصال
+    try {
+      const response = await pastoralCareAPI.markChildCalled(child._id, `تم الاتصال بـ ${child.parentName}`)
+      if (response.success) {
+        toast.success(`تم تسجيل الاتصال بـ ${child.name}`)
+        loadAbsentChildren() // إعادة تحميل القائمة
+      }
+    } catch (error) {
+      console.error('Error marking child as called:', error)
+      // لا نعرض خطأ هنا لأن الاتصال تم بالفعل
+    }
+  }
 
-    return matchesSearch && matchesStatus && matchesType
+  const handleRemoveFromList = async (child: AbsentChild) => {
+    if (!confirm(`هل أنت متأكد من إزالة ${child.name} من قائمة الافتقاد؟`)) {
+      return
+    }
+
+    try {
+      const response = await pastoralCareAPI.removeChildFromCare(
+        child._id, 
+        'تم الانتهاء من افتقاد الطفل'
+      )
+      
+      if (response.success) {
+        toast.success(`تم إزالة ${child.name} من قائمة الافتقاد`)
+        loadAbsentChildren() // إعادة تحميل القائمة
+      } else {
+        toast.error('فشل في إزالة الطفل من القائمة')
+      }
+    } catch (error) {
+      console.error('Error removing child from list:', error)
+      toast.error('حدث خطأ في إزالة الطفل من القائمة')
+    }
+  }
+
+  // فلترة الأطفال حسب البحث والفلاتر
+  const filteredChildren = absentChildren.filter(child => {
+    const matchesSearch = child.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         child.parentName.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    const matchesClass = classFilter === 'all' || child.className === classFilter
+    
+    const matchesStatus = statusFilter === 'all' || 
+                         (statusFilter === 'called' && child.hasBeenCalled) ||
+                         (statusFilter === 'notCalled' && !child.hasBeenCalled)
+    
+    return matchesSearch && matchesClass && matchesStatus
   })
 
-  if (loading) {
+  // إحصائيات سريعة
+  const getQuickStats = () => {
+    const total = filteredChildren.length
+    const called = filteredChildren.filter(child => child.hasBeenCalled).length
+    const notCalled = total - called
+    
+    return { total, called, notCalled }
+  }
+
+  const quickStats = getQuickStats()
+
+  if (isLoading || loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="text-gray-600 mt-4">جاري تحميل قائمة الافتقاد...</p>
+        </div>
       </div>
     )
   }
 
+  if (!isAuthenticated) {
+    return null
+  }
+
   return (
-    <div className="p-6" dir="rtl">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 text-right">الرعاية الرعوية</h1>
-        <p className="text-gray-600 text-right mt-2">متابعة الحالات الخاصة ورعاية الأطفال</p>
-      </div>
-
-      {/* Search and Filters */}
-      <div className="bg-white p-4 rounded-lg shadow mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div>
-            <input
-              type="text"
-              placeholder="البحث في السجلات..."
-              title="البحث في السجلات"
-              className="w-full p-3 border border-gray-300 rounded-lg text-right"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <div>
-            <select
-              title="تصفية حسب الحالة"
-              className="w-full p-3 border border-gray-300 rounded-lg text-right"
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-            >
-              <option value="all">جميع الحالات</option>
-              <option value="pending">في الانتظار</option>
-              <option value="in-progress">قيد المتابعة</option>
-              <option value="resolved">تم الحل</option>
-              <option value="follow-up">متابعة مطلوبة</option>
-            </select>
-          </div>
-          <div>
-            <select
-              title="تصفية حسب النوع"
-              className="w-full p-3 border border-gray-300 rounded-lg text-right"
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-            >
-              <option value="all">جميع الأنواع</option>
-              <option value="spiritual">روحية</option>
-              <option value="behavioral">سلوكية</option>
-              <option value="family">أسرية</option>
-              <option value="academic">دراسية</option>
-              <option value="health">صحية</option>
-            </select>
-          </div>
-          <div>
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              إضافة سجل جديد
-            </button>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <button
+                onClick={() => router.push('/dashboard')}
+                className="text-gray-500 hover:text-gray-700 ml-4"
+              >
+                ← العودة
+              </button>
+              <h1 className="text-xl font-semibold text-gray-900">
+                الافتقاد
+              </h1>
+            </div>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={loadAbsentChildren}
+                className="flex items-center px-3 py-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors text-sm"
+                title="تحديث القائمة"
+              >
+                <ArrowPathIcon className="w-4 h-4 ml-1" />
+                تحديث
+              </button>
+              <div className="flex items-center">
+                <UserGroupIcon className="w-6 h-6 text-orange-600 ml-2" />
+                <span className="text-sm text-gray-600">
+                  {quickStats.total} طفل يحتاج افتقاد
+                </span>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      </header>
 
-      {/* Pastoral Care Records */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  الطفل
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  النوع
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  الوصف
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  التاريخ
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  الحالة
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  المتابعة
-                </th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  الإجراءات
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredPastoralCares.map((care) => (
-                <tr key={care._id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="text-sm font-medium text-gray-900">
-                      {care.child.name}
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Last Absent Date Info */}
+        {lastAbsentDate && (
+          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <CalendarDaysIcon className="w-5 h-5 text-blue-600 ml-2" />
+              <p className="text-blue-800 font-medium">
+                آخر موعد حضور: {new Date(lastAbsentDate).toLocaleDateString('ar-EG', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-white p-4 rounded-lg shadow">
+            <div className="flex items-center">
+              <div className="bg-red-100 p-3 rounded-full">
+                <ExclamationTriangleIcon className="w-6 h-6 text-red-600" />
+              </div>
+              <div className="mr-4">
+                <p className="text-sm text-gray-600">إجمالي الغياب</p>
+                <p className="text-2xl font-bold text-red-700">{totalStats.totalAbsent}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-lg shadow">
+            <div className="flex items-center">
+              <div className="bg-orange-100 p-3 rounded-full">
+                <UserGroupIcon className="w-6 h-6 text-orange-600" />
+              </div>
+              <div className="mr-4">
+                <p className="text-sm text-gray-600">يحتاج افتقاد</p>
+                <p className="text-2xl font-bold text-orange-700">{quickStats.total}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-lg shadow">
+            <div className="flex items-center">
+              <div className="bg-green-100 p-3 rounded-full">
+                <CheckCircleIcon className="w-6 h-6 text-green-600" />
+              </div>
+              <div className="mr-4">
+                <p className="text-sm text-gray-600">تم الاتصال</p>
+                <p className="text-2xl font-bold text-green-700">{quickStats.called}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-lg shadow">
+            <div className="flex items-center">
+              <div className="bg-yellow-100 p-3 rounded-full">
+                <PhoneIcon className="w-6 h-6 text-yellow-600" />
+              </div>
+              <div className="mr-4">
+                <p className="text-sm text-gray-600">لم يتم الاتصال</p>
+                <p className="text-2xl font-bold text-yellow-700">{quickStats.notCalled}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Filters */}
+        <div className="bg-white p-4 rounded-lg shadow mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="relative">
+              <MagnifyingGlassIcon className="w-5 h-5 absolute right-3 top-3 text-gray-400" />
+              <input
+                type="text"
+                placeholder="البحث عن طفل أو ولي أمر..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <select
+                value={classFilter}
+                onChange={(e) => setClassFilter(e.target.value)}
+                className="w-full py-2 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label="فلتر حسب الفصل"
+              >
+                <option value="all">جميع الفصول</option>
+                {uniqueClasses.map(className => (
+                  <option key={className} value={className}>{className}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full py-2 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label="فلتر حسب حالة الاتصال"
+              >
+                <option value="all">جميع الحالات</option>
+                <option value="notCalled">لم يتم الاتصال</option>
+                <option value="called">تم الاتصال</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Children List */}
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          {filteredChildren.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <UserGroupIcon className="w-8 h-8 text-gray-400" />
+              </div>
+              <p className="text-gray-500 font-medium">لا توجد أطفال تحتاج للافتقاد</p>
+              <p className="text-gray-400 text-sm mt-1">
+                {statusFilter === 'all' ? 'جميع الأطفال الغائبين تم افتقادهم' : 
+                 statusFilter === 'called' ? 'لا توجد أطفال تم الاتصال بهم' :
+                 'لا توجد أطفال لم يتم الاتصال بهم'}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-200">
+              {filteredChildren.map((child) => (
+                <div key={child._id} className="p-4 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center mb-2">
+                        <h3 className="text-lg font-medium text-gray-900 ml-3">
+                          {child.name}
+                        </h3>
+                        {child.hasBeenCalled && (
+                          <span className="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                            <CheckCircleIcon className="w-3 h-3 ml-1" />
+                            تم الاتصال
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-gray-600">
+                        <div className="flex items-center">
+                          <UserGroupIcon className="w-4 h-4 ml-1" />
+                          <span>ولي الأمر: {child.parentName}</span>
+                        </div>
+                        <div className="flex items-center">
+                          <span className="w-2 h-2 bg-blue-500 rounded-full ml-2"></span>
+                          <span>الفصل: {child.className}</span>
+                        </div>
+                        {child.phone && (
+                          <div className="flex items-center">
+                            <PhoneIcon className="w-4 h-4 ml-1" />
+                            <span dir="ltr">{child.phone}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {child.hasBeenCalled && child.calledAt && (
+                        <div className="mt-2 text-xs text-gray-500">
+                          <ClockIcon className="w-3 h-3 inline ml-1" />
+                          تم الاتصال في: {new Date(child.calledAt).toLocaleDateString('ar-EG', {
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </div>
+                      )}
+
+                      {child.notes && (
+                        <div className="mt-2 text-sm text-gray-600">
+                          <span className="font-medium">ملاحظات: </span>
+                          {child.notes}
+                        </div>
+                      )}
                     </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getTypeColor(care.type)}`}>
-                      {getTypeText(care.type)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="text-sm text-gray-900 max-w-xs truncate">
-                      {care.description}
+
+                    <div className="flex items-center gap-2 mr-4">
+                      {/* زر الاتصال */}
+                      <button
+                        onClick={() => handlePhoneCall(child)}
+                        disabled={!child.phone}
+                        className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                          child.phone
+                            ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                            : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        }`}
+                        title={child.phone ? `اتصال بـ ${child.phone}` : 'لا يوجد رقم هاتف'}
+                      >
+                        <PhoneIcon className="w-4 h-4 ml-1" />
+                        اتصال
+                      </button>
+
+                      {/* زر الإزالة من القائمة */}
+                      <button
+                        onClick={() => handleRemoveFromList(child)}
+                        className="flex items-center px-3 py-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors text-sm font-medium"
+                        title="تم الانتهاء من الافتقاد"
+                      >
+                        <CheckCircleIcon className="w-4 h-4 ml-1" />
+                        تم
+                      </button>
                     </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="text-sm text-gray-900">
-                      {new Date(care.date).toLocaleDateString('ar-EG')}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(care.status)}`}>
-                      {getStatusText(care.status)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="text-sm text-gray-900">
-                      {care.followUpDate ? new Date(care.followUpDate).toLocaleDateString('ar-EG') : '-'}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <button
-                      onClick={() => openEditModal(care)}
-                      className="text-indigo-600 hover:text-indigo-900 ml-4"
-                    >
-                      تعديل
-                    </button>
-                    <button
-                      onClick={() => handleDeletePastoralCare(care._id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      حذف
-                    </button>
-                  </td>
-                </tr>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+          )}
         </div>
 
-        {filteredPastoralCares.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500">لا توجد سجلات مطابقة للبحث</p>
+        {/* Summary at bottom */}
+        {filteredChildren.length > 0 && (
+          <div className="mt-6 bg-gray-50 border rounded-lg p-4">
+            <div className="flex items-center justify-between text-sm text-gray-600">
+              <span>
+                عرض {filteredChildren.length} من {absentChildren.length} طفل
+              </span>
+              <span>
+                تم الاتصال: {quickStats.called} | لم يتم الاتصال: {quickStats.notCalled}
+              </span>
+            </div>
           </div>
         )}
       </div>
-
-      {/* Add Pastoral Care Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3 text-center">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">إضافة سجل رعاية جديد</h3>
-              <form onSubmit={handleAddPastoralCare} className="space-y-4">
-                <div>
-                  <select
-                    title="اختيار الطفل"
-                    className="w-full p-3 border border-gray-300 rounded-lg text-right"
-                    value={formData.child}
-                    onChange={(e) => setFormData({...formData, child: e.target.value})}
-                    required
-                  >
-                    <option value="">اختر الطفل</option>
-                    {children.map((child) => (
-                      <option key={child._id} value={child._id}>
-                        {child.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <select
-                    title="نوع الرعاية"
-                    className="w-full p-3 border border-gray-300 rounded-lg text-right"
-                    value={formData.type}
-                    onChange={(e) => setFormData({...formData, type: e.target.value})}
-                    required
-                  >
-                    <option value="">اختر نوع الرعاية</option>
-                    <option value="spiritual">روحية</option>
-                    <option value="behavioral">سلوكية</option>
-                    <option value="family">أسرية</option>
-                    <option value="academic">دراسية</option>
-                    <option value="health">صحية</option>
-                  </select>
-                </div>
-                <div>
-                  <textarea
-                    placeholder="وصف الحالة"
-                    className="w-full p-3 border border-gray-300 rounded-lg text-right h-24 resize-none"
-                    value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 text-right">
-                    تاريخ الحالة
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full p-3 border border-gray-300 rounded-lg text-right"
-                    value={formData.date}
-                    onChange={(e) => setFormData({...formData, date: e.target.value})}
-                    required
-                  />
-                </div>
-                <div>
-                  <select
-                    title="حالة المتابعة"
-                    className="w-full p-3 border border-gray-300 rounded-lg text-right"
-                    value={formData.status}
-                    onChange={(e) => setFormData({...formData, status: e.target.value})}
-                  >
-                    <option value="pending">في الانتظار</option>
-                    <option value="in-progress">قيد المتابعة</option>
-                    <option value="resolved">تم الحل</option>
-                    <option value="follow-up">متابعة مطلوبة</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 text-right">
-                    تاريخ المتابعة (اختياري)
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full p-3 border border-gray-300 rounded-lg text-right"
-                    value={formData.followUpDate}
-                    onChange={(e) => setFormData({...formData, followUpDate: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <textarea
-                    placeholder="ملاحظات إضافية (اختياري)"
-                    className="w-full p-3 border border-gray-300 rounded-lg text-right h-20 resize-none"
-                    value={formData.notes}
-                    onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                  />
-                </div>
-                <div className="flex gap-4">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    إضافة
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setShowAddModal(false)}
-                    className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
-                  >
-                    إلغاء
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit Pastoral Care Modal */}
-      {editingCare && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3 text-center">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">تعديل سجل الرعاية</h3>
-              <form onSubmit={handleEditPastoralCare} className="space-y-4">
-                <div>
-                  <select
-                    title="اختيار الطفل"
-                    className="w-full p-3 border border-gray-300 rounded-lg text-right"
-                    value={formData.child}
-                    onChange={(e) => setFormData({...formData, child: e.target.value})}
-                    required
-                  >
-                    <option value="">اختر الطفل</option>
-                    {children.map((child) => (
-                      <option key={child._id} value={child._id}>
-                        {child.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <select
-                    title="نوع الرعاية"
-                    className="w-full p-3 border border-gray-300 rounded-lg text-right"
-                    value={formData.type}
-                    onChange={(e) => setFormData({...formData, type: e.target.value})}
-                    required
-                  >
-                    <option value="">اختر نوع الرعاية</option>
-                    <option value="spiritual">روحية</option>
-                    <option value="behavioral">سلوكية</option>
-                    <option value="family">أسرية</option>
-                    <option value="academic">دراسية</option>
-                    <option value="health">صحية</option>
-                  </select>
-                </div>
-                <div>
-                  <textarea
-                    placeholder="وصف الحالة"
-                    className="w-full p-3 border border-gray-300 rounded-lg text-right h-24 resize-none"
-                    value={formData.description}
-                    onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 text-right">
-                    تاريخ الحالة
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full p-3 border border-gray-300 rounded-lg text-right"
-                    value={formData.date}
-                    onChange={(e) => setFormData({...formData, date: e.target.value})}
-                    required
-                  />
-                </div>
-                <div>
-                  <select
-                    title="حالة المتابعة"
-                    className="w-full p-3 border border-gray-300 rounded-lg text-right"
-                    value={formData.status}
-                    onChange={(e) => setFormData({...formData, status: e.target.value})}
-                  >
-                    <option value="pending">في الانتظار</option>
-                    <option value="in-progress">قيد المتابعة</option>
-                    <option value="resolved">تم الحل</option>
-                    <option value="follow-up">متابعة مطلوبة</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1 text-right">
-                    تاريخ المتابعة (اختياري)
-                  </label>
-                  <input
-                    type="date"
-                    className="w-full p-3 border border-gray-300 rounded-lg text-right"
-                    value={formData.followUpDate}
-                    onChange={(e) => setFormData({...formData, followUpDate: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <textarea
-                    placeholder="ملاحظات إضافية (اختياري)"
-                    className="w-full p-3 border border-gray-300 rounded-lg text-right h-20 resize-none"
-                    value={formData.notes}
-                    onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                  />
-                </div>
-                <div className="flex gap-4">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    حفظ التغييرات
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEditingCare(null)}
-                    className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
-                  >
-                    إلغاء
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

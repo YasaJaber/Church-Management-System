@@ -34,6 +34,20 @@ const pastoralCareSchema = new mongoose.Schema(
       enum: ["attended", "contacted", "manual"], // attended = حضر, contacted = تم الاتصال, manual = إزالة يدوية
       default: null,
     },
+    // حقول الاتصال
+    hasBeenCalled: {
+      type: Boolean,
+      default: false,
+    },
+    calledBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    calledAt: {
+      type: Date,
+      default: null,
+    },
     notes: {
       type: String,
       trim: true,
@@ -48,5 +62,6 @@ const pastoralCareSchema = new mongoose.Schema(
 // Index for better performance
 pastoralCareSchema.index({ child: 1, absentDate: 1 });
 pastoralCareSchema.index({ isActive: 1 });
+pastoralCareSchema.index({ hasBeenCalled: 1 });
 
 module.exports = mongoose.model("PastoralCare", pastoralCareSchema);

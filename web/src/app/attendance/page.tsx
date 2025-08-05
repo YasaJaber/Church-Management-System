@@ -12,12 +12,12 @@ import {
   ClockIcon
 } from '@heroicons/react/24/outline'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import AttendanceModal from '@/components/AttendanceModal'
 import { childrenAPI, classesAPI, attendanceAPI } from '@/services/api'
 
 interface Child {
   _id: string
   name: string
-  age: number
   classId: string
   className?: string
   isPresent?: boolean
@@ -41,6 +41,13 @@ export default function AttendancePage() {
   const [selectedClass, setSelectedClass] = useState('')
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [saving, setSaving] = useState(false)
+  const [attendanceModal, setAttendanceModal] = useState<{
+    isOpen: boolean
+    child: Child | null
+  }>({
+    isOpen: false,
+    child: null
+  })
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -80,9 +87,18 @@ export default function AttendancePage() {
         // إذا كان إداري، يعرض كل الفصول
         const response = await classesAPI.getAllClasses()
         if (response.success) {
-          setClasses(response.data || [])
-          if (response.data && response.data.length > 0) {
-            setSelectedClass(response.data[0]._id)
+          // فلترة الفصول التجريبية أو الاختبارية
+          const filteredClasses = (response.data || []).filter((cls: Class) => {
+            const name = cls.name.toLowerCase()
+            return !name.includes('تجريبي') && 
+                   !name.includes('اختبار') && 
+                   !name.includes('test') && 
+                   !name.includes('experimental')
+          })
+          
+          setClasses(filteredClasses)
+          if (filteredClasses.length > 0) {
+            setSelectedClass(filteredClasses[0]._id)
           }
         } else {
           toast.error('فشل في تحميل بيانات الفصول')
@@ -111,10 +127,9 @@ export default function AttendancePage() {
         const childrenWithAttendance = response.data.map((child: any) => ({
           _id: child._id,
           name: child.name,
-          age: child.age || 0,
           classId: child.class?._id || child.classId,
           className: child.className,
-          isPresent: child.attendance?.status === 'present', // إذا لم يكن له تسجيل حضور = undefined (لا حضور ولا غياب)
+          isPresent: child.attendance ? child.attendance.status === 'present' : undefined, // undefined means not recorded
           attendanceId: child.attendance?._id,
           notes: child.attendance?.notes || '',
           hasAttendanceRecord: !!child.attendance // لمعرفة إذا كان له تسجيل أصلاً
@@ -136,9 +151,21 @@ export default function AttendancePage() {
     }
   }
 
-  const markPresent = async (childId: string) => {
-    if (saving) return
+  const openAttendanceModal = (child: Child) => {
+    setAttendanceModal({
+      isOpen: true,
+      child
+    })
+  }
 
+  const closeAttendanceModal = () => {
+    setAttendanceModal({
+      isOpen: false,
+      child: null
+    })
+  }
+
+  const handleAttendanceSave = async (childId: string, status: 'present' | 'absent', notes?: string) => {
     const childIndex = children.findIndex(c => c._id === childId)
     if (childIndex === -1) return
 
@@ -148,8 +175,9 @@ export default function AttendancePage() {
     const updatedChildren = [...children]
     updatedChildren[childIndex] = { 
       ...child, 
-      isPresent: true, 
-      hasAttendanceRecord: true 
+      isPresent: status === 'present', 
+      hasAttendanceRecord: true,
+      notes: notes || ''
     }
     setChildren(updatedChildren)
 
@@ -157,66 +185,64 @@ export default function AttendancePage() {
       const response = await attendanceAPI.markAttendance({
         childId,
         date: selectedDate,
-        status: 'present',
-        classId: selectedClass
+        status,
+        classId: selectedClass,
+        notes
       })
 
       if (!response.success) {
         throw new Error(response.error || 'فشل في تسجيل الحضور')
       }
 
-      toast.success('تم تسجيل الحضور')
+      // Refresh data to ensure consistency
+      loadAttendanceData()
     } catch (error: any) {
-      console.error('Error marking present:', error)
+      console.error('Error saving attendance:', error)
       
       // Revert UI change on error
       const revertedChildren = [...children]
       revertedChildren[childIndex] = child
       setChildren(revertedChildren)
       
-      toast.error(error.message || 'حدث خطأ في تسجيل الحضور')
+      throw error // Re-throw to let modal handle the error
     }
   }
 
-  const markAbsent = async (childId: string) => {
-    if (saving) return
-
+  const handleAttendanceDelete = async (childId: string) => {
     const childIndex = children.findIndex(c => c._id === childId)
     if (childIndex === -1) return
 
     const child = children[childIndex]
 
-    // Optimistically update UI
+    // Optimistically update UI - remove attendance record
     const updatedChildren = [...children]
     updatedChildren[childIndex] = { 
       ...child, 
-      isPresent: false, 
-      hasAttendanceRecord: true 
+      isPresent: undefined,
+      hasAttendanceRecord: false,
+      notes: '',
+      attendanceId: undefined
     }
     setChildren(updatedChildren)
 
     try {
-      const response = await attendanceAPI.markAttendance({
-        childId,
-        date: selectedDate,
-        status: 'absent',
-        classId: selectedClass
-      })
+      const response = await attendanceAPI.deleteAttendance(childId, selectedDate)
 
       if (!response.success) {
-        throw new Error(response.error || 'فشل في تسجيل الغياب')
+        throw new Error(response.error || 'فشل في مسح تسجيل الحضور')
       }
 
-      toast.success('تم تسجيل الغياب')
+      // Refresh data to ensure consistency
+      loadAttendanceData()
     } catch (error: any) {
-      console.error('Error marking absent:', error)
+      console.error('Error deleting attendance:', error)
       
       // Revert UI change on error
       const revertedChildren = [...children]
       revertedChildren[childIndex] = child
       setChildren(revertedChildren)
       
-      toast.error(error.message || 'حدث خطأ في تسجيل الغياب')
+      throw error // Re-throw to let modal handle the error
     }
   }
 
@@ -444,9 +470,6 @@ export default function AttendancePage() {
                       <div className="text-sm font-medium text-gray-900">
                         {child.name}
                       </div>
-                      <div className="text-sm text-gray-500">
-                        {child.age} سنة
-                      </div>
                     </div>
                   </div>
 
@@ -459,6 +482,9 @@ export default function AttendancePage() {
                           : 'bg-red-100 text-red-800'
                       }`}>
                         {child.isPresent ? 'حاضر' : 'غائب'}
+                        {child.notes && (
+                          <span className="mr-1 text-gray-500" title={child.notes}>📝</span>
+                        )}
                       </span>
                     ) : (
                       <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
@@ -466,36 +492,15 @@ export default function AttendancePage() {
                       </span>
                     )}
                     
-                    {/* أزرار الحضور والغياب */}
-                    <div className="flex space-x-1 space-x-reverse">
-                      {/* زر الحضور */}
-                      <button
-                        onClick={() => markPresent(child._id)}
-                        disabled={saving}
-                        className={`p-2 rounded-full transition-colors ${
-                          child.hasAttendanceRecord && child.isPresent
-                            ? 'text-green-600 bg-green-100'
-                            : 'text-gray-400 hover:bg-green-50 hover:text-green-600'
-                        } disabled:opacity-50`}
-                        title="تسجيل حضور"
-                      >
-                        <CheckCircleIcon className="w-5 h-5" />
-                      </button>
-                      
-                      {/* زر الغياب */}
-                      <button
-                        onClick={() => markAbsent(child._id)}
-                        disabled={saving}
-                        className={`p-2 rounded-full transition-colors ${
-                          child.hasAttendanceRecord && !child.isPresent
-                            ? 'text-red-600 bg-red-100'
-                            : 'text-gray-400 hover:bg-red-50 hover:text-red-600'
-                        } disabled:opacity-50`}
-                        title="تسجيل غياب"
-                      >
-                        <XCircleIcon className="w-5 h-5" />
-                      </button>
-                    </div>
+                    {/* زر تسجيل الحضور */}
+                    <button
+                      onClick={() => openAttendanceModal(child)}
+                      disabled={saving}
+                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                      title="تسجيل الحضور"
+                    >
+                      {child.hasAttendanceRecord ? 'تعديل' : 'تسجيل'}
+                    </button>
                   </div>
                 </div>
               ))}
@@ -503,6 +508,15 @@ export default function AttendancePage() {
           </div>
         )}
       </main>
+
+      {/* Attendance Modal */}
+      <AttendanceModal
+        isOpen={attendanceModal.isOpen}
+        onClose={closeAttendanceModal}
+        child={attendanceModal.child || { _id: '', name: '' }}
+        onSave={handleAttendanceSave}
+        onDelete={handleAttendanceDelete}
+      />
     </div>
   )
 }

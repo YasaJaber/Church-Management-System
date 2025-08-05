@@ -35,25 +35,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
-  // Check authentication status
+  // Direct API check without using authAPI service
   const checkAuth = async (): Promise<boolean> => {
+    console.log('🔍 AuthContext: بدء التحقق من المصادقة...')
+    
     try {
       const token = Cookies.get('auth_token') || Cookies.get('userToken') || 
                    localStorage.getItem('auth_token') || localStorage.getItem('userToken')
       
+      console.log('🔑 AuthContext: التوكن الموجود:', token ? 'موجود' : 'غير موجود')
+      
       if (!token) {
+        console.log('❌ AuthContext: لا يوجد توكن - إعداد حالة غير مصادق')
         setIsLoading(false)
+        setIsAuthenticated(false)
+        setUser(null)
         return false
       }
 
-      const response = await authAPI.getCurrentUser()
+      console.log('📡 AuthContext: طلب التحقق من المستخدم الحالي...')
       
-      if (response.success && response.data && response.data.user) {
-        setUser(response.data.user)
+      // Direct fetch call to avoid any service layer issues
+      const response = await fetch('http://localhost:5000/api/auth/me', {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        }
+      })
+      
+      const data = await response.json()
+      console.log('📥 AuthContext: استجابة التحقق:', data)
+      
+      if (response.ok && data.success && data.data && data.data.user) {
+        console.log('✅ AuthContext: تم التحقق بنجاح من المستخدم:', data.data.user)
+        setUser(data.data.user)
         setIsAuthenticated(true)
         setIsLoading(false)
         return true
       } else {
+        console.log('❌ AuthContext: فشل التحقق - مسح التوكن')
         // Invalid token, clear it
         Cookies.remove('auth_token')
         Cookies.remove('userToken')
@@ -65,7 +86,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return false
       }
     } catch (error) {
-      console.error('Auth check failed:', error)
+      console.error('❌ AuthContext: فشل التحقق من المصادقة:', error)
       // Clear invalid tokens
       Cookies.remove('auth_token')
       Cookies.remove('userToken')
@@ -80,75 +101,49 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Login function
   const login = async (credentials: LoginCredentials): Promise<LoginResponse> => {
+    console.log('🔐 AuthContext: محاولة تسجيل الدخول...', credentials.username)
+    
     try {
       setIsLoading(true)
-      console.log('🔑 محاولة تسجيل دخول للمستخدم:', credentials.username)
+      const response = await authAPI.login(credentials)
       
-      const response = await authAPI.login({
-        username: credentials.username,
-        password: credentials.password
-      })
-
-      console.log('📥 رد من الـ API:', response)
-
-      if (response && response.success) {
-        const { user, token } = response.data // البيانات في response.data
+      if (response.success && response.data) {
+        const { user, token } = response.data
         
-        console.log('✅ تسجيل دخول ناجح:', user)
-        console.log('🔑 الرمز المميز:', token)
-        
-        // Store token with both names for compatibility
-        if (credentials.rememberMe) {
-          Cookies.set('auth_token', token, { expires: 30 }) // 30 days
-          Cookies.set('userToken', token, { expires: 30 }) // Legacy support
-        } else {
-          Cookies.set('auth_token', token, { expires: 1 }) // 1 day
-          Cookies.set('userToken', token, { expires: 1 }) // Legacy support
-        }
+        // Store token in both cookies and localStorage
+        Cookies.set('auth_token', token, { expires: 7 })
         localStorage.setItem('auth_token', token)
-        localStorage.setItem('userToken', token) // Legacy support
         
-        // Update state
         setUser(user)
         setIsAuthenticated(true)
         setIsLoading(false)
         
-        return {
-          success: true,
-          message: response.message || 'تم تسجيل الدخول بنجاح',
-          user,
-          token
-        }
+        console.log('✅ AuthContext: تم تسجيل الدخول بنجاح')
+        toast.success(`مرحباً ${user.username}!`)
+        
+        return response
       } else {
-        console.log('❌ فشل تسجيل الدخول:', response)
+        console.log('❌ AuthContext: فشل تسجيل الدخول')
         setIsLoading(false)
-        return {
-          success: false,
-          message: response?.message || response?.error || 'فشل في تسجيل الدخول',
-          user: {} as User,
-          token: ''
-        }
+        const errorMessage = response.message || 'فشل في تسجيل الدخول'
+        toast.error(errorMessage)
+        throw new Error(errorMessage)
       }
     } catch (error: any) {
+      console.error('❌ AuthContext: خطأ في تسجيل الدخول:', error)
       setIsLoading(false)
-      console.error('❌ خطأ في تسجيل الدخول:', error)
-      
-      const errorMessage = error.message || 
-                          'حدث خطأ أثناء تسجيل الدخول'
-      
-      return {
-        success: false,
-        message: errorMessage,
-        user: {} as User,
-        token: ''
-      }
+      const errorMessage = error.response?.data?.message || error.message || 'فشل في تسجيل الدخول'
+      toast.error(errorMessage)
+      throw error
     }
   }
 
   // Logout function
   const logout = async (): Promise<void> => {
+    console.log('🚪 AuthContext: تسجيل الخروج...')
+    
     try {
-      // Clear all tokens (both legacy and new)
+      // Clear tokens
       Cookies.remove('auth_token')
       Cookies.remove('userToken')
       localStorage.removeItem('auth_token')
@@ -157,39 +152,55 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Reset state
       setUser(null)
       setIsAuthenticated(false)
+      setIsLoading(false)
       
+      console.log('✅ AuthContext: تم تسجيل الخروج بنجاح')
       toast.success('تم تسجيل الخروج بنجاح')
     } catch (error) {
-      console.error('Logout error:', error)
-      toast.error('حدث خطأ أثناء تسجيل الخروج')
+      console.error('❌ AuthContext: خطأ في تسجيل الخروج:', error)
     }
   }
 
-  // Check auth on mount
+  // Initialize auth check on mount
   useEffect(() => {
-    console.log('🔄 AuthProvider: Checking authentication...')
-    checkAuth()
+    console.log('🚀 AuthContext: تشغيل useEffect للتحقق الأولي...')
+    
+    const initAuth = async () => {
+      try {
+        await checkAuth()
+      } catch (error) {
+        console.error('❌ AuthContext: خطأ في التحقق الأولي:', error)
+        setIsLoading(false)
+      }
+    }
+
+    initAuth()
   }, [])
 
-  const value: AuthContextType = {
-    user,
-    isAuthenticated,
-    isLoading,
-    login,
-    logout,
-    checkAuth
-  }
-
-  console.log('🔐 AuthProvider state:', {
-    isLoading,
-    isAuthenticated,
-    hasUser: !!user,
-    username: user?.username
-  })
+  // Debug logging for state changes
+  useEffect(() => {
+    console.log('🔄 AuthContext: تغيير في الحالة:', {
+      isLoading,
+      isAuthenticated,
+      hasUser: !!user,
+      username: user?.username
+    })
+  }, [isLoading, isAuthenticated, user])
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={{
+        user,
+        isAuthenticated,
+        isLoading,
+        login,
+        logout,
+        checkAuth
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )
 }
+
+export default AuthProvider

@@ -418,4 +418,114 @@ router.delete("/remove-child/:childId", authMiddleware, async (req, res) => {
   }
 });
 
+// @route   POST /api/pastoral-care/mark-called/:childId
+// @desc    Mark a child as called (contacted)
+// @access  Protected
+router.post("/mark-called/:childId", authMiddleware, async (req, res) => {
+  try {
+    const { childId } = req.params;
+    const { notes } = req.body;
+
+    console.log(`📞 Marking child ${childId} as called`);
+    console.log(`📝 Notes: ${notes || "No notes provided"}`);
+    console.log(`👤 Called by: ${req.user.name} (${req.user._id})`);
+
+    // Get the child to check permissions
+    const child = await Child.findById(childId).populate("class");
+    if (!child) {
+      return res.status(404).json({
+        success: false,
+        error: "Child not found"
+      });
+    }
+
+    // Check permissions
+    if (req.user.role !== "admin" && req.user.role !== "serviceLeader") {
+      if (!req.user.assignedClass || 
+          child.class._id.toString() !== req.user.assignedClass._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          error: "Access denied. You can only manage pastoral care for your assigned class."
+        });
+      }
+    }
+
+    // Get the most recent attendance date for this child
+    const mostRecentAttendanceDate = await getMostRecentAttendanceDate([childId]);
+    
+    if (!mostRecentAttendanceDate) {
+      return res.status(404).json({
+        success: false,
+        error: "No attendance records found for this child"
+      });
+    }
+
+    console.log(`📅 Most recent attendance date for this child: ${mostRecentAttendanceDate}`);
+
+    // Check if there's an existing pastoral care record for this child
+    let pastoralCareRecord = await PastoralCare.findOne({
+      child: childId,
+      absentDate: mostRecentAttendanceDate,
+      isActive: true
+    });
+
+    // If no record exists, create one
+    if (!pastoralCareRecord) {
+      console.log(`📝 No existing record found, creating new one`);
+      
+      pastoralCareRecord = new PastoralCare({
+        child: childId,
+        absentDate: mostRecentAttendanceDate,
+        addedBy: req.user._id,
+        notes: notes || `تم الاتصال بواسطة ${req.user.name}`,
+        hasBeenCalled: true,
+        calledBy: req.user._id,
+        calledAt: new Date(),
+        isActive: true
+      });
+    } else {
+      // Update existing record
+      console.log(`📝 Updating existing record`);
+      
+      pastoralCareRecord.hasBeenCalled = true;
+      pastoralCareRecord.calledBy = req.user._id;
+      pastoralCareRecord.calledAt = new Date();
+      
+      if (notes) {
+        pastoralCareRecord.notes += `\n\nاتصال ${new Date().toLocaleDateString('ar-EG')}: ${notes}`;
+      } else {
+        pastoralCareRecord.notes += `\n\nتم الاتصال بواسطة ${req.user.name} في ${new Date().toLocaleDateString('ar-EG')}`;
+      }
+    }
+
+    await pastoralCareRecord.save();
+
+    console.log(`✅ Child ${child.name} marked as called successfully`);
+    console.log(`   Class: ${child.class.stage} - ${child.class.grade}`);
+    console.log(`   Called by: ${req.user.name}`);
+    console.log(`   Time: ${new Date()}`);
+
+    res.json({
+      success: true,
+      message: `تم تسجيل الاتصال بـ ${child.name} بنجاح`,
+      data: {
+        pastoralCareId: pastoralCareRecord._id,
+        childId: child._id,
+        childName: child.name,
+        calledBy: req.user.name,
+        calledAt: pastoralCareRecord.calledAt,
+        notes: notes || null
+      }
+    });
+
+  } catch (error) {
+    console.error("❌ Error marking child as called:", error);
+    res.status(500).json({
+      success: false,
+      error: "Server error while marking child as called",
+      details: error.message
+    });
+  }
+});
+
 module.exports = router;

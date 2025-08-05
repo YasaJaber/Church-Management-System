@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Service Leader APIs</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test-result { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .loading { background-color: #fff3cd; color: #856404; }
+    </style>
+</head>
+<body>
+    <h1>اختبار APIs أمين الخدمة</h1>
+    
+    <div id="results"></div>
+    
+    <script>
+        const results = document.getElementById('results');
+        const token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4OGYyMTc3NjI0OWIzODJjZTkzYmZmNiIsInJvbGUiOiJzZXJ2aWNlTGVhZGVyIiwidXNlcm5hbWUiOiJhbWluX2toZWRtYSIsImlhdCI6MTc1NDIxMDg4MSwiZXhwIjoxNzU0ODE1NjgxfQ.lJ3k1ftAG326g27f3aZ-OPX07Uz_VT7d2p4lbPyAaeE';
+        
+        function addResult(message, type = 'success') {
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = message;
+            results.appendChild(div);
+        }
+        
+        async function testAPI(name, url) {
+            addResult(`🔄 Testing ${name}...`, 'loading');
+            const start = Date.now();
+            
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const end = Date.now();
+                const time = (end - start) / 1000;
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addResult(`✅ ${name} - Success (${time}s) - ${data.data?.length || 'N/A'} items returned`, 'success');
+                } else {
+                    addResult(`❌ ${name} - Failed (${response.status}): ${response.statusText}`, 'error');
+                }
+            } catch (error) {
+                const end = Date.now();
+                const time = (end - start) / 1000;
+                addResult(`❌ ${name} - Error (${time}s): ${error.message}`, 'error');
+            }
+        }
+        
+        // Run tests
+        async function runTests() {
+            addResult('بدء الاختبارات...', 'loading');
+            
+            await testAPI('Children API', 'http://localhost:5000/api/children');
+            await testAPI('Class Statistics API', 'http://localhost:5000/api/children/statistics/by-class');
+            
+            addResult('✅ انتهت جميع الاختبارات', 'success');
+        }
+        
+        runTests();
+    </script>
+</body>
+</html>

@@ -62,7 +62,15 @@ export default function ClassesPage() {
       setLoading(true)
       const response = await classesAPI.getAll()
       if (response.success && response.data) {
-        setClasses(response.data)
+        // Filter out experimental/test classes
+        const filteredClasses = response.data.filter((cls: Class) => {
+          const name = cls.name.toLowerCase()
+          return !name.includes('تجريبي') && 
+                 !name.includes('اختبار') && 
+                 !name.includes('test') && 
+                 !name.includes('experimental')
+        })
+        setClasses(filteredClasses)
       }
     } catch (error) {
       console.error('Error fetching classes:', error)

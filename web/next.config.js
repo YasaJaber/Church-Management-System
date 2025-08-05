@@ -8,9 +8,7 @@ const nextConfig = {
       },
     ]
   },
-  experimental: {
-    appDir: true,
-  },
+
   images: {
     domains: ['localhost', 'church-management-system-vk3m.onrender.com'],
   },

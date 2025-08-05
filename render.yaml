@@ -1,10 +1,11 @@
 services:
+  # Backend Service
   - type: web
     name: church-management-backend
     env: node
     plan: free
     buildCommand: cd backend && npm install
-    startCommand: cd backend && npm start
+    startCommand: cd backend && node index.js
     envVars:
       - key: NODE_ENV
         value: production
@@ -14,3 +15,24 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
+
+  # Frontend Service (Web)
+  - type: web
+    name: church-management-web
+    env: node
+    plan: free
+    buildCommand: cd web && npm install && npm run build
+    startCommand: cd web && npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: church-management-backend
+          property: host
+          transform: "https://$1/api"
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /
