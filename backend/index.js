@@ -7,7 +7,13 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: ['https://church-management-web.onrender.com', 'http://localhost:3000'],
+  origin: [
+    'https://church-management-web.onrender.com', 
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:3001'
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-auth-token'],
   credentials: true

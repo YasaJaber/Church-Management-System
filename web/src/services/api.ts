@@ -1,12 +1,16 @@
 import axios from 'axios'
+import { tr } from 'date-fns/locale'
 import Cookies from 'js-cookie'
 
 // Base URL for the API - Use direct backend URL for now
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
 const LOCAL_URL = process.env.NEXT_PUBLIC_API_LOCAL || 'http://localhost:5000/api'
 
-// Always use production backend for deployment
-const USE_PRODUCTION_BACKEND = true
+// Check if we're in development mode on localhost
+const isDevelopment = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+
+// Always use production backend for deployment, except when developing locally
+const USE_PRODUCTION_BACKEND = !isDevelopment
 
 const API_BASE_URL = USE_PRODUCTION_BACKEND ? 
   (process.env.NEXT_PUBLIC_API_URL || 'https://church-management-system-b6h7.onrender.com/api') : 
