@@ -5,12 +5,14 @@ import { NotificationProvider } from '@/context/NotificationContext'
 import { Toaster } from 'react-hot-toast'
 
 export const metadata: Metadata = {
-  title: 'كنيسة الشهيد مار جرجس - نظام إدارة الكنيسة',
+  title: 'كنيسة الشهيد مار جرجس - بأولاد علي - نظام إدارة الكنيسة',
   description: 'نظام إدارة شئون الكنيسة والأطفال والخدام',
   keywords: ['كنيسة', 'إدارة', 'أطفال', 'خدام', 'حضور'],
   authors: [{ name: 'Church Management Team' }],
   icons: {
-    icon: '/favicon.ico',
+    icon: '/saint-george.png',
+    shortcut: '/saint-george.png',
+    apple: '/saint-george.png',
   },
 }
 

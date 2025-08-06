@@ -1,6 +1,6 @@
 # Church Management System - Web Application
 
-نظام إدارة كنيسة الشهيد مار جرجس - الإصدار الويب
+نظام إدارة كنيسة الشهيد مار جرجس - بأولاد علي - الإصدار الويب
 
 ## Overview / نظرة عامة
 
@@ -238,5 +238,5 @@ For questions or support regarding this church management system, please contact
 
 ---
 
-**نظام إدارة كنيسة الشهيد مار جرجس - الإصدار 1.0**
+**نظام إدارة كنيسة الشهيد مار جرجس - بأولاد علي - الإصدار 1.0**
 **St. George Church Management System - Version 1.0**

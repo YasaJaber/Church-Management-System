@@ -172,9 +172,9 @@ export default function DashboardPage() {
               {isAuthenticated && user ? (
                 <>
                   <span className="text-sm text-gray-700">
-                    مرحباً خادم {user.name || user.username}
+                    مرحباً {user.name || user.username}
                     {user.assignedClass && (
-                      <span className="text-gray-500 mr-2">- {user.assignedClass.name}</span>
+                      <span className="text-gray-500 mr-2">- خادم {user.assignedClass.name}</span>
                     )}
                   </span>
                   <button

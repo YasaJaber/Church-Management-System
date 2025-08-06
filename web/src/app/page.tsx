@@ -25,16 +25,13 @@ export default function HomePage() {
         <div className="text-center">
           <div className="mb-4">
             <img 
-              src="/images/logo.png" 
+              src="/saint-george.png" 
               alt="كنيسة مار جرجس" 
-              className="w-24 h-24 mx-auto"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none'
-              }}
+              className="w-32 h-32 mx-auto rounded-lg shadow-lg"
             />
           </div>
           <h1 className="text-2xl font-bold text-gray-800 mb-4">
-            🏛️ كنيسة الشهيد مار جرجس
+            كنيسة الشهيد مار جرجس - بأولاد علي
           </h1>
           <p className="text-gray-600 mb-6">
             نظام إدارة الكنيسة
