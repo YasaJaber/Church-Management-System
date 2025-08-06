@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { API_BASE_URL } from '@/services/api'
 
 interface DashboardStats {
   children: {
@@ -66,22 +67,22 @@ export default function ServiceLeaderDashboard() {
       const token = localStorage.getItem('token') || localStorage.getItem('auth_token')
       
       // جلب إحصائيات الأطفال
-      const childrenResponse = await fetch('http://localhost:5000/api/statistics/church', {
+      const childrenResponse = await fetch(`${API_BASE_URL}/statistics/church`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       
       // جلب إحصائيات الخدام
-      const servantsResponse = await fetch('http://localhost:5000/api/servants/statistics/general', {
+      const servantsResponse = await fetch(`${API_BASE_URL}/servants/statistics/general`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       
       // جلب الخدام المحتاجين متابعة
-      const followUpResponse = await fetch('http://localhost:5000/api/servants/statistics/follow-up', {
+      const followUpResponse = await fetch(`${API_BASE_URL}/servants/statistics/follow-up`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       
       // جلب الأطفال المواظبين
-      const consecutiveResponse = await fetch('http://localhost:5000/api/statistics/consecutive-attendance', {
+      const consecutiveResponse = await fetch(`${API_BASE_URL}/statistics/consecutive-attendance`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
 

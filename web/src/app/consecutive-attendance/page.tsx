@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'next/navigation'
-import { classesAPI } from '@/services/api'
+import { classesAPI, API_BASE_URL } from '@/services/api'
 
 interface ConsecutiveChild {
   name: string
@@ -93,7 +93,7 @@ export default function ConsecutiveAttendancePage() {
         return
       }
       
-      const url = `http://localhost:5000/api/statistics/consecutive-attendance-by-classes${classId ? `?classId=${classId}` : ''}`
+      const url = `${API_BASE_URL}/statistics/consecutive-attendance-by-classes${classId ? `?classId=${classId}` : ''}`
       console.log('📊 Fetching from:', url)
       console.log('🔑 Using token:', token.substring(0, 50) + '...')
       
@@ -143,7 +143,7 @@ export default function ConsecutiveAttendancePage() {
       const weeklyStats: WeeklyAttendance[] = []
 
       for (const friday of last4Fridays) {
-        const url = `http://localhost:5000/api/attendance/children-with-status?date=${friday}${classId ? `&classId=${classId}` : ''}`
+        const url = `${API_BASE_URL}/attendance/children-with-status?date=${friday}${classId ? `&classId=${classId}` : ''}`
         
         const response = await fetch(url, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -222,7 +222,7 @@ export default function ConsecutiveAttendancePage() {
                    localStorage.getItem('auth_token') ||
                    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4N2FiMDdmYjQ0NjhkMjEwMGUxZDA1NCIsInJvbGUiOiJhZG1pbiIsInVzZXJuYW1lIjoia2Vyb2xlcyIsImlhdCI6MTc1NDM5NDQ0MywiZXhwIjoxNzU0OTk5MjQzfQ._zOJADjrl1HcumdQhPU36tFOG4T1fUUiQd4UV8mOicFs'
       
-      const response = await fetch('http://localhost:5000/api/statistics/deliver-gift', {
+      const response = await fetch(`${API_BASE_URL}/statistics/deliver-gift`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

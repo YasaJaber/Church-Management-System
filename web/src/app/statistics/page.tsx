@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'next/navigation'
-import { attendanceAPI, childrenAPI, classesAPI } from '@/services/api'
+import { attendanceAPI, childrenAPI, classesAPI, API_BASE_URL } from '@/services/api'
 
 interface AttendanceStats {
   totalChildren: number
@@ -72,7 +72,7 @@ export default function StatisticsPage() {
     try {
       // Get most recent attendance date
       const token = localStorage.getItem('token') || localStorage.getItem('auth_token')
-      const response = await fetch('http://localhost:5000/api/attendance/recent-dates?limit=1', {
+      const response = await fetch(`${API_BASE_URL}/attendance/recent-dates?limit=1`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       
@@ -140,7 +140,7 @@ export default function StatisticsPage() {
           // Get consecutive absent children
           try {
             const token = localStorage.getItem('token') || localStorage.getItem('auth_token')
-            const consecutiveResponse = await fetch(`http://localhost:5000/api/statistics/consecutive-attendance${targetClassId ? `?classId=${targetClassId}` : ''}`, {
+            const consecutiveResponse = await fetch(`${API_BASE_URL}/statistics/consecutive-attendance${targetClassId ? `?classId=${targetClassId}` : ''}`, {
               headers: { 'Authorization': `Bearer ${token}` }
             })
             consecutiveData = consecutiveResponse.ok ? await consecutiveResponse.json() : { data: [] }
@@ -151,7 +151,7 @@ export default function StatisticsPage() {
           // Get church overall statistics (for admin/serviceLeader only)
           try {
             const token = localStorage.getItem('token') || localStorage.getItem('auth_token')
-            const churchResponse = await fetch('http://localhost:5000/api/statistics/church', {
+            const churchResponse = await fetch(`${API_BASE_URL}/statistics/church`, {
               headers: { 'Authorization': `Bearer ${token}` }
             })
             churchData = churchResponse.ok ? await churchResponse.json() : { data: null }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'next/navigation'
+import { API_BASE_URL } from '@/services/api'
 
 interface AttendanceTrend {
   date: string
@@ -68,7 +69,7 @@ export default function AdvancedStatisticsPage() {
   const fetchAvailableClasses = async () => {
     try {
       const token = localStorage.getItem('token') || localStorage.getItem('auth_token')
-      const response = await fetch('http://localhost:5000/api/classes', {
+      const response = await fetch(`${API_BASE_URL}/classes`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       const data = await response.json()
@@ -97,7 +98,7 @@ export default function AdvancedStatisticsPage() {
 
       if (activeTab === 'trends') {
         console.log('📈 Fetching trends...')
-        const response = await fetch(`http://localhost:5000/api/advanced-statistics/attendance-trends?${params}`, {
+        const response = await fetch(`${API_BASE_URL}/advanced-statistics/attendance-trends?${params}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
         const data = await response.json()
@@ -112,7 +113,7 @@ export default function AdvancedStatisticsPage() {
       if (activeTab === 'comparison' && (user?.role === 'admin' || user?.role === 'serviceLeader')) {
         console.log('⚖️ Fetching comparison...')
         console.log('👤 User role:', user?.role)
-        const response = await fetch(`http://localhost:5000/api/advanced-statistics/class-comparison?${params}`, {
+        const response = await fetch(`${API_BASE_URL}/advanced-statistics/class-comparison?${params}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
         const data = await response.json()
@@ -130,7 +131,7 @@ export default function AdvancedStatisticsPage() {
 
       if (activeTab === 'frequency') {
         console.log('🔄 Fetching frequency...')
-        const response = await fetch(`http://localhost:5000/api/advanced-statistics/attendance-frequency?${params}`, {
+        const response = await fetch(`${API_BASE_URL}/advanced-statistics/attendance-frequency?${params}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
         const data = await response.json()
@@ -144,7 +145,7 @@ export default function AdvancedStatisticsPage() {
 
       if (activeTab === 'individual' && selectedClass) {
         console.log('🎯 Fetching individual class:', selectedClass)
-        const response = await fetch(`http://localhost:5000/api/advanced-statistics/individual-class/${selectedClass}?${params}`, {
+        const response = await fetch(`${API_BASE_URL}/advanced-statistics/individual-class/${selectedClass}?${params}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
         const data = await response.json()

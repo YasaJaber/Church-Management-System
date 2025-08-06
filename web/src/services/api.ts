@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { tr } from 'date-fns/locale'
 import { EnhancedStorage } from '@/utils/storage'
+import Cookies from 'js-cookie'
 
 // Base URL for the API - Use direct backend URL for now
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
@@ -9,7 +10,7 @@ const LOCAL_URL = process.env.NEXT_PUBLIC_API_LOCAL || 'http://localhost:5000/ap
 // Always use production backend
 const USE_PRODUCTION_BACKEND = true
 
-const API_BASE_URL = 'https://church-management-system-b6h7.onrender.com/api'
+export const API_BASE_URL = 'https://church-management-system-b6h7.onrender.com/api'
 
 console.log('API Base URL:', API_BASE_URL)
 console.log('Environment:', process.env.NODE_ENV)

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContext'
 import { useRouter } from 'next/navigation'
+import { API_BASE_URL } from '@/services/api'
 
 interface ServantFollowUp {
   _id: string
@@ -58,7 +59,7 @@ export default function ServantsFollowUpPage() {
       const token = localStorage.getItem('token') || localStorage.getItem('auth_token')
       
       // جلب الإحصائيات العامة للخدام
-      const statsResponse = await fetch('http://localhost:5000/api/servants/statistics/general', {
+      const statsResponse = await fetch(`${API_BASE_URL}/servants/statistics/general`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       
@@ -70,7 +71,7 @@ export default function ServantsFollowUpPage() {
       }
       
       // جلب الخدام الذين يحتاجون متابعة
-      const followUpResponse = await fetch('http://localhost:5000/api/servants/statistics/follow-up', {
+      const followUpResponse = await fetch(`${API_BASE_URL}/servants/statistics/follow-up`, {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       
