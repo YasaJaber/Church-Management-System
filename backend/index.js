@@ -10,6 +10,8 @@ app.use(cors({
   origin: [
     'https://church-management-web.onrender.com', 
     'https://church-management-system-six.vercel.app',
+    'https://church-management-system.vercel.app',
+    'https://*.vercel.app',
     'http://localhost:3000',
     'http://localhost:3001',
     'http://127.0.0.1:3000',
