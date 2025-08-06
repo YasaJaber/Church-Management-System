@@ -12,20 +12,14 @@ https://church-management-system-b6h7.onrender.com/api
 
 ## طرق تطبيق التغييرات على رابط النشر:
 
-### الطريقة الأولى: رفع التغييرات إلى GitHub
-1. اعمل commit و push للتغييرات:
-```bash
-git add .
-git commit -m "Fix API connection errors - use production URL"
-git push origin master
-```
-2. Vercel سيبني المشروع تلقائياً عند الـ push
+### ✅ تم الانتهاء من Push إلى GitHub!
+تم رفع جميع التغييرات بنجاح، Commit ID: `78524bc`
 
-### الطريقة الثانية: النشر اليدوي من Vercel Dashboard
+### الآن عليك:
 1. ادخل على [vercel.com](https://vercel.com) 
-2. اختار مشروعك
-3. اضغط "Deployments" 
-4. اضغط "Redeploy" على آخر deployment
+2. اختار مشروعك (Church-Management-System)
+3. انتظر شوية - Vercel هيعمل deploy تلقائي
+4. أو اضغط "Deployments" → "Redeploy" لو محصلش
 5. تأكد من إعدادات البيئة:
    - `NEXT_PUBLIC_API_URL` = `https://church-management-system-b6h7.onrender.com/api`
    - `NEXT_PUBLIC_USE_PRODUCTION` = `true`

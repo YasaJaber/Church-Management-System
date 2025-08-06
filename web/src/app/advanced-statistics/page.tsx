@@ -8,7 +8,11 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
-import { API_BASE_URL } from '@/services/api'
+import { getApiUrl } from '@/config/production'
+
+// Ensure production API URL is used
+const API_BASE_URL = getApiUrl()
+console.log('🚀 Advanced Statistics API URL:', API_BASE_URL)
 
 interface AttendanceTrend {
   date: string
