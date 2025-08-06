@@ -9,11 +9,11 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
 import { attendanceAPI, childrenAPI, classesAPI } from '@/services/api'
-import { getApiUrl } from '@/config/production'
+import { FORCE_PRODUCTION_API } from '@/config/api'
 
-// Ensure production API URL is used
-const API_BASE_URL = getApiUrl()
-console.log('📊 Statistics API URL:', API_BASE_URL)
+// FORCE production API URL - no localhost allowed
+const API_BASE_URL = FORCE_PRODUCTION_API
+console.log('📊 FORCED Statistics API URL:', API_BASE_URL)
 
 interface AttendanceStats {
   totalChildren: number
