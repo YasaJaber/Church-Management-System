@@ -135,14 +135,14 @@ export class EnhancedStorage {
   // Specific methods for auth tokens
   static setAuthToken(token: string): void {
     this.setItem('auth_token', token, {
-      cookieExpires: 30, // 30 days instead of 7
+      cookieExpires: 7,
       secure: typeof window !== 'undefined' && window.location.protocol === 'https:',
       sameSite: 'Lax'
     })
     
     // Also set legacy token name for compatibility
     this.setItem('userToken', token, {
-      cookieExpires: 30, // 30 days instead of 7
+      cookieExpires: 7,
       secure: typeof window !== 'undefined' && window.location.protocol === 'https:',
       sameSite: 'Lax'
     })
@@ -154,17 +154,8 @@ export class EnhancedStorage {
 
   static setUserData(userData: any): void {
     try {
-      // Add last login time to user data
-      const userDataWithTimestamp = {
-        ...userData,
-        lastLoginTime: new Date().toISOString()
-      }
-      const jsonData = JSON.stringify(userDataWithTimestamp)
-      this.setItem('user_data', jsonData, {
-        cookieExpires: 30, // 30 days for user data too
-        secure: typeof window !== 'undefined' && window.location.protocol === 'https:',
-        sameSite: 'Lax'
-      })
+      const jsonData = JSON.stringify(userData)
+      this.setItem('user_data', jsonData)
     } catch (error) {
       console.warn('⚠️ Failed to stringify user data:', error)
     }
@@ -173,23 +164,7 @@ export class EnhancedStorage {
   static getUserData(): any | null {
     try {
       const jsonData = this.getItem('user_data')
-      if (!jsonData) return null
-      
-      const userData = JSON.parse(jsonData)
-      
-      // Check if data is too old (more than 30 days)
-      if (userData.lastLoginTime) {
-        const lastLogin = new Date(userData.lastLoginTime)
-        const daysSinceLogin = (Date.now() - lastLogin.getTime()) / (1000 * 60 * 60 * 24)
-        
-        if (daysSinceLogin > 30) {
-          console.log('🗓️ User data is too old, clearing...')
-          this.clearAuth()
-          return null
-        }
-      }
-      
-      return userData
+      return jsonData ? JSON.parse(jsonData) : null
     } catch (error) {
       console.warn('⚠️ Failed to parse user data:', error)
       return null
@@ -200,35 +175,6 @@ export class EnhancedStorage {
     const authKeys = ['auth_token', 'userToken', 'user_data']
     authKeys.forEach(key => this.removeItem(key))
     console.log('🧹 Cleared all authentication data')
-  }
-
-  // Check if user session is still valid (not too old)
-  static isSessionValid(): boolean {
-    try {
-      const userData = this.getUserData()
-      if (!userData || !userData.lastLoginTime) return false
-      
-      const lastLogin = new Date(userData.lastLoginTime)
-      const daysSinceLogin = (Date.now() - lastLogin.getTime()) / (1000 * 60 * 60 * 24)
-      
-      return daysSinceLogin <= 30 // Valid for 30 days
-    } catch (error) {
-      console.warn('⚠️ Error checking session validity:', error)
-      return false
-    }
-  }
-
-  // Update last activity time to keep session fresh
-  static updateActivity(): void {
-    try {
-      const userData = this.getUserData()
-      if (userData) {
-        userData.lastActivity = new Date().toISOString()
-        this.setUserData(userData)
-      }
-    } catch (error) {
-      console.warn('⚠️ Error updating activity:', error)
-    }
   }
 }
 

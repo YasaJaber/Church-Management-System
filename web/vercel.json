@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next",
+      "config": {
+        "outputDirectory": ".next"
+      }
+    }
+  ],
+  "env": {
+    "NEXT_PUBLIC_API_URL": "https://church-management-system-b6h7.onrender.com/api",
+    "NEXT_PUBLIC_USE_PRODUCTION": "true"
+  },
+  "functions": {
+    "src/app/**": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/"
+    }
+  ]
+}

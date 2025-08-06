@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import './globals.css'
-import { AuthProvider } from '@/context/AuthContext'
+import { AuthProvider } from '@/context/AuthContextSimple'
 import { NotificationProvider } from '@/context/NotificationContext'
 import { Toaster } from 'react-hot-toast'
 

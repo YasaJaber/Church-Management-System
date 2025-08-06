@@ -3,14 +3,17 @@ import { tr } from 'date-fns/locale'
 import { EnhancedStorage } from '@/utils/storage'
 import Cookies from 'js-cookie'
 
-// Base URL for the API - Use direct backend URL for now
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+// Base URL for the API
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://church-management-system-b6h7.onrender.com/api'
 const LOCAL_URL = process.env.NEXT_PUBLIC_API_LOCAL || 'http://localhost:5000/api'
 
-// Always use production backend
-const USE_PRODUCTION_BACKEND = true
+// Use production environment check
+const USE_PRODUCTION_BACKEND = process.env.NEXT_PUBLIC_USE_PRODUCTION === 'true' || process.env.NODE_ENV === 'production'
 
-export const API_BASE_URL = 'https://church-management-system-b6h7.onrender.com/api'
+// Determine which API URL to use
+export const API_BASE_URL = USE_PRODUCTION_BACKEND ? 
+  (process.env.NEXT_PUBLIC_API_URL || 'https://church-management-system-b6h7.onrender.com/api') : 
+  LOCAL_URL
 
 console.log('API Base URL:', API_BASE_URL)
 console.log('Environment:', process.env.NODE_ENV)

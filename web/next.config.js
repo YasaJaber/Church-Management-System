@@ -1,16 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: 'http://localhost:5000/api/:path*',
-      },
-    ]
-  },
-
+  output: 'export',
+  trailingSlash: true,
   images: {
-    domains: ['localhost', 'church-management-system-vk3m.onrender.com'],
+    unoptimized: true,
+    domains: ['localhost', 'church-management-system-vk3m.onrender.com', 'church-management-system-b6h7.onrender.com'],
   },
   env: {
     CUSTOM_KEY: process.env.CUSTOM_KEY,
@@ -21,6 +15,12 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
+  experimental: {
+    missingSuspenseWithCSRBailout: false,
+  },
+  async generateStaticParams() {
+    return []
+  }
 }
 
 module.exports = nextConfig

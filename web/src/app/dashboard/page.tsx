@@ -1,6 +1,11 @@
 'use client'
 
-import { useAuth } from '@/context/AuthContext'
+export const dynamic = 'force-dynamic'
+
+
+
+
+import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'

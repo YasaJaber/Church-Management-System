@@ -1,7 +1,12 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
+
+
+
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/context/AuthContext'
+import { useAuth } from '@/context/AuthContextSimple'
 import { childrenAPI } from '@/services/api'
 import { 
   CalendarIcon, 
