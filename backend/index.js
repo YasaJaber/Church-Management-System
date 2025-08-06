@@ -9,6 +9,7 @@ const app = express();
 app.use(cors({
   origin: [
     'https://church-management-web.onrender.com', 
+    'https://church-management-system-1-i51l.onrender.com', // الرابط الجديد للفرونت إند
     'https://church-management-system-six.vercel.app',
     'https://church-management-system.vercel.app',
     'https://*.vercel.app',
