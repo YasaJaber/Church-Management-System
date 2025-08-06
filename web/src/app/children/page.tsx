@@ -417,6 +417,9 @@ export default function ChildrenPage() {
               </button>
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
                 إدارة الأطفال
+                {user?.assignedClass && (
+                  <span className="text-blue-600 font-medium text-base"> - {user.assignedClass.name}</span>
+                )}
               </h1>
             </div>
             {/* إضافة طفل مسموحة للجميع إلا الخادم العادي */}

@@ -309,6 +309,9 @@ export default function AttendancePage() {
               </button>
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
                 تسجيل الحضور
+                {user?.assignedClass && (
+                  <span className="text-blue-600 font-medium text-base"> - {user.assignedClass.name}</span>
+                )}
               </h1>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4 space-x-reverse">

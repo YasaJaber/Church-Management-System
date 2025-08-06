@@ -247,6 +247,9 @@ export default function IndividualTrackingPage() {
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
                 <span className="hidden sm:inline">المتابعة الفردية للأطفال</span>
                 <span className="sm:hidden">المتابعة الفردية</span>
+                {user?.assignedClass && (
+                  <span className="text-blue-600 font-medium text-base"> - {user.assignedClass.name}</span>
+                )}
               </h1>
             </div>
             <div className="flex items-center space-x-2 space-x-reverse">

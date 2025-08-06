@@ -195,8 +195,18 @@ export default function DashboardPage() {
                 className="w-8 h-8 ml-3 rounded flex-shrink-0"
               />
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
-                <span className="hidden sm:inline">نظام إدارة كنيسة الشهيد مار جرجس - بأولاد علي</span>
-                <span className="sm:hidden">مار جرجس - بأولاد علي</span>
+                <span className="hidden sm:inline">
+                  نظام إدارة كنيسة الشهيد مار جرجس - بأولاد علي
+                  {user?.assignedClass && (
+                    <span className="text-blue-600 font-medium"> - {user.assignedClass.name}</span>
+                  )}
+                </span>
+                <span className="sm:hidden">
+                  مار جرجس
+                  {user?.assignedClass && (
+                    <span className="text-blue-600 font-medium"> - {user.assignedClass.name}</span>
+                  )}
+                </span>
               </h1>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4 space-x-reverse">
