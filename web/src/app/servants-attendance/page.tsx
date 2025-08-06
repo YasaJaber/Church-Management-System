@@ -270,19 +270,20 @@ export default function ServantsAttendancePage() {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
+            <div className="flex items-center min-w-0 flex-1">
               <button
                 onClick={() => router.push('/dashboard')}
-                className="text-gray-500 hover:text-gray-700 ml-4"
+                className="text-gray-500 hover:text-gray-700 ml-4 flex-shrink-0"
               >
                 ← العودة
               </button>
-              <h1 className="text-xl font-semibold text-gray-900">
-                تسجيل حضور الخدام
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
+                <span className="hidden sm:inline">تسجيل حضور الخدام</span>
+                <span className="sm:hidden">حضور الخدام</span>
               </h1>
             </div>
-            <div className="flex items-center space-x-4 space-x-reverse">
-              <div className="text-sm text-gray-600">
+            <div className="flex items-center space-x-2 sm:space-x-4 space-x-reverse">
+              <div className="text-sm text-gray-600 hidden sm:flex items-center">
                 <ClockIcon className="w-4 h-4 inline ml-1" />
                 {new Date().toLocaleTimeString('ar-EG')}
               </div>

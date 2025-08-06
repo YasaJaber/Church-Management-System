@@ -188,38 +188,41 @@ export default function DashboardPage() {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
+            <div className="flex items-center min-w-0 flex-1">
               <img 
                 src="/saint-george.png" 
                 alt="كنيسة مار جرجس - بأولاد علي" 
-                className="w-8 h-8 ml-3 rounded"
+                className="w-8 h-8 ml-3 rounded flex-shrink-0"
               />
-              <h1 className="text-xl font-semibold text-gray-900">
-                نظام إدارة كنيسة مار جرجس - بأولاد علي
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
+                <span className="hidden sm:inline">نظام إدارة كنيسة الشهيد مار جرجس - بأولاد علي</span>
+                <span className="sm:hidden">مار جرجس - بأولاد علي</span>
               </h1>
             </div>
-            <div className="flex items-center space-x-4 space-x-reverse">
+            <div className="flex items-center space-x-2 sm:space-x-4 space-x-reverse">
               {isAuthenticated && user ? (
                 <>
-                  <span className="text-sm text-gray-700">
-                    مرحباً {user.name || user.username}
+                  <span className="text-sm text-gray-700 hidden sm:inline">
+                    {user.name || user.username}
                     {user.assignedClass && (
                       <span className="text-gray-500 mr-2">- خادم {user.assignedClass.name}</span>
                     )}
                   </span>
                   <button
                     onClick={handleLogout}
-                    className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors text-sm"
+                    className="bg-red-600 text-white px-3 py-2 sm:px-4 rounded-md hover:bg-red-700 transition-colors text-sm whitespace-nowrap"
                   >
-                    تسجيل الخروج
+                    <span className="hidden sm:inline">تسجيل الخروج</span>
+                    <span className="sm:hidden">خروج</span>
                   </button>
                 </>
               ) : (
                 <button
                   onClick={() => router.push('/login')}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors text-sm"
+                  className="bg-blue-600 text-white px-3 py-2 sm:px-4 rounded-md hover:bg-blue-700 transition-colors text-sm whitespace-nowrap"
                 >
-                  تسجيل الدخول
+                  <span className="hidden sm:inline">تسجيل الدخول</span>
+                  <span className="sm:hidden">دخول</span>
                 </button>
               )}
             </div>

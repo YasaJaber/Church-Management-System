@@ -408,37 +408,39 @@ export default function ChildrenPage() {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
+            <div className="flex items-center min-w-0 flex-1">
               <button
                 onClick={() => router.push('/dashboard')}
-                className="text-gray-500 hover:text-gray-700 ml-4"
+                className="text-gray-500 hover:text-gray-700 ml-4 flex-shrink-0"
               >
                 ← العودة
               </button>
-              <h1 className="text-xl font-semibold text-gray-900">
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
                 إدارة الأطفال
               </h1>
             </div>
             {/* إضافة طفل مسموحة للجميع إلا الخادم العادي */}
-            <div className="flex items-center space-x-3 space-x-reverse">
+            <div className="flex items-center space-x-2 sm:space-x-3 space-x-reverse">
               {/* زر إصلاح الأطفال بدون فصول - للإداري وأمين الخدمة فقط */}
               {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
                 <button
                   onClick={fixChildrenWithoutClass}
-                  className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-2 rounded-md text-sm transition-colors"
+                  className="bg-yellow-600 hover:bg-yellow-700 text-white px-2 sm:px-3 py-2 rounded-md text-sm transition-colors whitespace-nowrap"
                   title="تعيين فصل للأطفال الذين بدون فصل"
                 >
-                  🔧 إصلاح الفصول
+                  <span className="hidden sm:inline">🔧 إصلاح الفصول</span>
+                  <span className="sm:hidden">🔧</span>
                 </button>
               )}
               
               {(user?.role === 'admin' || user?.role === 'serviceLeader' || user?.role === 'classTeacher' || user?.role === 'servant') && (
                 <button
                   onClick={() => setShowAddModal(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center transition-colors"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 sm:px-4 py-2 rounded-md flex items-center transition-colors whitespace-nowrap"
                 >
-                  <PlusIcon className="w-5 h-5 ml-2" />
-                  إضافة طفل جديد
+                  <PlusIcon className="w-4 h-4 sm:w-5 sm:h-5 ml-1 sm:ml-2" />
+                  <span className="hidden sm:inline">إضافة طفل جديد</span>
+                  <span className="sm:hidden">إضافة</span>
                 </button>
               )}
             </div>

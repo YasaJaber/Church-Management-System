@@ -65,6 +65,32 @@ a {
   }
 }
 
+/* Mobile responsive improvements */
+@media (max-width: 640px) {
+  /* Header improvements */
+  .header-title {
+    font-size: 1rem !important;
+    line-height: 1.25rem !important;
+  }
+  
+  /* Ensure proper text wrapping on mobile */
+  .truncate-mobile {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  
+  /* Better button spacing on mobile */
+  .mobile-btn-group {
+    gap: 0.5rem !important;
+  }
+  
+  .mobile-btn-group button {
+    padding: 0.5rem 0.75rem !important;
+    font-size: 0.875rem !important;
+  }
+}
+
 /* Custom component styles */
 @layer components {
   .btn-primary {

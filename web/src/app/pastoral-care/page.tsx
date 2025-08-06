@@ -206,28 +206,28 @@ export default function PastoralCarePage() {
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
+            <div className="flex items-center min-w-0 flex-1">
               <button
                 onClick={() => router.push('/dashboard')}
-                className="text-gray-500 hover:text-gray-700 ml-4"
+                className="text-gray-500 hover:text-gray-700 ml-4 flex-shrink-0"
               >
                 ← العودة
               </button>
-              <h1 className="text-xl font-semibold text-gray-900">
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
                 الافتقاد
               </h1>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4">
               <button
                 onClick={loadAbsentChildren}
-                className="flex items-center px-3 py-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors text-sm"
+                className="flex items-center px-2 sm:px-3 py-2 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors text-sm whitespace-nowrap"
                 title="تحديث القائمة"
               >
                 <ArrowPathIcon className="w-4 h-4 ml-1" />
-                تحديث
+                <span className="hidden sm:inline">تحديث</span>
               </button>
               <div className="flex items-center">
-                <UserGroupIcon className="w-6 h-6 text-orange-600 ml-2" />
+                <UserGroupIcon className="w-5 h-5 sm:w-6 sm:h-6 text-orange-600 ml-1 sm:ml-2" />
                 <span className="text-sm text-gray-600">
                   {quickStats.total} طفل يحتاج افتقاد
                 </span>
