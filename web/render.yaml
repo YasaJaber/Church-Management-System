@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: church-management-frontend
+    env: node
+    plan: free
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        # استبدل هذا برابط الباك إند الخاص بك
+        value: https://church-management-system-b6h7.onrender.com/api
+      - key: NEXT_PUBLIC_USE_PRODUCTION
+        value: true
