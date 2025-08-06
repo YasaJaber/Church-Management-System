@@ -3,8 +3,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { authAPI } from '@/services/api'
 import { toast } from 'react-hot-toast'
-import Cookies from 'js-cookie'
 import { User, LoginCredentials, LoginResponse } from '@/types/User'
+import { EnhancedStorage } from '@/utils/storage'
 
 // Simple AuthContext interface
 interface AuthContextType {
@@ -35,15 +35,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
 
-  // Direct API check without using authAPI service
+  // Enhanced auth check with better mobile support
   const checkAuth = async (): Promise<boolean> => {
     console.log('🔍 AuthContext: بدء التحقق من المصادقة...')
     
     try {
-      const token = Cookies.get('auth_token') || Cookies.get('userToken') || 
-                   localStorage.getItem('auth_token') || localStorage.getItem('userToken')
+      // Try multiple token sources with priority order
+      let token = null
+      let userDataFromStorage = null
       
-      console.log('🔑 AuthContext: التوكن الموجود:', token ? 'موجود' : 'غير موجود')
+      // Get token using enhanced storage
+      token = EnhancedStorage.getAuthToken()
+      console.log('� AuthContext: التوكن النهائي:', token ? 'موجود' : 'غير موجود')
+      
+      // Get cached user data
+      userDataFromStorage = EnhancedStorage.getUserData()
+      if (userDataFromStorage) {
+        console.log('👤 Cached user data found:', userDataFromStorage?.username)
+      }
       
       if (!token) {
         console.log('❌ AuthContext: لا يوجد توكن - إعداد حالة غير مصادق')
@@ -55,8 +64,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       console.log('📡 AuthContext: طلب التحقق من المستخدم الحالي...')
       
+      // If we have cached user data, set it immediately for faster UI
+      if (userDataFromStorage) {
+        console.log('⚡ Setting cached user data for faster load')
+        setUser(userDataFromStorage)
+        setIsAuthenticated(true)
+      }
+      
       // Direct fetch call to avoid any service layer issues
-      const response = await fetch('http://localhost:5000/api/auth/me', {
+      const response = await fetch('https://church-management-system-b6h7.onrender.com/api/auth/me', {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -69,17 +85,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       if (response.ok && data.success && data.data && data.data.user) {
         console.log('✅ AuthContext: تم التحقق بنجاح من المستخدم:', data.data.user)
+        
+        // Update user data and cache it
         setUser(data.data.user)
         setIsAuthenticated(true)
         setIsLoading(false)
+        
+        // Update cached user data
+        EnhancedStorage.setUserData(data.data.user)
+        
         return true
       } else {
-        console.log('❌ AuthContext: فشل التحقق - مسح التوكن')
-        // Invalid token, clear it
-        Cookies.remove('auth_token')
-        Cookies.remove('userToken')
-        localStorage.removeItem('auth_token')
-        localStorage.removeItem('userToken')
+        console.log('❌ AuthContext: فشل التحقق - مسح التوكن والبيانات')
+        // Invalid token, clear everything
+        EnhancedStorage.clearAuth()
         setUser(null)
         setIsAuthenticated(false)
         setIsLoading(false)
@@ -87,11 +106,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     } catch (error) {
       console.error('❌ AuthContext: فشل التحقق من المصادقة:', error)
-      // Clear invalid tokens
-      Cookies.remove('auth_token')
-      Cookies.remove('userToken')
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('userToken')
+      
+      // On network error, if we have cached user data, use it temporarily
+      try {
+        const cachedUserData = EnhancedStorage.getUserData()
+        if (cachedUserData) {
+          console.log('🔄 Network error but using cached user data temporarily')
+          setUser(cachedUserData)
+          setIsAuthenticated(true)
+          setIsLoading(false)
+          return true
+        }
+      } catch (storageError) {
+        console.warn('⚠️ Could not access cached user data')
+      }
+      
+      // Otherwise clear everything
+      EnhancedStorage.clearAuth()
       setUser(null)
       setIsAuthenticated(false)
       setIsLoading(false)
@@ -110,9 +141,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (response.success && response.data) {
         const { user, token } = response.data
         
-        // Store token in both cookies and localStorage
-        Cookies.set('auth_token', token, { expires: 7 })
-        localStorage.setItem('auth_token', token)
+        // Store token and user data using enhanced storage
+        EnhancedStorage.setAuthToken(token)
+        EnhancedStorage.setUserData(user)
         
         setUser(user)
         setIsAuthenticated(true)
@@ -138,16 +169,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }
 
-  // Logout function
+  // Enhanced logout function
   const logout = async (): Promise<void> => {
     console.log('🚪 AuthContext: تسجيل الخروج...')
     
     try {
-      // Clear tokens
-      Cookies.remove('auth_token')
-      Cookies.remove('userToken')
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('userToken')
+      // Clear all authentication data using enhanced storage
+      EnhancedStorage.clearAuth()
       
       // Reset state
       setUser(null)
@@ -161,7 +189,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }
 
-  // Initialize auth check on mount
+  // Initialize auth check on mount with enhanced persistence
   useEffect(() => {
     console.log('🚀 AuthContext: تشغيل useEffect للتحقق الأولي...')
     
@@ -175,7 +203,51 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     initAuth()
-  }, [])
+
+    // Set up periodic auth check for mobile reliability (every 5 minutes)
+    const authCheckInterval = setInterval(async () => {
+      if (isAuthenticated) {
+        console.log('🔄 Periodic auth check...')
+        try {
+          await checkAuth()
+        } catch (error) {
+          console.warn('⚠️ Periodic auth check failed:', error)
+        }
+      }
+    }, 5 * 60 * 1000) // 5 minutes
+
+    // Add visibility change listener for mobile apps
+    const handleVisibilityChange = () => {
+      if (!document.hidden && isAuthenticated) {
+        console.log('📱 App became visible, checking auth...')
+        checkAuth()
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      clearInterval(authCheckInterval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, []) // Empty dependency array for initial setup only
+
+  // Separate effect for auth state changes to avoid infinite loops
+  useEffect(() => {
+    if (isAuthenticated) {
+      // Set up interval only when authenticated
+      const authCheckInterval = setInterval(async () => {
+        console.log('🔄 Periodic auth check for authenticated user...')
+        try {
+          await checkAuth()
+        } catch (error) {
+          console.warn('⚠️ Periodic auth check failed:', error)
+        }
+      }, 5 * 60 * 1000) // 5 minutes
+
+      return () => clearInterval(authCheckInterval)
+    }
+  }, [isAuthenticated])
 
   // Debug logging for state changes
   useEffect(() => {

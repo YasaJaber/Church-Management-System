@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { api } from '@/services/api'
-import Cookies from 'js-cookie'
+import { EnhancedStorage } from '@/utils/storage'
 
 interface DashboardStats {
   totalChildren: number
@@ -47,6 +47,31 @@ export default function DashboardPage() {
     }
   }, [isAuthenticated, isLoading, router, user])
 
+  // Additional effect to handle page focus/visibility for mobile
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log('🔄 Page gained focus - refreshing auth state')
+      if (isAuthenticated && user) {
+        fetchDashboardStats()
+      }
+    }
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden && isAuthenticated && user) {
+        console.log('📱 Page became visible - refreshing data')
+        fetchDashboardStats()
+      }
+    }
+
+    window.addEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [isAuthenticated, user])
+
   const fetchDashboardStats = async () => {
     try {
       setLoadingStats(true)
@@ -54,16 +79,12 @@ export default function DashboardPage() {
       console.log('👤 Current user:', user)
       console.log('🔐 Is authenticated:', isAuthenticated)
       
-      // التحقق من وجود توكن
-      const token = Cookies.get('auth_token') || Cookies.get('userToken')
+      // التحقق من وجود توكن مع أولوية للـ cookies
+      const token = EnhancedStorage.getAuthToken()
+      
       if (!token) {
-        console.log('❌ لا يوجد توكن مصادقة')
-        setStats({
-          totalChildren: 0,
-          todayAttendance: 0,
-          todayAbsence: 0,
-          attendanceRate: 0
-        })
+        console.log('❌ لا يوجد توكن مصادقة - إعادة توجيه للتسجيل')
+        router.push('/login')
         return
       }
       console.log('✅ توكن المصادقة موجود:', token.substring(0, 20) + '...')
@@ -106,7 +127,11 @@ export default function DashboardPage() {
       
       // تحقق من نوع الخطأ
       if (error?.response?.status === 401 || error?.response?.status === 403) {
-        console.log('🔐 خطأ في المصادقة - إعادة توجيه للتسجيل')
+        console.log('🔐 خطأ في المصادقة - مسح البيانات وإعادة توجيه للتسجيل')
+        
+        // مسح جميع بيانات المصادقة باستخدام EnhancedStorage
+        EnhancedStorage.clearAuth()
+        
         // إعادة توجيه للتسجيل
         router.push('/login')
         return

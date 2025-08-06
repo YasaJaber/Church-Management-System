@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { tr } from 'date-fns/locale'
-import Cookies from 'js-cookie'
+import { EnhancedStorage } from '@/utils/storage'
 
 // Base URL for the API - Use direct backend URL for now
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
@@ -23,53 +23,27 @@ const api = axios.create({
   },
 })
 
-// Safe storage operations for web
+// Safe storage operations for web using enhanced storage
 const safeStorage = {
   getItem: (key: string): string | null => {
-    try {
-      if (typeof window !== 'undefined') {
-        return localStorage.getItem(key) || Cookies.get(key) || null
-      }
-      return null
-    } catch (error) {
-      console.warn(`Error getting ${key} from storage:`, error)
-      return null
-    }
+    return EnhancedStorage.getItem(key)
   },
   
   setItem: (key: string, value: string): void => {
-    try {
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(key, value)
-      }
-    } catch (error) {
-      console.warn(`Error setting ${key} in storage:`, error)
-    }
+    EnhancedStorage.setItem(key, value)
   },
   
   removeItem: (key: string): void => {
-    try {
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem(key)
-        Cookies.remove(key)
-      }
-    } catch (error) {
-      console.warn(`Error removing ${key} from storage:`, error)
-    }
+    EnhancedStorage.removeItem(key)
   }
 }
 
-// Request interceptor
+// Request interceptor with enhanced mobile support
 api.interceptors.request.use(
   async (config) => {
     try {
-      // Try both token names for compatibility
-      let token = safeStorage.getItem('auth_token') || safeStorage.getItem('userToken')
-      
-      // Also try cookies as fallback
-      if (!token && typeof window !== 'undefined') {
-        token = Cookies.get('auth_token') || Cookies.get('userToken') || null
-      }
+      // Enhanced token retrieval using EnhancedStorage
+      const token = EnhancedStorage.getAuthToken()
       
       console.log('Token from storage:', token ? 'EXISTS' : 'NOT_FOUND')
       console.log('Making request to:', (config.baseURL || '') + (config.url || ''))
@@ -90,7 +64,7 @@ api.interceptors.request.use(
   }
 )
 
-// Response interceptor
+// Enhanced response interceptor for better mobile token management
 api.interceptors.response.use(
   (response) => {
     console.log('API Response:', response.status, response.config.url)
@@ -112,14 +86,17 @@ api.interceptors.response.use(
     )
     
     if (error.response?.status === 401) {
-      console.log('Token expired, clearing storage')
-      // Token is invalid or expired
-      safeStorage.removeItem('userToken')
-      safeStorage.removeItem('userData')
+      console.log('📱 Token expired or invalid, clearing all storage')
+      
+      // Clear all possible token storage locations using EnhancedStorage
+      EnhancedStorage.clearAuth()
       
       // Redirect to login if we're on the client side
       if (typeof window !== 'undefined') {
-        window.location.href = '/login'
+        // Add small delay to ensure cleanup is complete
+        setTimeout(() => {
+          window.location.href = '/login'
+        }, 100)
       }
     }
     return Promise.reject(error)
