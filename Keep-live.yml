@@ -1,0 +1,15 @@
+name: Keep Render Services Alive on Friday
+
+on:
+  schedule:
+    - cron: "* * * * 5" # كل دقيقة يوم الجمعة
+  workflow_dispatch: # تشغيل يدوي لو حبيت
+
+jobs:
+  keep_alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Frontend
+        run: curl -s https://church-management-system-1-i51l.onrender.com > /dev/null
+      - name: Call Backend
+        run: curl -s https://church-management-system-b6h7.onrender.com/ > /dev/null
