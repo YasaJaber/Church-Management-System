@@ -443,4 +443,97 @@ router.get("/consecutive-attendance-by-classes", authMiddleware, async (req, res
   }
 });
 
+// @route   GET /api/statistics/child/:childId
+// @desc    Get individual child statistics
+// @access  Protected
+router.get("/child/:childId", authMiddleware, async (req, res) => {
+  try {
+    const { childId } = req.params;
+    console.log("📊 Fetching individual child statistics for:", childId);
+
+    // Get child information
+    const child = await Child.findById(childId).populate("classId", "name category");
+    
+    if (!child) {
+      return res.status(404).json({
+        success: false,
+        error: "الطفل غير موجود",
+      });
+    }
+
+    // Get attendance records for this child
+    const attendanceRecords = await Attendance.find({
+      person: childId,
+      type: "child",
+    }).sort({ date: -1 });
+
+    // Calculate statistics
+    const totalRecords = attendanceRecords.length;
+    const presentCount = attendanceRecords.filter(record => record.status === "present").length;
+    const absentCount = attendanceRecords.filter(record => record.status === "absent").length;
+    const attendanceRate = totalRecords > 0 ? Math.round((presentCount / totalRecords) * 100) : 0;
+
+    // Calculate consecutive attendance
+    let consecutiveAttendance = 0;
+    for (const record of attendanceRecords) {
+      if (record.status === "present") {
+        consecutiveAttendance++;
+      } else {
+        break;
+      }
+    }
+
+    // Get recent attendance (last 10 records)
+    const recentAttendance = attendanceRecords.slice(0, 10).map(record => ({
+      date: record.date,
+      status: record.status,
+      notes: record.notes || ""
+    }));
+
+    // Calculate monthly statistics (last 3 months)
+    const threeMonthsAgo = new Date();
+    threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+    const threeMonthsAgoStr = threeMonthsAgo.toISOString().split("T")[0];
+
+    const recentRecords = attendanceRecords.filter(record => record.date >= threeMonthsAgoStr);
+    const recentPresent = recentRecords.filter(record => record.status === "present").length;
+    const recentTotal = recentRecords.length;
+    const recentAttendanceRate = recentTotal > 0 ? Math.round((recentPresent / recentTotal) * 100) : 0;
+
+    const response = {
+      success: true,
+      data: {
+        child: {
+          id: child._id,
+          name: child.name,
+          className: child.classId?.name || "غير محدد",
+          category: child.classId?.category || "غير محدد",
+          isActive: child.isActive
+        },
+        statistics: {
+          totalAttendanceRecords: totalRecords,
+          presentCount,
+          absentCount,
+          attendanceRate,
+          consecutiveAttendance,
+          recentAttendanceRate, // Last 3 months
+          lastAttendance: attendanceRecords.length > 0 ? attendanceRecords[0].date : null
+        },
+        recentAttendance
+      }
+    };
+
+    console.log(`✅ Child statistics fetched for: ${child.name}`);
+    res.json(response);
+
+  } catch (error) {
+    console.error("❌ Error fetching child statistics:", error);
+    res.status(500).json({
+      success: false,
+      error: "خطأ في استرجاع إحصائيات الطفل",
+      details: error.message,
+    });
+  }
+});
+
 module.exports = router;
