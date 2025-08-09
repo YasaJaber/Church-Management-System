@@ -371,7 +371,7 @@ router.get("/consecutive-attendance-by-classes", authMiddleware, async (req, res
     for (const classObj of classes) {
       // Get children in this class
       const children = await Child.find({ 
-        classId: classObj._id,
+        class: classObj._id,
         isActive: true 
       });
 
@@ -452,7 +452,7 @@ router.get("/child/:childId", authMiddleware, async (req, res) => {
     console.log("📊 Fetching individual child statistics for:", childId);
 
     // Get child information
-    const child = await Child.findById(childId).populate("classId", "name category");
+    const child = await Child.findById(childId).populate("class", "name category");
     
     if (!child) {
       return res.status(404).json({
@@ -506,8 +506,8 @@ router.get("/child/:childId", authMiddleware, async (req, res) => {
         child: {
           id: child._id,
           name: child.name,
-          className: child.classId?.name || "غير محدد",
-          category: child.classId?.category || "غير محدد",
+          className: child.class?.name || "غير محدد",
+          category: child.class?.category || "غير محدد",
           isActive: child.isActive
         },
         statistics: {
