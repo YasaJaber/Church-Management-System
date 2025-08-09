@@ -597,9 +597,9 @@ router.get("/church", authMiddleware, async (req, res) => {
     const totalClasses = await Class.countDocuments();
     console.log("🏫 Total classes:", totalClasses);
 
-    // Get total servants count
+    // Get total servants count (only servants, not classTeachers)
     const totalServants = await User.countDocuments({
-      role: { $in: ["servant", "classTeacher"] },
+      role: "servant",
     });
     console.log("🙏 Total servants:", totalServants);
 

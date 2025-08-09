@@ -29,7 +29,7 @@ router.get("/church", authMiddleware, async (req, res) => {
       totalChildren = await Child.countDocuments({ isActive: true });
       totalClasses = await Class.countDocuments();
       totalServants = await User.countDocuments({
-        role: { $in: ["servant", "classTeacher"] },
+        role: "servant",
       });
 
       // Get today's attendance records for all classes
@@ -58,7 +58,7 @@ router.get("/church", authMiddleware, async (req, res) => {
 
       // Count servants in their class only
       totalServants = await User.countDocuments({
-        role: { $in: ["servant", "classTeacher"] },
+        role: "servant",
         assignedClass: req.user.assignedClass._id,
       });
 

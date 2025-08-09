@@ -57,9 +57,9 @@ router.get("/church", authMiddleware, async (req, res) => {
 
     const servantQuery =
       req.user.role === "admin" || req.user.role === "serviceLeader"
-        ? { role: { $in: ["servant", "classTeacher"] } }
+        ? { role: "servant" }
         : {
-            role: { $in: ["servant", "classTeacher"] },
+            role: "servant",
             assignedClass: req.user.assignedClass,
           };
 
