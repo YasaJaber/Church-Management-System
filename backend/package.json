@@ -7,6 +7,8 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "seed": "node scripts/seed.js",
+    "clear-attendance": "node scripts/clear-attendance-records.js",
+    "clear-attendance-auto": "node scripts/clear-attendance-auto.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
