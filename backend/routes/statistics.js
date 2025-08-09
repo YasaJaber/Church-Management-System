@@ -12,30 +12,74 @@ const { authMiddleware } = require("../middleware/auth");
 router.get("/church", authMiddleware, async (req, res) => {
   try {
     console.log("🏛️ Fetching church statistics for dashboard");
+    console.log("👤 User role:", req.user.role);
+    console.log("🏫 User assigned class:", req.user.assignedClass);
 
     // Get today's date as string (YYYY-MM-DD format)
     const today = new Date().toISOString().split("T")[0];
     console.log("📅 Today's date:", today);
 
-    // Get total children count
-    const totalChildren = await Child.countDocuments();
+    let totalChildren, totalClasses, totalServants, todaysAttendance;
+
+    // Role-based statistics
+    if (req.user.role === "admin" || req.user.role === "serviceLeader") {
+      // Admin and Service Leader see all church statistics
+      console.log("👑 Admin/ServiceLeader - showing all church statistics");
+
+      totalChildren = await Child.countDocuments({ isActive: true });
+      totalClasses = await Class.countDocuments();
+      totalServants = await User.countDocuments({
+        role: { $in: ["servant", "classTeacher"] },
+      });
+
+      // Get today's attendance records for all classes
+      todaysAttendance = await Attendance.find({
+        date: today,
+        type: "child",
+      });
+    } else if (
+      (req.user.role === "classTeacher" || req.user.role === "servant") &&
+      req.user.assignedClass
+    ) {
+      // Class teachers and servants see only their class statistics
+      console.log(
+        "👤 ClassTeacher/Servant - showing class statistics for:",
+        req.user.assignedClass
+      );
+
+      // Get children count for their assigned class only
+      totalChildren = await Child.countDocuments({
+        class: req.user.assignedClass._id,
+        isActive: true,
+      });
+
+      // For class teachers, they see only 1 class (their own)
+      totalClasses = 1;
+
+      // Count servants in their class only
+      totalServants = await User.countDocuments({
+        role: { $in: ["servant", "classTeacher"] },
+        assignedClass: req.user.assignedClass._id,
+      });
+
+      // Get today's attendance records for their class only
+      todaysAttendance = await Attendance.find({
+        date: today,
+        type: "child",
+        class: req.user.assignedClass._id,
+      });
+    } else {
+      // No assigned class or invalid role
+      console.log("❌ Invalid role or no assigned class");
+      return res.status(403).json({
+        success: false,
+        error: "غير مسموح - لا توجد صلاحيات كافية",
+      });
+    }
+
     console.log("👶 Total children:", totalChildren);
-
-    // Get total classes count
-    const totalClasses = await Class.countDocuments();
     console.log("🏫 Total classes:", totalClasses);
-
-    // Get total servants count
-    const totalServants = await User.countDocuments({
-      role: { $in: ["servant", "classTeacher"] },
-    });
     console.log("🙏 Total servants:", totalServants);
-
-    // Get today's attendance records
-    const todaysAttendance = await Attendance.find({
-      date: today,
-      type: "child",
-    });
     console.log("📊 Today's attendance records:", todaysAttendance.length);
 
     // Calculate present and absent for today
