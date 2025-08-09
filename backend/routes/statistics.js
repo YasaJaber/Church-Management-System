@@ -214,4 +214,98 @@ router.get("/consecutive-attendance", authMiddleware, async (req, res) => {
   }
 });
 
+// @route   GET /api/statistics/consecutive-attendance-by-classes
+// @desc    Get consecutive attendance statistics grouped by classes
+// @access  Protected
+router.get("/consecutive-attendance-by-classes", authMiddleware, async (req, res) => {
+  try {
+    console.log("📊 Fetching consecutive attendance statistics by classes");
+
+    const { classId, minDays = 3 } = req.query;
+
+    // Get all classes or specific class
+    let classes;
+    if (classId) {
+      classes = await Class.find({ _id: classId });
+    } else {
+      classes = await Class.find({});
+    }
+
+    const classesData = [];
+
+    for (const classObj of classes) {
+      // Get children in this class
+      const children = await Child.find({ 
+        classId: classObj._id,
+        isActive: true 
+      });
+
+      const consecutiveChildren = [];
+
+      for (const child of children) {
+        // Get attendance records for this child, sorted by date desc
+        const attendanceRecords = await Attendance.find({
+          person: child._id,
+          type: "child",
+        }).sort({ date: -1 });
+
+        // Calculate consecutive attendance (convert days to weeks)
+        let consecutiveCount = 0;
+        for (const record of attendanceRecords) {
+          if (record.status === "present") {
+            consecutiveCount++;
+          } else {
+            break;
+          }
+        }
+
+        // Convert days to weeks and only include children with consecutive attendance >= minDays
+        const consecutiveWeeks = Math.floor(consecutiveCount / 1); // Each day counts as attendance
+        if (consecutiveCount >= minDays) {
+          consecutiveChildren.push({
+            childId: child._id,
+            name: child.name,
+            consecutiveWeeks: consecutiveWeeks, // Frontend expects this field name
+          });
+        }
+      }
+
+      // Sort children by consecutive weeks desc
+      consecutiveChildren.sort((a, b) => b.consecutiveWeeks - a.consecutiveWeeks);
+
+      // Only include classes that have consecutive children
+      if (consecutiveChildren.length > 0) {
+        classesData.push({
+          classId: classObj._id,
+          className: classObj.name,
+          children: consecutiveChildren, // Frontend expects this structure
+        });
+      }
+    }
+
+    // Sort classes by number of consecutive children desc
+    classesData.sort((a, b) => b.children.length - a.children.length);
+
+    console.log(
+      `✅ Found ${classesData.length} classes with consecutive attendance data`
+    );
+
+    res.json({
+      success: true,
+      data: classesData,
+      summary: {
+        totalClasses: classesData.length,
+        minDays: parseInt(minDays),
+        totalConsecutiveChildren: classesData.reduce((sum, cls) => sum + cls.children.length, 0)
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error fetching consecutive attendance by classes:", error);
+    res.status(500).json({
+      success: false,
+      error: "خطأ في استرجاع إحصائيات الحضور المتتالي بالفصول",
+    });
+  }
+});
+
 module.exports = router;
