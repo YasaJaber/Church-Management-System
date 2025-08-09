@@ -98,6 +98,7 @@ app.use("/api/attendance", require("./routes/attendance"));
 app.use("/api/servants", require("./routes/servants"));
 app.use("/api/servants-attendance", require("./routes/servants-attendance"));
 app.use("/api/pastoral-care", require("./routes/pastoral-care"));
+app.use("/api/statistics", require("./routes/statistics"));
 app.use("/api/advanced-statistics", require("./routes/advanced-statistics"));
 
 console.log("📍 Routes registered successfully");

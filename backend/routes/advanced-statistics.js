@@ -11,15 +11,18 @@ const { authMiddleware } = require("../middleware/auth");
 // @access  Protected
 router.get("/attendance-trends", authMiddleware, async (req, res) => {
   try {
-    const { classId, period = 'month', startDate, endDate } = req.query;
+    const { classId, period = "month", startDate, endDate } = req.query;
     const userId = req.user.id;
     const userRole = req.user.role;
 
-    let filter = { type: 'child' }; // فقط حضور الأطفال
+    let filter = { type: "child" }; // فقط حضور الأطفال
     let classFilter = {};
 
     // إذا كان المستخدم مدرس فصل أو خادم، يجب أن يرى فصله فقط
-    if ((userRole === 'classTeacher' || userRole === 'servant') && req.user.assignedClass) {
+    if (
+      (userRole === "classTeacher" || userRole === "servant") &&
+      req.user.assignedClass
+    ) {
       classFilter._id = req.user.assignedClass;
     } else if (classId) {
       classFilter._id = classId;
@@ -34,16 +37,16 @@ router.get("/attendance-trends", authMiddleware, async (req, res) => {
     } else {
       startDateObj = new Date(endDateObj);
       switch (period) {
-        case 'week':
+        case "week":
           startDateObj.setDate(startDateObj.getDate() - 7);
           break;
-        case 'month':
+        case "month":
           startDateObj.setMonth(startDateObj.getMonth() - 1);
           break;
-        case 'quarter':
+        case "quarter":
           startDateObj.setMonth(startDateObj.getMonth() - 3);
           break;
-        case 'year':
+        case "year":
           startDateObj.setFullYear(startDateObj.getFullYear() - 1);
           break;
         default:
@@ -52,17 +55,17 @@ router.get("/attendance-trends", authMiddleware, async (req, res) => {
     }
 
     // تحويل التواريخ لنص (لأن date في schema هو string)
-    const startDateStr = startDateObj.toISOString().split('T')[0];
-    const endDateStr = endDateObj.toISOString().split('T')[0];
+    const startDateStr = startDateObj.toISOString().split("T")[0];
+    const endDateStr = endDateObj.toISOString().split("T")[0];
 
     filter.date = {
       $gte: startDateStr,
-      $lte: endDateStr
+      $lte: endDateStr,
     };
 
     // الحصول على الفصول
     const classes = await Class.find(classFilter);
-    const classIds = classes.map(c => c._id);
+    const classIds = classes.map((c) => c._id);
 
     if (classIds.length > 0) {
       filter.class = { $in: classIds };
@@ -70,13 +73,13 @@ router.get("/attendance-trends", authMiddleware, async (req, res) => {
 
     // الحصول على بيانات الحضور
     const attendanceRecords = await Attendance.find(filter)
-      .populate('person', 'name')
-      .populate('class', 'name category')
+      .populate("person", "name")
+      .populate("class", "name category")
       .sort({ date: 1 });
 
     // تجميع البيانات حسب التاريخ
     const dateGroups = {};
-    attendanceRecords.forEach(record => {
+    attendanceRecords.forEach((record) => {
       const dateKey = record.date;
       if (!dateGroups[dateKey]) {
         dateGroups[dateKey] = {
@@ -84,7 +87,7 @@ router.get("/attendance-trends", authMiddleware, async (req, res) => {
           present: 0,
           absent: 0,
           total: 0,
-          classes: {}
+          classes: {},
         };
       }
 
@@ -95,25 +98,25 @@ router.get("/attendance-trends", authMiddleware, async (req, res) => {
           category: record.class.category,
           present: 0,
           absent: 0,
-          total: 0
+          total: 0,
         };
       }
 
-      if (record.status === 'present') {
+      if (record.status === "present") {
         dateGroups[dateKey].present++;
         dateGroups[dateKey].classes[classId].present++;
       } else {
         dateGroups[dateKey].absent++;
         dateGroups[dateKey].classes[classId].absent++;
       }
-      
+
       dateGroups[dateKey].total++;
       dateGroups[dateKey].classes[classId].total++;
     });
 
     // تحويل إلى مصفوفة وترتيب حسب التاريخ
-    const trendsData = Object.values(dateGroups).sort((a, b) => 
-      new Date(a.date) - new Date(b.date)
+    const trendsData = Object.values(dateGroups).sort(
+      (a, b) => new Date(a.date) - new Date(b.date)
     );
 
     res.json({
@@ -123,15 +126,14 @@ router.get("/attendance-trends", authMiddleware, async (req, res) => {
         period: period,
         startDate: startDateStr,
         endDate: endDateStr,
-        totalRecords: attendanceRecords.length
-      }
+        totalRecords: attendanceRecords.length,
+      },
     });
-
   } catch (error) {
     console.error("Error fetching attendance trends:", error);
     res.status(500).json({
       success: false,
-      error: "خطأ في استرجاع بيانات الاتجاهات"
+      error: "خطأ في استرجاع بيانات الاتجاهات",
     });
   }
 });
@@ -141,37 +143,37 @@ router.get("/attendance-trends", authMiddleware, async (req, res) => {
 // @access  Protected (Admin/Service Leader only)
 router.get("/class-comparison", authMiddleware, async (req, res) => {
   try {
-    console.log('🔍 Class-comparison API called');
-    console.log('📊 Query params:', req.query);
-    console.log('👤 User role:', req.user.role);
-    
-    const { period = 'month', startDate, endDate } = req.query;
+    console.log("🔍 Class-comparison API called");
+    console.log("📊 Query params:", req.query);
+    console.log("👤 User role:", req.user.role);
+
+    const { period = "month", startDate, endDate } = req.query;
     const userRole = req.user.role;
 
     // التحقق من الصلاحيات
-    if (userRole !== 'admin' && userRole !== 'serviceLeader') {
-      console.log('❌ Access denied for role:', userRole);
+    if (userRole !== "admin" && userRole !== "serviceLeader") {
+      console.log("❌ Access denied for role:", userRole);
       return res.status(403).json({
         success: false,
-        error: "غير مسموح - أمين الخدمة أو الأدمن فقط"
+        error: "غير مسموح - أمين الخدمة أو الأدمن فقط",
       });
     }
 
-    console.log('✅ Access granted for role:', userRole);
+    console.log("✅ Access granted for role:", userRole);
 
     // تحديد الفترة الزمنية
     const endDateObj = endDate ? new Date(endDate) : new Date();
     let startDateObj = startDate ? new Date(startDate) : new Date(endDateObj);
-    
+
     if (!startDate) {
       switch (period) {
-        case 'week':
+        case "week":
           startDateObj.setDate(startDateObj.getDate() - 7);
           break;
-        case 'month':
+        case "month":
           startDateObj.setMonth(startDateObj.getMonth() - 1);
           break;
-        case 'quarter':
+        case "quarter":
           startDateObj.setMonth(startDateObj.getMonth() - 3);
           break;
         default:
@@ -179,58 +181,72 @@ router.get("/class-comparison", authMiddleware, async (req, res) => {
       }
     }
 
-    const startDateStr = startDateObj.toISOString().split('T')[0];
-    const endDateStr = endDateObj.toISOString().split('T')[0];
-    
+    const startDateStr = startDateObj.toISOString().split("T")[0];
+    const endDateStr = endDateObj.toISOString().split("T")[0];
+
     console.log(`📅 Date range: ${startDateStr} to ${endDateStr}`);
 
     // الحصول على جميع الفصول
     const classes = await Class.find({});
     console.log(`🏫 Found ${classes.length} classes`);
-    
+
     const classComparisons = [];
 
     for (const classObj of classes) {
       // عدد الأطفال في الفصل
-      const totalChildren = await Child.countDocuments({ classId: classObj._id });
-      
+      const totalChildren = await Child.countDocuments({
+        classId: classObj._id,
+      });
+
       // سجلات الحضور للفصل في الفترة المحددة
       const attendanceRecords = await Attendance.find({
         class: classObj._id,
-        type: 'child',
-        date: { $gte: startDateStr, $lte: endDateStr }
+        type: "child",
+        date: { $gte: startDateStr, $lte: endDateStr },
       });
 
       // حساب الإحصائيات
-      const presentCount = attendanceRecords.filter(r => r.status === 'present').length;
-      const absentCount = attendanceRecords.filter(r => r.status === 'absent').length;
+      const presentCount = attendanceRecords.filter(
+        (r) => r.status === "present"
+      ).length;
+      const absentCount = attendanceRecords.filter(
+        (r) => r.status === "absent"
+      ).length;
       const totalRecords = presentCount + absentCount;
-      const attendanceRate = totalRecords > 0 ? Math.round((presentCount / totalRecords) * 100) : 0;
-      
+      const attendanceRate =
+        totalRecords > 0 ? Math.round((presentCount / totalRecords) * 100) : 0;
+
       // عدد الجلسات المختلفة
-      const uniqueDates = [...new Set(attendanceRecords.map(r => r.date))];
+      const uniqueDates = [...new Set(attendanceRecords.map((r) => r.date))];
       const totalSessions = uniqueDates.length;
-      const avgAttendancePerSession = totalSessions > 0 ? Math.round((presentCount / totalSessions) * 100) / 100 : 0;
+      const avgAttendancePerSession =
+        totalSessions > 0
+          ? Math.round((presentCount / totalSessions) * 100) / 100
+          : 0;
 
       classComparisons.push({
         classId: classObj._id,
         className: classObj.name,
-        category: classObj.category || 'غير محدد',
+        category: classObj.category || "غير محدد",
         totalChildren,
         totalSessions,
         presentCount,
         absentCount,
         attendanceRate,
-        avgAttendancePerSession
+        avgAttendancePerSession,
       });
     }
 
     // ترتيب حسب معدل الحضور
     classComparisons.sort((a, b) => b.attendanceRate - a.attendanceRate);
-    
+
     console.log(`📊 Generated ${classComparisons.length} class comparisons`);
-    classComparisons.slice(0, 3).forEach(cls => {
-      console.log(`  - ${cls.className}: ${cls.attendanceRate}% (${cls.presentCount}/${cls.presentCount + cls.absentCount})`);
+    classComparisons.slice(0, 3).forEach((cls) => {
+      console.log(
+        `  - ${cls.className}: ${cls.attendanceRate}% (${cls.presentCount}/${
+          cls.presentCount + cls.absentCount
+        })`
+      );
     });
 
     const response = {
@@ -240,18 +256,21 @@ router.get("/class-comparison", authMiddleware, async (req, res) => {
         period,
         startDate: startDateStr,
         endDate: endDateStr,
-        totalClasses: classes.length
-      }
+        totalClasses: classes.length,
+      },
     };
-    
-    console.log('✅ Sending response with', response.data.classComparisons.length, 'comparisons');
-    res.json(response);
 
+    console.log(
+      "✅ Sending response with",
+      response.data.classComparisons.length,
+      "comparisons"
+    );
+    res.json(response);
   } catch (error) {
     console.error("❌ Error fetching class comparison:", error);
     res.status(500).json({
       success: false,
-      error: "خطأ في استرجاع مقارنة الفصول"
+      error: "خطأ في استرجاع مقارنة الفصول",
     });
   }
 });
@@ -261,22 +280,22 @@ router.get("/class-comparison", authMiddleware, async (req, res) => {
 // @access  Protected
 router.get("/attendance-frequency", authMiddleware, async (req, res) => {
   try {
-    const { period = 'month', startDate, endDate, classId } = req.query;
+    const { period = "month", startDate, endDate, classId } = req.query;
     const userRole = req.user.role;
 
     // تحديد الفترة الزمنية
     const endDateObj = endDate ? new Date(endDate) : new Date();
     let startDateObj = startDate ? new Date(startDate) : new Date(endDateObj);
-    
+
     if (!startDate) {
       switch (period) {
-        case 'week':
+        case "week":
           startDateObj.setDate(startDateObj.getDate() - 7);
           break;
-        case 'month':
+        case "month":
           startDateObj.setMonth(startDateObj.getMonth() - 1);
           break;
-        case 'quarter':
+        case "quarter":
           startDateObj.setMonth(startDateObj.getMonth() - 3);
           break;
         default:
@@ -284,16 +303,19 @@ router.get("/attendance-frequency", authMiddleware, async (req, res) => {
       }
     }
 
-    const startDateStr = startDateObj.toISOString().split('T')[0];
-    const endDateStr = endDateObj.toISOString().split('T')[0];
+    const startDateStr = startDateObj.toISOString().split("T")[0];
+    const endDateStr = endDateObj.toISOString().split("T")[0];
 
     let filter = {
-      type: 'child',
-      date: { $gte: startDateStr, $lte: endDateStr }
+      type: "child",
+      date: { $gte: startDateStr, $lte: endDateStr },
     };
 
     // إذا كان المستخدم مدرس فصل أو خادم، فقط فصله
-    if ((userRole === 'classTeacher' || userRole === 'servant') && req.user.assignedClass) {
+    if (
+      (userRole === "classTeacher" || userRole === "servant") &&
+      req.user.assignedClass
+    ) {
       filter.class = req.user.assignedClass;
     } else if (classId) {
       filter.class = classId;
@@ -306,59 +328,64 @@ router.get("/attendance-frequency", authMiddleware, async (req, res) => {
         $group: {
           _id: {
             date: "$date",
-            classId: "$class"
+            classId: "$class",
           },
           attendanceCount: { $sum: 1 },
           presentCount: {
-            $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] }
+            $sum: { $cond: [{ $eq: ["$status", "present"] }, 1, 0] },
           },
           absentCount: {
-            $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] }
-          }
-        }
+            $sum: { $cond: [{ $eq: ["$status", "absent"] }, 1, 0] },
+          },
+        },
       },
       {
         $lookup: {
           from: "classes",
           localField: "_id.classId",
           foreignField: "_id",
-          as: "classInfo"
-        }
+          as: "classInfo",
+        },
       },
       {
-        $sort: { "_id.date": 1 }
-      }
+        $sort: { "_id.date": 1 },
+      },
     ]);
 
     // تحليل تكرار أخذ الحضور
     const dateFrequency = {};
-    frequencyData.forEach(record => {
+    frequencyData.forEach((record) => {
       const date = record._id.date;
       if (!dateFrequency[date]) {
         dateFrequency[date] = {
           date,
           classesWithAttendance: 0,
           totalAttendanceRecords: 0,
-          classes: []
+          classes: [],
         };
       }
-      
+
       dateFrequency[date].classesWithAttendance++;
       dateFrequency[date].totalAttendanceRecords += record.attendanceCount;
       dateFrequency[date].classes.push({
         classId: record._id.classId,
-        className: record.classInfo[0]?.name || 'Unknown',
-        category: record.classInfo[0]?.category || 'غير محدد',
+        className: record.classInfo[0]?.name || "Unknown",
+        category: record.classInfo[0]?.category || "غير محدد",
         attendanceCount: record.attendanceCount,
         presentCount: record.presentCount,
-        absentCount: record.absentCount
+        absentCount: record.absentCount,
       });
     });
 
     // إحصائيات عامة
     const totalDays = Object.keys(dateFrequency).length;
-    const avgClassesPerDay = totalDays > 0 ? 
-      Object.values(dateFrequency).reduce((sum, day) => sum + day.classesWithAttendance, 0) / totalDays : 0;
+    const avgClassesPerDay =
+      totalDays > 0
+        ? Object.values(dateFrequency).reduce(
+            (sum, day) => sum + day.classesWithAttendance,
+            0
+          ) / totalDays
+        : 0;
 
     res.json({
       success: true,
@@ -367,16 +394,15 @@ router.get("/attendance-frequency", authMiddleware, async (req, res) => {
         summary: {
           totalDays,
           avgClassesPerDay: Math.round(avgClassesPerDay * 100) / 100,
-          period
-        }
-      }
+          period,
+        },
+      },
     });
-
   } catch (error) {
     console.error("Error fetching attendance frequency:", error);
     res.status(500).json({
       success: false,
-      error: "خطأ في استرجاع تكرار الحضور"
+      error: "خطأ في استرجاع تكرار الحضور",
     });
   }
 });
@@ -387,15 +413,18 @@ router.get("/attendance-frequency", authMiddleware, async (req, res) => {
 router.get("/individual-class/:classId", authMiddleware, async (req, res) => {
   try {
     const { classId } = req.params;
-    const { period = 'month', startDate, endDate } = req.query;
+    const { period = "month", startDate, endDate } = req.query;
     const userRole = req.user.role;
 
     // التحقق من الصلاحيات
-    if ((userRole === 'classTeacher' || userRole === 'servant')) {
-      if (!req.user.assignedClass || req.user.assignedClass.toString() !== classId) {
+    if (userRole === "classTeacher" || userRole === "servant") {
+      if (
+        !req.user.assignedClass ||
+        req.user.assignedClass.toString() !== classId
+      ) {
         return res.status(403).json({
           success: false,
-          error: "غير مسموح - يمكنك رؤية فصلك فقط"
+          error: "غير مسموح - يمكنك رؤية فصلك فقط",
         });
       }
     }
@@ -405,23 +434,23 @@ router.get("/individual-class/:classId", authMiddleware, async (req, res) => {
     if (!classInfo) {
       return res.status(404).json({
         success: false,
-        error: "الفصل غير موجود"
+        error: "الفصل غير موجود",
       });
     }
 
     // تحديد الفترة الزمنية
     const endDateObj = endDate ? new Date(endDate) : new Date();
     let startDateObj = startDate ? new Date(startDate) : new Date(endDateObj);
-    
+
     if (!startDate) {
       switch (period) {
-        case 'week':
+        case "week":
           startDateObj.setDate(startDateObj.getDate() - 7);
           break;
-        case 'month':
+        case "month":
           startDateObj.setMonth(startDateObj.getMonth() - 1);
           break;
-        case 'quarter':
+        case "quarter":
           startDateObj.setMonth(startDateObj.getMonth() - 3);
           break;
         default:
@@ -429,23 +458,25 @@ router.get("/individual-class/:classId", authMiddleware, async (req, res) => {
       }
     }
 
-    const startDateStr = startDateObj.toISOString().split('T')[0];
-    const endDateStr = endDateObj.toISOString().split('T')[0];
+    const startDateStr = startDateObj.toISOString().split("T")[0];
+    const endDateStr = endDateObj.toISOString().split("T")[0];
 
     // الحصول على الأطفال في الفصل
-    const children = await Child.find({ classId }).select('name');
+    const children = await Child.find({ classId }).select("name");
     const totalChildren = children.length;
 
     // بيانات الحضور للفصل
     const attendanceRecords = await Attendance.find({
       class: classId,
-      type: 'child',
-      date: { $gte: startDateStr, $lte: endDateStr }
-    }).populate('person', 'name').sort({ date: 1 });
+      type: "child",
+      date: { $gte: startDateStr, $lte: endDateStr },
+    })
+      .populate("person", "name")
+      .sort({ date: 1 });
 
     // تحليل البيانات حسب الطفل
     const childrenAnalysis = {};
-    children.forEach(child => {
+    children.forEach((child) => {
       childrenAnalysis[child._id] = {
         childId: child._id,
         name: child.name,
@@ -454,17 +485,17 @@ router.get("/individual-class/:classId", authMiddleware, async (req, res) => {
         absentCount: 0,
         attendanceRate: 0,
         consecutiveAbsent: 0,
-        lastAttendance: null
+        lastAttendance: null,
       };
     });
 
     // تحليل السجلات
-    const sessionDates = [...new Set(attendanceRecords.map(r => r.date))];
-    
-    attendanceRecords.forEach(record => {
+    const sessionDates = [...new Set(attendanceRecords.map((r) => r.date))];
+
+    attendanceRecords.forEach((record) => {
       const childId = record.person._id.toString();
       if (childrenAnalysis[childId]) {
-        if (record.status === 'present') {
+        if (record.status === "present") {
           childrenAnalysis[childId].presentCount++;
           childrenAnalysis[childId].lastAttendance = record.date;
         } else {
@@ -474,20 +505,23 @@ router.get("/individual-class/:classId", authMiddleware, async (req, res) => {
     });
 
     // حساب معدلات الحضور والغياب المتتالي
-    Object.values(childrenAnalysis).forEach(child => {
+    Object.values(childrenAnalysis).forEach((child) => {
       const totalRecords = child.presentCount + child.absentCount;
-      child.attendanceRate = totalRecords > 0 ? Math.round((child.presentCount / totalRecords) * 100) : 0;
+      child.attendanceRate =
+        totalRecords > 0
+          ? Math.round((child.presentCount / totalRecords) * 100)
+          : 0;
       child.totalSessions = sessionDates.length;
-      
+
       // حساب الغياب المتتالي
       const recentRecords = attendanceRecords
-        .filter(r => r.person._id.toString() === child.childId.toString())
+        .filter((r) => r.person._id.toString() === child.childId.toString())
         .sort((a, b) => new Date(b.date) - new Date(a.date))
         .slice(0, 10);
-      
+
       let consecutiveCount = 0;
       for (const record of recentRecords) {
-        if (record.status === 'absent') {
+        if (record.status === "absent") {
           consecutiveCount++;
         } else {
           break;
@@ -497,10 +531,15 @@ router.get("/individual-class/:classId", authMiddleware, async (req, res) => {
     });
 
     // إحصائيات عامة للفصل
-    const presentTotal = attendanceRecords.filter(r => r.status === 'present').length;
-    const absentTotal = attendanceRecords.filter(r => r.status === 'absent').length;
+    const presentTotal = attendanceRecords.filter(
+      (r) => r.status === "present"
+    ).length;
+    const absentTotal = attendanceRecords.filter(
+      (r) => r.status === "absent"
+    ).length;
     const totalRecords = presentTotal + absentTotal;
-    const classAttendanceRate = totalRecords > 0 ? (presentTotal / totalRecords) * 100 : 0;
+    const classAttendanceRate =
+      totalRecords > 0 ? (presentTotal / totalRecords) * 100 : 0;
 
     res.json({
       success: true,
@@ -508,31 +547,128 @@ router.get("/individual-class/:classId", authMiddleware, async (req, res) => {
         classInfo: {
           id: classInfo._id,
           name: classInfo.name,
-          category: classInfo.category || 'غير محدد',
-          totalChildren
+          category: classInfo.category || "غير محدد",
+          totalChildren,
         },
         period: {
           start: startDateStr,
           end: endDateStr,
-          totalSessions: sessionDates.length
+          totalSessions: sessionDates.length,
         },
         overallStats: {
           totalRecords,
           presentTotal,
           absentTotal,
           attendanceRate: Math.round(classAttendanceRate * 100) / 100,
-          avgAttendancePerSession: sessionDates.length > 0 ? Math.round((presentTotal / sessionDates.length) * 100) / 100 : 0
+          avgAttendancePerSession:
+            sessionDates.length > 0
+              ? Math.round((presentTotal / sessionDates.length) * 100) / 100
+              : 0,
         },
         childrenAnalysis: Object.values(childrenAnalysis),
-        sessionDates
-      }
+        sessionDates,
+      },
     });
-
   } catch (error) {
     console.error("Error fetching individual class statistics:", error);
     res.status(500).json({
       success: false,
-      error: "خطأ في استرجاع إحصائيات الفصل"
+      error: "خطأ في استرجاع إحصائيات الفصل",
+    });
+  }
+});
+
+// @route   GET /api/advanced-statistics/church
+// @desc    Get church-wide statistics for dashboard
+// @access  Protected
+router.get("/church", authMiddleware, async (req, res) => {
+  try {
+    console.log("🏛️ Fetching church statistics for dashboard");
+
+    // Get today's date as string (YYYY-MM-DD format)
+    const today = new Date().toISOString().split("T")[0];
+    console.log("📅 Today's date:", today);
+
+    // Get total children count
+    const totalChildren = await Child.countDocuments();
+    console.log("👶 Total children:", totalChildren);
+
+    // Get total classes count
+    const totalClasses = await Class.countDocuments();
+    console.log("🏫 Total classes:", totalClasses);
+
+    // Get total servants count
+    const totalServants = await User.countDocuments({
+      role: { $in: ["servant", "classTeacher"] },
+    });
+    console.log("🙏 Total servants:", totalServants);
+
+    // Get today's attendance records
+    const todaysAttendance = await Attendance.find({
+      date: today,
+      type: "child",
+    });
+    console.log("📊 Today's attendance records:", todaysAttendance.length);
+
+    // Calculate present and absent for today
+    const presentToday = todaysAttendance.filter(
+      (record) => record.status === "present"
+    ).length;
+    const absentToday = todaysAttendance.filter(
+      (record) => record.status === "absent"
+    ).length;
+    const totalTodayRecords = presentToday + absentToday;
+
+    console.log("✅ Present today:", presentToday);
+    console.log("❌ Absent today:", absentToday);
+
+    // Calculate attendance rate (for today or overall if no data today)
+    let attendanceRate = 0;
+    if (totalTodayRecords > 0) {
+      attendanceRate = Math.round((presentToday / totalTodayRecords) * 100);
+    } else {
+      // If no attendance data for today, calculate overall attendance rate for last 30 days
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split("T")[0];
+
+      const recentAttendance = await Attendance.find({
+        date: { $gte: thirtyDaysAgoStr, $lte: today },
+        type: "child",
+      });
+
+      const recentPresent = recentAttendance.filter(
+        (r) => r.status === "present"
+      ).length;
+      const recentTotal = recentAttendance.length;
+
+      if (recentTotal > 0) {
+        attendanceRate = Math.round((recentPresent / recentTotal) * 100);
+      }
+    }
+
+    console.log("📈 Attendance rate:", attendanceRate + "%");
+
+    const response = {
+      success: true,
+      data: {
+        totalChildren,
+        totalClasses,
+        totalServants,
+        presentToday,
+        absentToday,
+        attendanceRate,
+        date: today,
+      },
+    };
+
+    console.log("✅ Sending church statistics:", response.data);
+    res.json(response);
+  } catch (error) {
+    console.error("❌ Error fetching church statistics:", error);
+    res.status(500).json({
+      success: false,
+      error: "خطأ في استرجاع إحصائيات الكنيسة",
     });
   }
 });

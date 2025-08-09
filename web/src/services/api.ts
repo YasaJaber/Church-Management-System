@@ -166,8 +166,9 @@ export const childrenAPI = {
       console.log('Fetching all children with filters:', filters)
       const params = new URLSearchParams(filters as Record<string, string>)
       const response = await api.get(`/children?${params}`)
-      console.log('Children fetched successfully:', response.data.length, 'children')
-      return { success: true, data: response.data.data || response.data }
+      const children = response.data.data || response.data || []
+      console.log('Children fetched successfully:', children.length, 'children')
+      return { success: true, data: children }
     } catch (error: any) {
       console.error('Error fetching children:', error)
       return {
@@ -444,8 +445,9 @@ export const classesAPI = {
     try {
       console.log('Fetching all classes')
       const response = await api.get('/classes')
-      console.log('Classes fetched successfully:', response.data.length, 'classes')
-      return { success: true, data: response.data.data || response.data }
+      const classes = response.data.data || response.data || []
+      console.log('Classes fetched successfully:', classes.length, 'classes')
+      return { success: true, data: classes }
     } catch (error: any) {
       console.error('Error fetching classes:', error)
       return {
