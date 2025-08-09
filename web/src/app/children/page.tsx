@@ -132,20 +132,8 @@ export default function ChildrenPage() {
                    !name.includes('experimental')
           })
           
-          // استخراج IDs الفصول من الأطفال الموجودين
-          const classIdsWithChildren = Array.from(new Set(
-            loadedChildren
-              .filter(child => {
-                const childClassId = child.classId || child.class?._id
-                return childClassId && childClassId !== 'undefined'
-              })
-              .map(child => child.classId || child.class?._id)
-          ))
-          
-          // فلترة الفصول لتعرض فقط التي تحتوي على أطفال
-          availableClasses = allClasses.filter((cls: any) => 
-            classIdsWithChildren.includes(cls._id)
-          )
+          // للإداري وأمين الخدمة: عرض جميع الفصول (حتى الفاضية) لإمكانية إضافة أطفال جدد
+          availableClasses = allClasses
         }
       } else if ((user?.role === 'classTeacher' || user?.role === 'servant') && user?.assignedClass) {
         // مدرس الفصل والخادم يرون فصلهم فقط إذا كان به أطفال
@@ -264,7 +252,11 @@ export default function ChildrenPage() {
   }
 
   const fixChildrenWithoutClass = async () => {
-    const childrenWithoutClass = children.filter(child => !child.classId || child.classId === 'undefined')
+    const childrenWithoutClass = children.filter(child => {
+      // Prioritize class._id over classId to avoid toObject() issues
+      const childClassId = child.class?._id || child.classId
+      return !childClassId || childClassId?.toString() === 'undefined'
+    })
     
     if (childrenWithoutClass.length === 0) {
       toast.success('جميع الأطفال لديهم فصول مُعينة')
@@ -342,42 +334,46 @@ export default function ChildrenPage() {
   const filteredChildren = children.filter(child => {
     const matchesSearch = child.name.toLowerCase().includes(searchTerm.toLowerCase())
     
-    // Handle both classId (string) and class (object) formats
-    const childClassId = child.classId || child.class?._id
-    const matchesClass = classFilter === 'all' || childClassId === classFilter
+    // Prioritize class._id over classId to avoid toObject() issues
+    const childClassId = child.class?._id || child.classId
+    const matchesClass = classFilter === 'all' || childClassId?.toString() === classFilter
     
     return matchesSearch && matchesClass
   })
 
   // Add class names to children
   const enrichedChildren = filteredChildren.map(child => {
-    // Handle both formats: classId (string) or class (object)
-    const childClassId = child.classId || child.class?._id
-    const childClass = classes.find(cls => cls._id === childClassId)
-    
-    return {
-      ...child,
-      className: child.class?.name || child.className || childClass?.name || 'غير محدد'
-    }
+    // Don't use spread operator - just add className property to avoid mongoose issues
+    child.className = child.class?.name || child.className || 'غير محدد'
+    return child
   })
 
   // Group children by class for grouped view
   const groupedChildren = classes.map(classItem => {
     const classChildren = enrichedChildren.filter(child => {
-      const childClassId = child.classId || child.class?._id
-      return childClassId === classItem._id
+      // Prioritize class._id over classId to avoid toObject() issues
+      const childClassId = child.class?._id || child.classId
+      return childClassId?.toString() === classItem._id.toString()
     })
     return {
       class: classItem,
       children: classChildren,
       count: classChildren.length
     }
-  }).filter(group => group.count > 0) // Only show classes that have children
+  }).filter(group => {
+    // للإداري وأمين الخدمة: عرض كل الفصول حتى الفاضية
+    if (user?.role === 'admin' || user?.role === 'serviceLeader') {
+      return true
+    }
+    // لباقي المستخدمين: عرض الفصول التي بها أطفال فقط
+    return group.count > 0
+  })
 
   // Children without class
   const childrenWithoutClass = enrichedChildren.filter(child => {
-    const childClassId = child.classId || child.class?._id
-    return !childClassId || childClassId === 'undefined'
+    // Prioritize class._id over classId to avoid toObject() issues
+    const childClassId = child.class?._id || child.classId
+    return !childClassId || childClassId?.toString() === 'undefined'
   })
   if (childrenWithoutClass.length > 0) {
     groupedChildren.push({

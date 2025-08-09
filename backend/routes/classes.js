@@ -17,18 +17,33 @@ router.get("/", authMiddleware, async (req, res) => {
     console.log("=".repeat(50));
 
     let classes;
-    
+
     // Role-based access control
-    if (req.user.role === "admin") {
-      // Admin sees all classes
+    if (req.user.role === "admin" || req.user.role === "serviceLeader") {
+      // Admin and Service Leader see all classes
       classes = await Class.find().sort({ order: 1 });
-      console.log("👑 Admin access - showing all", classes.length, "classes");
-    } else if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
+      console.log(
+        `👑 ${req.user.role} access - showing all`,
+        classes.length,
+        "classes"
+      );
+    } else if (
+      (req.user.role === "servant" || req.user.role === "classTeacher") &&
+      req.user.assignedClass
+    ) {
       // Servant or Class Teacher sees only their assigned class
       classes = [req.user.assignedClass];
-      console.log("👤 Servant/ClassTeacher access - showing assigned class:", req.user.assignedClass.name);
+      console.log(
+        "👤 Servant/ClassTeacher access - showing assigned class:",
+        req.user.assignedClass.name
+      );
     } else {
-      console.log("❌ Access denied - role:", req.user.role, "assignedClass:", req.user.assignedClass);
+      console.log(
+        "❌ Access denied - role:",
+        req.user.role,
+        "assignedClass:",
+        req.user.assignedClass
+      );
       return res.status(403).json({
         success: false,
         error: "Access denied",

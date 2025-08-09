@@ -4,7 +4,7 @@ const classSchema = new mongoose.Schema(
   {
     stage: {
       type: String,
-      enum: ["Nursery", "Primary", "Preparatory", "Secondary"],
+      enum: ["Nursery", "Primary", "Preparatory", "Secondary", "Coaching"],
       required: true,
     },
     grade: {
