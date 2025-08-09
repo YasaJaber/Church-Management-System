@@ -504,18 +504,20 @@ router.get("/child/:childId", authMiddleware, async (req, res) => {
       success: true,
       data: {
         child: {
-          id: child._id,
+          _id: child._id,
           name: child.name,
-          className: child.class?.name || "غير محدد",
-          category: child.class?.category || "غير محدد",
-          isActive: child.isActive
+          class: child.class,
+          parentName: child.parentName || "",
+          phone: child.phone || "",
+          notes: child.notes || ""
         },
-        statistics: {
-          totalAttendanceRecords: totalRecords,
+        summary: {
+          totalRecords: totalRecords,
           presentCount,
           absentCount,
           attendanceRate,
-          consecutiveAttendance,
+          currentStreak: consecutiveAttendance,
+          maxStreak: consecutiveAttendance, // For now, use same as current
           recentAttendanceRate, // Last 3 months
           lastAttendance: attendanceRecords.length > 0 ? attendanceRecords[0].date : null
         },
