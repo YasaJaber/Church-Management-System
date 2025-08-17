@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContextSimple'
-import { childrenAPI } from '@/services/api'
+import { childrenAPI, statisticsAPI } from '@/services/api'
 import { 
   PhoneIcon, 
   UserIcon, 
@@ -141,7 +141,8 @@ export default function ChildrenTrackingPage() {
   const fetchIndividualStatistics = async (childId: string) => {
     try {
       console.log('🔄 Fetching individual statistics for child:', childId)
-      const response = await childrenAPI.getIndividualStatistics(childId)
+      // Use the same API endpoint that works for service leader dashboard
+      const response = await statisticsAPI.getChildStatistics(childId)
       
       if (response.success) {
         console.log('📊 Individual statistics response:', response.data)
