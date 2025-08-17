@@ -592,7 +592,7 @@ export const statisticsAPI = {
       }
 
       console.log('Fetching individual child statistics for:', childId)
-      const response = await api.get(`/statistics/child/${childId}`)
+      const response = await api.get(`/children/statistics/individual/${childId}`)
       console.log('Child statistics fetched successfully')
       
       statisticsCache[cacheKey] = response.data
