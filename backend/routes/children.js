@@ -817,37 +817,29 @@ router.get("/statistics/individual/:id", authMiddleware, async (req, res) => {
       attendanceMap[record.date] = record.status;
     });
 
-    // Calculate current streak (from most recent Friday)
-    for (const fridayDate of fridayDates) {
-      const status = attendanceMap[fridayDate];
-      if (status === "present") {
-        if (currentStreakType === null) {
-          currentStreakType = "present";
-          currentStreak = 1;
-        } else if (currentStreakType === "present") {
+    // Calculate current streak from actual records (not Friday assumptions)
+    if (attendanceRecords.length > 0) {
+      const mostRecentStatus = attendanceRecords[0].status;
+      currentStreakType = mostRecentStatus;
+      currentStreak = 1;
+      
+      for (let i = 1; i < attendanceRecords.length; i++) {
+        if (attendanceRecords[i].status === mostRecentStatus) {
           currentStreak++;
         } else {
           break;
         }
-      } else if (status === "absent" || !status) {
-        if (currentStreakType === null) {
-          currentStreakType = "absent";
-          currentStreak = 1;
-        } else if (currentStreakType === "absent") {
-          currentStreak++;
-        } else {
-          break;
-        }
-      } else {
-        break; // Late breaks the streak
       }
     }
 
-    // Calculate max streaks from historical data
+    // Calculate max streaks from historical data (oldest to newest)
     let tempPresentStreak = 0;
     let tempAbsentStreak = 0;
 
-    for (const record of attendanceRecords.reverse()) {
+    // Create a copy of records in chronological order (oldest first)
+    const chronologicalRecords = [...attendanceRecords].reverse();
+    
+    for (const record of chronologicalRecords) {
       if (record.status === "present") {
         tempPresentStreak++;
         tempAbsentStreak = 0;
