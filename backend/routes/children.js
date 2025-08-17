@@ -698,42 +698,13 @@ router.get("/statistics/individual/:id", authMiddleware, adminOrServiceLeader, a
     // Get all attendance records for this child - try multiple query methods
     console.log(`🔍 Searching for attendance records for child ID: ${childId}`);
     
-    // First try with current query
+    // Use the same query method as statistics-fresh.js which works
     let attendanceRecords = await Attendance.find({
       person: childId,
-      personModel: "Child",
       type: "child",
     }).sort({ date: -1 });
     
-    console.log(`📊 Method 1 - Found ${attendanceRecords.length} records with personModel: "Child", type: "child"`);
-    
-    // If no records found, try without personModel
-    if (attendanceRecords.length === 0) {
-      attendanceRecords = await Attendance.find({
-        person: childId,
-        type: "child",
-      }).sort({ date: -1 });
-      console.log(`📊 Method 2 - Found ${attendanceRecords.length} records with type: "child" only`);
-    }
-    
-    // If still no records, try without type
-    if (attendanceRecords.length === 0) {
-      attendanceRecords = await Attendance.find({
-        person: childId,
-      }).sort({ date: -1 });
-      console.log(`📊 Method 3 - Found ${attendanceRecords.length} records with person only`);
-    }
-    
-    // If still no records, try with ObjectId conversion
-    if (attendanceRecords.length === 0) {
-      const mongoose = require('mongoose');
-      attendanceRecords = await Attendance.find({
-        person: new mongoose.Types.ObjectId(childId),
-      }).sort({ date: -1 });
-      console.log(`📊 Method 4 - Found ${attendanceRecords.length} records with ObjectId conversion`);
-    }
-    
-    console.log(`📊 Final result: ${attendanceRecords.length} attendance records for child ${childId}`);
+    console.log(`📊 Found ${attendanceRecords.length} attendance records using working query method`);
     console.log(`📊 First few records:`, attendanceRecords.slice(0, 3).map(r => ({ 
       date: r.date, 
       status: r.status, 
