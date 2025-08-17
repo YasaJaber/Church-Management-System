@@ -61,25 +61,33 @@ interface IndividualStats {
     totalRecords: number
     presentCount: number
     absentCount: number
-    lateCount: number
+    lateCount?: number
     attendanceRate: number
     currentStreak: number
-    currentStreakType: string
-    maxPresentStreak: number
-    maxAbsentStreak: number
+    currentStreakType?: string
+    maxPresentStreak?: number
+    maxAbsentStreak?: number
+    maxStreak?: number
+    recentAttendanceRate?: number
+    lastAttendance?: string
   }
-  dates: {
+  dates?: {
     presentDates: string[]
     absentDates: string[]
     lateDates: string[]
   }
-  recentActivity: Array<{
+  recentActivity?: Array<{
     date: string
     status: string
     dayName: string
     notes: string
   }>
-  monthlyBreakdown: Array<{
+  recentAttendance?: Array<{
+    date: string
+    status: string
+    notes: string
+  }>
+  monthlyBreakdown?: Array<{
     month: string
     monthName: string
     present: number
@@ -533,7 +541,7 @@ export default function ChildrenTrackingPage() {
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">إحصائيات المواظبة</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="text-center">
-                    <div className={`text-xl font-bold mb-1 ${getStreakColor(selectedChild.summary.currentStreakType)}`}>
+                    <div className={`text-xl font-bold mb-1 ${getStreakColor(selectedChild.summary.currentStreakType || 'present')}`}>
                       {selectedChild.summary.currentStreak}
                     </div>
                     <div className="text-sm text-gray-600">
@@ -561,8 +569,8 @@ export default function ChildrenTrackingPage() {
               <div className="mb-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">النشاط الأخير</h3>
                 <div className="space-y-2">
-                  {selectedChild.recentActivity && selectedChild.recentActivity.length > 0 ? (
-                    selectedChild.recentActivity.map((activity, index) => (
+                  {selectedChild.recentAttendance && selectedChild.recentAttendance.length > 0 ? (
+                    selectedChild.recentAttendance.map((activity, index) => (
                       <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                         <div className="flex items-center space-x-3 space-x-reverse">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
@@ -582,12 +590,14 @@ export default function ChildrenTrackingPage() {
                               {activity.status === 'present' ? 'حاضر' : 
                                activity.status === 'absent' ? 'غائب' : 'متأخر'}
                             </div>
-                            <div className="text-sm text-gray-600">{activity.dayName}</div>
+                            <div className="text-sm text-gray-600">
+                              {new Date(activity.date + 'T00:00:00').toLocaleDateString('ar-EG', { weekday: 'long' })}
+                            </div>
                           </div>
                         </div>
                         <div className="text-sm text-gray-600 text-left">
                           <div className="font-medium">
-                            {new Date(activity.date).toLocaleDateString('ar-EG', {
+                            {new Date(activity.date + 'T00:00:00').toLocaleDateString('ar-EG', {
                               day: 'numeric',
                               month: 'short'
                             })}
@@ -613,7 +623,7 @@ export default function ChildrenTrackingPage() {
               </div>
 
               {/* Monthly Breakdown */}
-              {selectedChild.monthlyBreakdown.length > 0 && (
+              {selectedChild.monthlyBreakdown && selectedChild.monthlyBreakdown.length > 0 && (
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-3">الإحصائيات الشهرية</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
