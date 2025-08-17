@@ -140,9 +140,13 @@ export default function ChildrenTrackingPage() {
 
   const fetchIndividualStatistics = async (childId: string) => {
     try {
+      console.log('🔄 Fetching individual statistics for child:', childId)
       const response = await childrenAPI.getIndividualStatistics(childId)
       
       if (response.success) {
+        console.log('📊 Individual statistics response:', response.data)
+        console.log('📊 Recent activity length:', response.data.recentActivity?.length || 0)
+        console.log('📊 Recent activity sample:', response.data.recentActivity?.slice(0, 2) || [])
         setSelectedChild(response.data)
         setShowModal(true)
         console.log('📊 Individual statistics loaded for child:', childId)
@@ -556,44 +560,54 @@ export default function ChildrenTrackingPage() {
               <div className="mb-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-3">النشاط الأخير</h3>
                 <div className="space-y-2">
-                  {selectedChild.recentActivity.map((activity, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center space-x-3 space-x-reverse">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          activity.status === 'present' ? 'bg-green-100' : 
-                          activity.status === 'absent' ? 'bg-red-100' : 'bg-yellow-100'
-                        }`}>
-                          {activity.status === 'present' ? (
-                            <CheckCircleIcon className="w-4 h-4 text-green-600" />
-                          ) : activity.status === 'absent' ? (
-                            <XCircleIcon className="w-4 h-4 text-red-600" />
-                          ) : (
-                            <ClockIcon className="w-4 h-4 text-yellow-600" />
-                          )}
-                        </div>
-                        <div>
-                          <div className="font-medium text-gray-900">
-                            {activity.status === 'present' ? 'حاضر' : 
-                             activity.status === 'absent' ? 'غائب' : 'متأخر'}
+                  {selectedChild.recentActivity && selectedChild.recentActivity.length > 0 ? (
+                    selectedChild.recentActivity.map((activity, index) => (
+                      <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex items-center space-x-3 space-x-reverse">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            activity.status === 'present' ? 'bg-green-100' : 
+                            activity.status === 'absent' ? 'bg-red-100' : 'bg-yellow-100'
+                          }`}>
+                            {activity.status === 'present' ? (
+                              <CheckCircleIcon className="w-4 h-4 text-green-600" />
+                            ) : activity.status === 'absent' ? (
+                              <XCircleIcon className="w-4 h-4 text-red-600" />
+                            ) : (
+                              <ClockIcon className="w-4 h-4 text-yellow-600" />
+                            )}
                           </div>
-                          <div className="text-sm text-gray-600">{activity.dayName}</div>
+                          <div>
+                            <div className="font-medium text-gray-900">
+                              {activity.status === 'present' ? 'حاضر' : 
+                               activity.status === 'absent' ? 'غائب' : 'متأخر'}
+                            </div>
+                            <div className="text-sm text-gray-600">{activity.dayName}</div>
+                          </div>
+                        </div>
+                        <div className="text-sm text-gray-600 text-left">
+                          <div className="font-medium">
+                            {new Date(activity.date).toLocaleDateString('ar-EG', {
+                              day: 'numeric',
+                              month: 'short'
+                            })}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            {new Date(activity.date).toLocaleDateString('ar-EG', {
+                              year: 'numeric'
+                            })}
+                          </div>
                         </div>
                       </div>
-                      <div className="text-sm text-gray-600 text-left">
-                        <div className="font-medium">
-                          {new Date(activity.date).toLocaleDateString('ar-EG', {
-                            day: 'numeric',
-                            month: 'short'
-                          })}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          {new Date(activity.date).toLocaleDateString('ar-EG', {
-                            year: 'numeric'
-                          })}
-                        </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <div className="mb-4">
+                        <ClockIcon className="w-16 h-16 text-gray-300 mx-auto" />
                       </div>
+                      <p className="text-lg font-medium mb-2">لا توجد سجلات حضور</p>
+                      <p className="text-sm">ستظهر سجلات الحضور هنا عند تسجيلها</p>
                     </div>
-                  ))}
+                  )}
                 </div>
               </div>
 

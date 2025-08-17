@@ -695,12 +695,17 @@ router.get("/statistics/individual/:id", authMiddleware, adminOrServiceLeader, a
       type: "child",
     }).sort({ date: -1 });
     
+    console.log(`📊 Found ${attendanceRecords.length} attendance records for child ${childId}`);
+    console.log(`📊 First few records:`, attendanceRecords.slice(0, 3).map(r => ({ date: r.date, status: r.status })));
+    
     // Calculate basic statistics
     const totalRecords = attendanceRecords.length;
     const presentCount = attendanceRecords.filter(r => r.status === "present").length;
     const absentCount = attendanceRecords.filter(r => r.status === "absent").length;
     const lateCount = attendanceRecords.filter(r => r.status === "late").length;
     const attendanceRate = totalRecords > 0 ? ((presentCount / totalRecords) * 100).toFixed(1) : 0;
+    
+    console.log(`📊 Statistics: total=${totalRecords}, present=${presentCount}, absent=${absentCount}, late=${lateCount}, rate=${attendanceRate}%`);
     
     // Calculate consecutive attendance/absence streaks
     let currentStreak = 0;
@@ -767,6 +772,9 @@ router.get("/statistics/individual/:id", authMiddleware, adminOrServiceLeader, a
       dayName: new Date(record.date + 'T00:00:00').toLocaleDateString('ar-EG', { weekday: 'long' }),
       notes: record.notes || ''
     }));
+    
+    console.log(`📊 Recent activity created with ${recentActivity.length} records`);
+    console.log(`📊 Recent activity sample:`, recentActivity.slice(0, 2));
     
     // Monthly breakdown for the current year
     const currentYear = new Date().getFullYear();
