@@ -9,7 +9,6 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContextSimple'
 import { childrenAPI } from '@/services/api'
 import { 
-  CalendarIcon, 
   PhoneIcon, 
   UserIcon, 
   ChartBarIcon,
@@ -580,8 +579,18 @@ export default function ChildrenTrackingPage() {
                           <div className="text-sm text-gray-600">{activity.dayName}</div>
                         </div>
                       </div>
-                      <div className="text-sm text-gray-600">
-                        {new Date(activity.date).toLocaleDateString('ar-EG')}
+                      <div className="text-sm text-gray-600 text-left">
+                        <div className="font-medium">
+                          {new Date(activity.date).toLocaleDateString('ar-EG', {
+                            day: 'numeric',
+                            month: 'short'
+                          })}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {new Date(activity.date).toLocaleDateString('ar-EG', {
+                            year: 'numeric'
+                          })}
+                        </div>
                       </div>
                     </div>
                   ))}
