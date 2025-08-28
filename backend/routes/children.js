@@ -822,7 +822,7 @@ router.get("/statistics/individual/:id", authMiddleware, async (req, res) => {
       const mostRecentStatus = attendanceRecords[0].status;
       currentStreakType = mostRecentStatus;
       currentStreak = 1;
-      
+
       for (let i = 1; i < attendanceRecords.length; i++) {
         if (attendanceRecords[i].status === mostRecentStatus) {
           currentStreak++;
@@ -838,7 +838,7 @@ router.get("/statistics/individual/:id", authMiddleware, async (req, res) => {
 
     // Create a copy of records in chronological order (oldest first)
     const chronologicalRecords = [...attendanceRecords].reverse();
-    
+
     for (const record of chronologicalRecords) {
       if (record.status === "present") {
         tempPresentStreak++;

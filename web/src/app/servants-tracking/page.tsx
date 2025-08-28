@@ -39,24 +39,30 @@ interface ServantStatistics {
     _id: string
     name: string
     phone?: string
-    role?: string
+    username?: string
+    createdAt?: string
   }
   summary: {
     totalRecords: number
     presentCount: number
     absentCount: number
+    lateCount: number
     attendanceRate: number
     currentStreak: number
-    maxStreak: number
+    currentStreakType?: string
+    maxPresentStreak: number
+    maxAbsentStreak: number
   }
   dates: {
     presentDates: string[]
     absentDates: string[]
+    lateDates?: string[]
   }
   recentActivity: Array<{
     date: string
     status: string
     dayName: string
+    notes?: string
   }>
   monthlyBreakdown: Array<{
     month: string
@@ -168,7 +174,7 @@ export default function ServantsTrackingPage() {
   const loadServantStatistics = async (servant: Servant) => {
     setStatsLoading(true)
     try {
-      const response = await servantsAPI.getStatistics(servant._id)
+      const response = await servantsAPI.getIndividualStatistics(servant._id)
       if (response.success) {
         setServantStats(response.data)
       } else {
@@ -473,7 +479,7 @@ export default function ServantsTrackingPage() {
               ) : servantStats ? (
                 <div className="space-y-6">
                   {/* Summary Statistics */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div className="bg-green-50 p-4 rounded-lg text-center">
                       <div className="text-2xl font-bold text-green-600">
                         {servantStats.summary.presentCount}
@@ -492,7 +498,40 @@ export default function ServantsTrackingPage() {
                       </div>
                       <div className="text-sm text-gray-600">نسبة الحضور</div>
                     </div>
+                    <div className="bg-purple-50 p-4 rounded-lg text-center">
+                      <div className="text-2xl font-bold text-purple-600">
+                        {servantStats.summary.totalRecords}
+                      </div>
+                      <div className="text-sm text-gray-600">إجمالي السجلات</div>
+                    </div>
                   </div>
+
+                  {/* Current Streak Info */}
+                  {servantStats.summary.currentStreak > 0 && (
+                    <div className={`p-4 rounded-lg border-l-4 ${
+                      servantStats.summary.currentStreakType === 'present' 
+                        ? 'bg-green-50 border-green-500' 
+                        : 'bg-red-50 border-red-500'
+                    }`}>
+                      <div className="flex items-center">
+                        <div className={`text-lg font-semibold ${
+                          servantStats.summary.currentStreakType === 'present' 
+                            ? 'text-green-800' 
+                            : 'text-red-800'
+                        }`}>
+                          {servantStats.summary.currentStreakType === 'present' 
+                            ? `🔥 مواظبة حالية: ${servantStats.summary.currentStreak} أسبوع متتالي` 
+                            : `⚠️ غياب حالي: ${servantStats.summary.currentStreak} أسبوع متتالي`
+                          }
+                        </div>
+                      </div>
+                      {servantStats.summary.maxPresentStreak > 0 && (
+                        <div className="text-sm text-gray-600 mt-1">
+                          أطول مواظبة: {servantStats.summary.maxPresentStreak} أسبوع
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Monthly Breakdown */}
                   {servantStats.monthlyBreakdown && servantStats.monthlyBreakdown.length > 0 && (
@@ -551,20 +590,30 @@ export default function ServantsTrackingPage() {
                       <h3 className="text-lg font-medium text-gray-900 mb-4">النشاط الأخير</h3>
                       <div className="space-y-2">
                         {servantStats.recentActivity.slice(0, 10).map((activity, index) => (
-                          <div key={index} className="flex items-center justify-between py-2 px-4 bg-gray-50 rounded-lg">
-                            <div className="flex items-center">
-                              <div className={`w-3 h-3 rounded-full ml-3 ${
-                                activity.status === 'present' ? 'bg-green-500' : 'bg-red-500'
-                              }`}></div>
-                              <span className="text-sm text-gray-900">
-                                {activity.dayName} - {new Date(activity.date).toLocaleDateString('ar-EG')}
+                          <div key={index} className="py-2 px-4 bg-gray-50 rounded-lg">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                <div className={`w-3 h-3 rounded-full ml-3 ${
+                                  activity.status === 'present' ? 'bg-green-500' : 
+                                  activity.status === 'late' ? 'bg-yellow-500' : 'bg-red-500'
+                                }`}></div>
+                                <span className="text-sm text-gray-900">
+                                  {activity.dayName} - {new Date(activity.date).toLocaleDateString('ar-EG')}
+                                </span>
+                              </div>
+                              <span className={`text-sm font-medium ${
+                                activity.status === 'present' ? 'text-green-600' : 
+                                activity.status === 'late' ? 'text-yellow-600' : 'text-red-600'
+                              }`}>
+                                {activity.status === 'present' ? 'حاضر' : 
+                                 activity.status === 'late' ? 'متأخر' : 'غائب'}
                               </span>
                             </div>
-                            <span className={`text-sm font-medium ${
-                              activity.status === 'present' ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                              {activity.status === 'present' ? 'حاضر' : 'غائب'}
-                            </span>
+                            {activity.notes && (
+                              <div className="mt-2 text-xs text-gray-500 pr-6">
+                                📝 {activity.notes}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

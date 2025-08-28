@@ -967,11 +967,41 @@ router.get(
         });
       }
 
-      // Get all attendance records for this servant
-      const attendanceRecords = await Attendance.find({
+      // Get all attendance records for this servant from both models
+      // Check Attendance model (newer system)
+      const attendanceRecords1 = await Attendance.find({
         person: servantId,
         personModel: "User",
       }).sort({ date: -1 });
+
+      // Check ServantAttendance model (older system)
+      const ServantAttendance = require("../models/ServantAttendance");
+      const attendanceRecords2 = await ServantAttendance.find({
+        servantId: servantId,
+      }).sort({ date: -1 });
+
+      console.log(
+        `📊 Found ${attendanceRecords1.length} records in Attendance model`
+      );
+      console.log(
+        `📊 Found ${attendanceRecords2.length} records in ServantAttendance model`
+      );
+
+      // Combine and normalize the records
+      const attendanceRecords = [
+        ...attendanceRecords1.map((record) => ({
+          date: record.date,
+          status: record.status,
+          notes: record.notes || "",
+          _id: record._id,
+        })),
+        ...attendanceRecords2.map((record) => ({
+          date: record.date,
+          status: record.status,
+          notes: record.notes || "",
+          _id: record._id,
+        })),
+      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       // Calculate basic statistics
       const totalRecords = attendanceRecords.length;
