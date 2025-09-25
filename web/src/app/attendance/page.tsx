@@ -14,7 +14,8 @@ import {
   XCircleIcon,
   CalendarIcon,
   UserGroupIcon,
-  ClockIcon
+  ClockIcon,
+  DocumentCheckIcon
 } from '@heroicons/react/24/outline'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import AttendanceModal from '@/components/AttendanceModal'
@@ -29,6 +30,9 @@ interface Child {
   attendanceId?: string
   notes?: string
   hasAttendanceRecord?: boolean // جديد: لمعرفة إذا كان له تسجيل حضور أصلاً
+  // Add batch editing state
+  batchStatus?: "present" | "absent" | null
+  batchNotes?: string
 }
 
 interface Class {
@@ -53,6 +57,10 @@ export default function AttendancePage() {
     isOpen: false,
     child: null
   })
+
+  // Batch mode state
+  const [batchMode, setBatchMode] = useState(false)
+  const [batchSaving, setBatchSaving] = useState(false)
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -137,7 +145,10 @@ export default function AttendancePage() {
           isPresent: child.attendance ? child.attendance.status === 'present' : undefined, // undefined means not recorded
           attendanceId: child.attendance?._id,
           notes: child.attendance?.notes || '',
-          hasAttendanceRecord: !!child.attendance // لمعرفة إذا كان له تسجيل أصلاً
+          hasAttendanceRecord: !!child.attendance, // لمعرفة إذا كان له تسجيل أصلاً
+          // Reset batch state when loading new data
+          batchStatus: null,
+          batchNotes: "",
         }))
         
         setChildren(childrenWithAttendance)
@@ -272,6 +283,257 @@ export default function AttendancePage() {
     }
   }
 
+  // Toggle child's batch status
+  const toggleChildBatchStatus = (
+    childId: string,
+    status: "present" | "absent"
+  ) => {
+    setChildren((prev) =>
+      prev.map((child) => {
+        if (child._id === childId) {
+          const newStatus = child.batchStatus === status ? null : status;
+          return {
+            ...child,
+            batchStatus: newStatus,
+          };
+        }
+        return child;
+      })
+    );
+  };
+
+  // Update batch notes for a child
+  const updateChildBatchNotes = (childId: string, notes: string) => {
+    setChildren((prev) =>
+      prev.map((child) => {
+        if (child._id === childId) {
+          return {
+            ...child,
+            batchNotes: notes,
+          };
+        }
+        return child;
+      })
+    );
+  };
+
+  // Save all batch changes
+  const saveBatchAttendance = async () => {
+    if (!selectedDate) {
+      toast.error("يرجى تحديد التاريخ");
+      return;
+    }
+
+    // Get children with batch changes
+    const changedChildren = children.filter(
+      (child) => child.batchStatus !== null && child.batchStatus !== undefined
+    );
+
+    if (changedChildren.length === 0) {
+      toast.error("لا توجد تغييرات لحفظها");
+      return;
+    }
+
+    setBatchSaving(true);
+    try {
+      console.log(
+        "Saving batch attendance for",
+        changedChildren.length,
+        "children"
+      );
+
+      const attendanceData = changedChildren.map((child) => ({
+        childId: child._id,
+        status: child.batchStatus!,
+        notes: child.batchNotes || "",
+      }));
+
+      const response = await attendanceAPI.batchSave(
+        attendanceData,
+        selectedDate
+      );
+
+      if (response.success) {
+        const { successful, errors, summary } = response.data;
+
+        if (summary.successful > 0) {
+          toast.success(`تم تسجيل حضور ${summary.successful} طفل بنجاح`);
+        }
+
+        if (summary.failed > 0) {
+          toast.error(`فشل في تسجيل ${summary.failed} سجل`);
+          console.error("Failed records:", errors);
+        }
+
+        // Reset batch mode and reload data
+        setBatchMode(false);
+        setChildren((prev) =>
+          prev.map((child) => ({
+            ...child,
+            batchStatus: null,
+            batchNotes: "",
+          }))
+        );
+
+        // Reload attendance data
+        await loadAttendanceData();
+      } else {
+        throw new Error(response.error || "فشل في تسجيل الحضور الجماعي");
+      }
+    } catch (error: any) {
+      console.error("Error saving batch attendance:", error);
+      toast.error(error.message || "حدث خطأ في تسجيل الحضور الجماعي");
+    } finally {
+      setBatchSaving(false);
+    }
+  };
+
+  // Cancel batch mode
+  const cancelBatchMode = () => {
+    setBatchMode(false);
+    setChildren((prev) =>
+      prev.map((child) => ({
+        ...child,
+        batchStatus: null,
+        batchNotes: "",
+      }))
+    );
+  };
+
+  // Mark all as present in batch mode
+  const markAllPresentBatch = () => {
+    setChildren((prev) =>
+      prev.map((child) => ({
+        ...child,
+        batchStatus: "present",
+      }))
+    );
+  };
+
+  // Mark all as absent in batch mode
+  const markAllAbsentBatch = () => {
+    setChildren((prev) =>
+      prev.map((child) => ({
+        ...child,
+        batchStatus: "absent",
+      }))
+    );
+  };
+
+  // Render batch controls
+  const renderBatchControls = () => {
+    if (!batchMode) return null;
+
+    const changedCount = children.filter(
+      (child) => child.batchStatus !== null
+    ).length;
+
+    return (
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <DocumentCheckIcon className="h-5 w-5 text-blue-600" />
+            <h3 className="text-lg font-semibold text-blue-800">
+              وضع التسجيل الجماعي
+            </h3>
+          </div>
+          <div className="text-sm text-blue-600">تم تحديد {changedCount} طفل</div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            onClick={markAllPresentBatch}
+            className="px-3 py-1 bg-green-100 text-green-700 rounded-md text-sm hover:bg-green-200 transition-colors"
+          >
+            تحديد الكل حاضر
+          </button>
+          <button
+            onClick={markAllAbsentBatch}
+            className="px-3 py-1 bg-red-100 text-red-700 rounded-md text-sm hover:bg-red-200 transition-colors"
+          >
+            تحديد الكل غائب
+          </button>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={saveBatchAttendance}
+            disabled={batchSaving || changedCount === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+          >
+            {batchSaving && (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            )}
+            حفظ الحضور ({changedCount})
+          </button>
+          <button
+            onClick={cancelBatchMode}
+            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors"
+          >
+            إلغاء
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Render child row for batch mode
+  const renderChildRowBatch = (child: Child) => {
+    const currentStatus =
+      child.batchStatus !== null
+        ? child.batchStatus
+        : child.hasAttendanceRecord
+        ? child.isPresent
+          ? "present"
+          : "absent"
+        : null;
+
+    return (
+      <div key={child._id} className="bg-white border rounded-lg p-4 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="font-medium text-gray-900">{child.name}</h3>
+            <p className="text-sm text-gray-500">{child.className}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => toggleChildBatchStatus(child._id, "present")}
+              className={`p-2 rounded-full transition-colors ${
+                currentStatus === "present"
+                  ? "bg-green-100 text-green-600 ring-2 ring-green-300"
+                  : "bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-500"
+              }`}
+              title="حاضر"
+            >
+              <CheckCircleIcon className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => toggleChildBatchStatus(child._id, "absent")}
+              className={`p-2 rounded-full transition-colors ${
+                currentStatus === "absent"
+                  ? "bg-red-100 text-red-600 ring-2 ring-red-300"
+                  : "bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500"
+              }`}
+              title="غائب"
+            >
+              <XCircleIcon className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <textarea
+            value={child.batchNotes || child.notes || ""}
+            onChange={(e) => updateChildBatchNotes(child._id, e.target.value)}
+            placeholder="ملاحظات..."
+            className="w-full p-2 border border-gray-200 rounded-md text-sm resize-none"
+            rows={2}
+          />
+        </div>
+      </div>
+    );
+  };
+
   // حساب الإحصائيات
   const presentCount = children.filter(child => child.hasAttendanceRecord && child.isPresent).length
   const absentCount = children.filter(child => child.hasAttendanceRecord && !child.isPresent).length  
@@ -315,6 +577,15 @@ export default function AttendancePage() {
               </h1>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4 space-x-reverse">
+              {!batchMode && (
+                <button
+                  onClick={() => setBatchMode(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
+                >
+                  <DocumentCheckIcon className="h-4 w-4" />
+                  التسجيل الجماعي
+                </button>
+              )}
               <div className="text-sm text-gray-600 hidden sm:flex items-center">
                 <ClockIcon className="w-4 h-4 inline ml-1" />
                 {new Date().toLocaleTimeString('ar-EG')}
@@ -340,6 +611,7 @@ export default function AttendancePage() {
                   onChange={(e) => setSelectedClass(e.target.value)}
                   className="input-field"
                   title="اختر الفصل"
+                  disabled={batchMode}
                 >
                   <option value="">اختر الفصل</option>
                   {classes.map(classItem => (
@@ -375,6 +647,7 @@ export default function AttendancePage() {
                   onChange={(e) => setSelectedDate(e.target.value)}
                   className="input-field pr-10"
                   title="اختر التاريخ"
+                  disabled={batchMode}
                 />
               </div>
             </div>
@@ -420,6 +693,9 @@ export default function AttendancePage() {
           )}
         </div>
 
+        {/* Batch Controls */}
+        {renderBatchControls()}
+
         {/* Children List */}
         {loading ? (
           <div className="bg-white rounded-lg shadow p-8">
@@ -450,8 +726,13 @@ export default function AttendancePage() {
               </h2>
             </div>
             
-            <div className="divide-y divide-gray-200">
-              {children.map((child) => (
+            {batchMode ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
+                {children.map((child) => renderChildRowBatch(child))}
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200">
+                {children.map((child) => (
                 <div
                   key={child._id}
                   className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors ${
@@ -512,19 +793,22 @@ export default function AttendancePage() {
                   </div>
                 </div>
               ))}
-            </div>
+              </div>
+            )}
           </div>
         )}
       </main>
 
-      {/* Attendance Modal */}
-      <AttendanceModal
-        isOpen={attendanceModal.isOpen}
-        onClose={closeAttendanceModal}
-        child={attendanceModal.child || { _id: '', name: '' }}
-        onSave={handleAttendanceSave}
-        onDelete={handleAttendanceDelete}
-      />
+      {/* Attendance Modal - only show in normal mode */}
+      {!batchMode && (
+        <AttendanceModal
+          isOpen={attendanceModal.isOpen}
+          onClose={closeAttendanceModal}
+          child={attendanceModal.child || { _id: '', name: '' }}
+          onSave={handleAttendanceSave}
+          onDelete={handleAttendanceDelete}
+        />
+      )}
     </div>
   )
 }

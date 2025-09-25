@@ -436,6 +436,31 @@ export const attendanceAPI = {
         error: error.response?.data?.error || 'حدث خطأ في حذف تسجيل الحضور'
       }
     }
+  },
+
+  // Batch attendance for multiple children
+  batchSave: async (attendanceData: Array<{
+    childId: string
+    status: 'present' | 'absent'
+    notes?: string
+  }>, date: string) => {
+    try {
+      console.log('Saving batch attendance:', attendanceData.length, 'records for date:', date)
+
+      const response = await api.post('/attendance/batch', {
+        attendanceData,
+        date
+      })
+
+      console.log('Batch attendance saved successfully:', response.data)
+      return { success: true, data: response.data.data || response.data }
+    } catch (error: any) {
+      console.error('Error saving batch attendance:', error)
+      return {
+        success: false,
+        error: error.response?.data?.error || 'حدث خطأ في تسجيل الحضور الجماعي'
+      }
+    }
   }
 }
 
@@ -1032,6 +1057,31 @@ export const servantsAttendanceAPI = {
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تسجيل الحضور الجماعي'
+      }
+    }
+  },
+
+  // Batch attendance for multiple servants
+  batchSave: async (attendanceData: Array<{
+    servantId: string
+    status: 'present' | 'absent' | 'excused'
+    notes?: string
+  }>, date: string) => {
+    try {
+      console.log('Saving servants batch attendance:', attendanceData.length, 'records for date:', date)
+
+      const response = await api.post('/servants-attendance/batch', {
+        attendanceData,
+        date
+      })
+
+      console.log('Servants batch attendance saved successfully:', response.data)
+      return { success: true, data: response.data.data || response.data }
+    } catch (error: any) {
+      console.error('Error saving servants batch attendance:', error)
+      return {
+        success: false,
+        error: error.response?.data?.error || 'حدث خطأ في تسجيل حضور الخدام الجماعي'
       }
     }
   }

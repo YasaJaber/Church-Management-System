@@ -12,7 +12,9 @@ const router = express.Router();
 // @access  Protected
 router.get("/children-with-status", authMiddleware, async (req, res) => {
   try {
-    console.log("🚀🚀🚀 CHILDREN-WITH-STATUS API CALLED - TOP OF FUNCTION 🚀🚀🚀");
+    console.log(
+      "🚀🚀🚀 CHILDREN-WITH-STATUS API CALLED - TOP OF FUNCTION 🚀🚀🚀"
+    );
     const { date, classId } = req.query;
 
     console.log("\n" + "=".repeat(50));
@@ -25,12 +27,24 @@ router.get("/children-with-status", authMiddleware, async (req, res) => {
 
     // Apply role-based filtering for class
     let targetClassId = classId;
-    if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
+    if (
+      (req.user.role === "servant" || req.user.role === "classTeacher") &&
+      req.user.assignedClass
+    ) {
       // Servants and classTeachers can only see their assigned class
       targetClassId = req.user.assignedClass._id.toString();
-      console.log("👤 Servant/ClassTeacher access - forced classId:", targetClassId);
-    } else if (req.user.role !== "admin" && req.user.role !== "serviceLeader" && !req.user.assignedClass) {
-      console.log("❌ Access denied for non-admin/non-serviceLeader without class");
+      console.log(
+        "👤 Servant/ClassTeacher access - forced classId:",
+        targetClassId
+      );
+    } else if (
+      req.user.role !== "admin" &&
+      req.user.role !== "serviceLeader" &&
+      !req.user.assignedClass
+    ) {
+      console.log(
+        "❌ Access denied for non-admin/non-serviceLeader without class"
+      );
       return res.status(403).json({
         success: false,
         error: "Access denied",
@@ -43,36 +57,46 @@ router.get("/children-with-status", authMiddleware, async (req, res) => {
       childQuery.class = targetClassId;
     }
 
-    const children = await Child.find(childQuery).populate("class").sort({ name: 1 });
+    const children = await Child.find(childQuery)
+      .populate("class")
+      .sort({ name: 1 });
     console.log("👥 Found", children.length, "active children");
 
     // Get attendance records for the specified date
     let attendanceRecords = [];
     if (date) {
-      const childIds = children.map(child => child._id);
+      const childIds = children.map((child) => child._id);
       attendanceRecords = await Attendance.find({
         date: date,
         type: "child",
-        person: { $in: childIds }
+        person: { $in: childIds },
       });
-      console.log("📊 Found", attendanceRecords.length, "attendance records for date:", date);
+      console.log(
+        "📊 Found",
+        attendanceRecords.length,
+        "attendance records for date:",
+        date
+      );
     }
 
     // Create attendance map for quick lookup
     const attendanceMap = {};
-    attendanceRecords.forEach(record => {
+    attendanceRecords.forEach((record) => {
       attendanceMap[record.person.toString()] = {
         status: record.status,
         notes: record.notes,
-        _id: record._id
+        _id: record._id,
       };
     });
 
     console.log("📊 Attendance map keys:", Object.keys(attendanceMap));
-    console.log("📊 Sample attendance map entry:", Object.values(attendanceMap)[0]);
+    console.log(
+      "📊 Sample attendance map entry:",
+      Object.values(attendanceMap)[0]
+    );
 
     // Transform data to include attendance status
-    const childrenWithStatus = children.map(child => ({
+    const childrenWithStatus = children.map((child) => ({
       _id: child._id,
       name: child.name,
       phone: child.phone,
@@ -80,25 +104,35 @@ router.get("/children-with-status", authMiddleware, async (req, res) => {
       stage: child.stage,
       grade: child.grade,
       class: child.class,
-      className: child.class?.name || 'غير محدد',
+      className: child.class?.name || "غير محدد",
       notes: child.notes,
       isActive: child.isActive,
       // **FIXED**: Attendance status for the specified date - null means NO RECORD
-      attendance: attendanceMap[child._id.toString()] || null  // MUST return null, not object
+      attendance: attendanceMap[child._id.toString()] || null, // MUST return null, not object
     }));
 
     console.log("✅ Sample child data being returned:");
-    console.log("First child attendance value:", childrenWithStatus[0]?.attendance);
+    console.log(
+      "First child attendance value:",
+      childrenWithStatus[0]?.attendance
+    );
     console.log("Is null?", childrenWithStatus[0]?.attendance === null);
     console.log("Attendance map size:", Object.keys(attendanceMap).length);
-    console.log("✅ Returning", childrenWithStatus.length, "children with attendance status");
+    console.log(
+      "✅ Returning",
+      childrenWithStatus.length,
+      "children with attendance status"
+    );
 
     const responseData = {
       success: true,
       data: childrenWithStatus,
     };
 
-    console.log("✅ FINAL RESPONSE - first child attendance:", responseData.data[0]?.attendance);
+    console.log(
+      "✅ FINAL RESPONSE - first child attendance:",
+      responseData.data[0]?.attendance
+    );
     res.json(responseData);
   } catch (error) {
     console.error("❌ Error in children-with-status:", error);
@@ -130,7 +164,7 @@ router.get("/children", authMiddleware, async (req, res) => {
     if (date) {
       // Convert input date to exact string match only
       query.date = date; // Exact string match for YYYY-MM-DD format only
-      
+
       console.log("📅 Exact date query:");
       console.log("   Target date (string):", date);
       console.log("   Query:", JSON.stringify(query));
@@ -138,12 +172,24 @@ router.get("/children", authMiddleware, async (req, res) => {
 
     // Apply role-based filtering
     let targetClassId = classId;
-    if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
+    if (
+      (req.user.role === "servant" || req.user.role === "classTeacher") &&
+      req.user.assignedClass
+    ) {
       // Servants and classTeachers can only see their assigned class
       targetClassId = req.user.assignedClass._id.toString();
-      console.log("👤 Servant/ClassTeacher access - forced classId:", targetClassId);
-    } else if (req.user.role !== "admin" && req.user.role !== "serviceLeader" && !req.user.assignedClass) {
-      console.log("❌ Access denied for non-admin/non-serviceLeader without class");
+      console.log(
+        "👤 Servant/ClassTeacher access - forced classId:",
+        targetClassId
+      );
+    } else if (
+      req.user.role !== "admin" &&
+      req.user.role !== "serviceLeader" &&
+      !req.user.assignedClass
+    ) {
+      console.log(
+        "❌ Access denied for non-admin/non-serviceLeader without class"
+      );
       return res.status(403).json({
         success: false,
         error: "Access denied",
@@ -292,16 +338,18 @@ router.post("/", authMiddleware, async (req, res) => {
     } else {
       // Create new record with extra validation
       console.log("🆕 Creating new attendance record");
-      
+
       // Final check to prevent race conditions
       const lastMinuteCheck = await Attendance.findOne({
         person: childId,
         date: date,
         type: "child",
       });
-      
+
       if (lastMinuteCheck) {
-        console.log("⚠️ Race condition detected - record was just created, updating instead");
+        console.log(
+          "⚠️ Race condition detected - record was just created, updating instead"
+        );
         lastMinuteCheck.status = status;
         lastMinuteCheck.notes = notes || "";
         lastMinuteCheck.recordedBy = req.user._id;
@@ -317,20 +365,22 @@ router.post("/", authMiddleware, async (req, res) => {
           recordedBy: req.user._id, // The user who is recording attendance
           class: child.class, // Add class for better tracking
         });
-        
+
         try {
           await attendanceRecord.save();
           console.log("✅ New attendance record created successfully");
         } catch (saveError) {
           // Check if it's a duplicate key error
           if (saveError.code === 11000) {
-            console.log("🔄 Duplicate key error - finding and updating existing record");
+            console.log(
+              "🔄 Duplicate key error - finding and updating existing record"
+            );
             const duplicateRecord = await Attendance.findOne({
               person: childId,
               date: date,
               type: "child",
             });
-            
+
             if (duplicateRecord) {
               duplicateRecord.status = status;
               duplicateRecord.notes = notes || "";
@@ -395,11 +445,13 @@ router.post("/", authMiddleware, async (req, res) => {
     // ✨ PASTORAL CARE: Automatically remove child from pastoral care list if they attended
     if (status === "present" || status === "late") {
       try {
-        console.log(`🤝 Checking if child ${attendanceRecord.person.name} needs to be removed from pastoral care...`);
-        
+        console.log(
+          `🤝 Checking if child ${attendanceRecord.person.name} needs to be removed from pastoral care...`
+        );
+
         const activePastoralCareRecord = await PastoralCare.findOne({
           child: childId,
-          isActive: true
+          isActive: true,
         });
 
         if (activePastoralCareRecord) {
@@ -408,12 +460,16 @@ router.post("/", authMiddleware, async (req, res) => {
           activePastoralCareRecord.removedDate = new Date();
           activePastoralCareRecord.removalReason = "attended";
           activePastoralCareRecord.notes += `\n\nتم حذفه تلقائياً من قائمة الافتقاد عند الحضور في ${date} بواسطة ${req.user.name}`;
-          
+
           await activePastoralCareRecord.save();
-          
-          console.log(`✅ Child ${attendanceRecord.person.name} automatically removed from pastoral care (attended on ${date})`);
+
+          console.log(
+            `✅ Child ${attendanceRecord.person.name} automatically removed from pastoral care (attended on ${date})`
+          );
         } else {
-          console.log(`ℹ️ Child ${attendanceRecord.person.name} was not in pastoral care list`);
+          console.log(
+            `ℹ️ Child ${attendanceRecord.person.name} was not in pastoral care list`
+          );
         }
       } catch (pastoralCareError) {
         console.error("❌ Error updating pastoral care:", pastoralCareError);
@@ -482,7 +538,7 @@ router.delete("/:childId/:date", authMiddleware, async (req, res) => {
       console.log("   Child ID:", childId);
       console.log("   Date:", date);
       console.log("   Query used:", JSON.stringify(deleteQuery));
-      
+
       return res.status(404).json({
         success: false,
         error: "لا يوجد تسجيل حضور لهذا الطفل في هذا التاريخ",
@@ -603,12 +659,24 @@ router.get("/recent-activity", authMiddleware, async (req, res) => {
 
     // Apply role-based filtering
     let targetClassId = classId;
-    if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
+    if (
+      (req.user.role === "servant" || req.user.role === "classTeacher") &&
+      req.user.assignedClass
+    ) {
       // Servants and classTeachers can only see their assigned class
       targetClassId = req.user.assignedClass._id.toString();
-      console.log("👤 Servant/ClassTeacher access - forced classId:", targetClassId);
-    } else if (req.user.role !== "admin" && req.user.role !== "serviceLeader" && !req.user.assignedClass) {
-      console.log("❌ Access denied for non-admin/non-serviceLeader without class");
+      console.log(
+        "👤 Servant/ClassTeacher access - forced classId:",
+        targetClassId
+      );
+    } else if (
+      req.user.role !== "admin" &&
+      req.user.role !== "serviceLeader" &&
+      !req.user.assignedClass
+    ) {
+      console.log(
+        "❌ Access denied for non-admin/non-serviceLeader without class"
+      );
       return res.status(403).json({
         success: false,
         error: "Access denied",
@@ -619,7 +687,7 @@ router.get("/recent-activity", authMiddleware, async (req, res) => {
       // Need to get children in that class first
       console.log("🔍 Filtering by class:", targetClassId);
       const childrenInClass = await Child.find({ class: targetClassId });
-      const childIds = childrenInClass.map(child => child._id);
+      const childIds = childrenInClass.map((child) => child._id);
       query.person = { $in: childIds };
       console.log("👶 Found children in class:", childIds.length);
     }
@@ -644,7 +712,6 @@ router.get("/recent-activity", authMiddleware, async (req, res) => {
       success: true,
       data: attendanceRecords,
     });
-
   } catch (error) {
     console.error("❌ Error in recent-activity:", error);
     res.status(500).json({
@@ -666,17 +733,17 @@ router.get("/recent-dates", authMiddleware, async (req, res) => {
     console.log("👤 User:", req.user?.username || "UNKNOWN");
 
     // Get distinct dates from attendance records, sorted descending
-    const dates = await Attendance.distinct('date', { type: 'child' });
-    
+    const dates = await Attendance.distinct("date", { type: "child" });
+
     // Sort dates in descending order (newest first)
     const sortedDates = dates
-      .map(date => {
-        if (typeof date === 'string') {
+      .map((date) => {
+        if (typeof date === "string") {
           return date;
         } else if (date instanceof Date) {
-          return date.toISOString().split('T')[0];
+          return date.toISOString().split("T")[0];
         } else {
-          return new Date(date).toISOString().split('T')[0];
+          return new Date(date).toISOString().split("T")[0];
         }
       })
       .sort((a, b) => new Date(b) - new Date(a))
@@ -688,12 +755,216 @@ router.get("/recent-dates", authMiddleware, async (req, res) => {
       success: true,
       data: sortedDates,
     });
-
   } catch (error) {
     console.error("❌ Error in recent-dates:", error);
     res.status(500).json({
       success: false,
       error: "Server error",
+    });
+  }
+});
+
+// @route   POST /api/attendance/batch
+// @desc    Mark attendance for multiple children at once
+// @access  Protected
+router.post("/batch", authMiddleware, async (req, res) => {
+  try {
+    const { attendanceData, date } = req.body;
+
+    console.log("\n" + "=".repeat(50));
+    console.log("📦 BATCH ATTENDANCE API CALLED");
+    console.log("📅 Date:", date);
+    console.log("👥 Number of records:", attendanceData?.length || 0);
+    console.log("👤 User:", req.user?.username || "UNKNOWN");
+    console.log("=".repeat(50));
+
+    // Validate input
+    if (
+      !attendanceData ||
+      !Array.isArray(attendanceData) ||
+      attendanceData.length === 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        error: "بيانات الحضور مطلوبة ويجب أن تكون مصفوفة غير فارغة",
+      });
+    }
+
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        error: "التاريخ مطلوب",
+      });
+    }
+
+    const results = [];
+    const errors = [];
+
+    // Process each attendance record
+    for (let i = 0; i < attendanceData.length; i++) {
+      const { childId, status, notes } = attendanceData[i];
+
+      try {
+        console.log(
+          `📝 Processing child ${i + 1}/${attendanceData.length}: ${childId}`
+        );
+
+        if (!childId || !status) {
+          console.log(`❌ Missing data for record ${i + 1}`);
+          errors.push({
+            index: i,
+            childId,
+            error: "معرف الطفل والحالة مطلوبان",
+          });
+          continue;
+        }
+
+        // Find the child
+        const child = await Child.findById(childId);
+        if (!child) {
+          console.log(`❌ Child not found: ${childId}`);
+          errors.push({
+            index: i,
+            childId,
+            error: "الطفل غير موجود",
+          });
+          continue;
+        }
+
+        // Check for existing record
+        let existingRecord = await Attendance.findOne({
+          person: childId,
+          date: date,
+          type: "child",
+        });
+
+        let attendanceRecord;
+
+        if (existingRecord) {
+          // Update existing record
+          console.log(`🔄 Updating existing record for child: ${child.name}`);
+          existingRecord.status = status;
+          existingRecord.notes = notes || "";
+          existingRecord.recordedBy = req.user._id;
+          attendanceRecord = await existingRecord.save();
+        } else {
+          // Create new record
+          console.log(`🆕 Creating new record for child: ${child.name}`);
+          attendanceRecord = new Attendance({
+            type: "child",
+            person: childId,
+            personModel: "Child",
+            date: date,
+            status: status,
+            notes: notes || "",
+            recordedBy: req.user._id,
+            class: child.class,
+          });
+
+          try {
+            await attendanceRecord.save();
+          } catch (saveError) {
+            // Handle duplicate key error
+            if (saveError.code === 11000) {
+              console.log(
+                `🔄 Duplicate key error for child: ${child.name}, finding existing record`
+              );
+              const duplicateRecord = await Attendance.findOne({
+                person: childId,
+                date: date,
+                type: "child",
+              });
+
+              if (duplicateRecord) {
+                duplicateRecord.status = status;
+                duplicateRecord.notes = notes || "";
+                duplicateRecord.recordedBy = req.user._id;
+                attendanceRecord = await duplicateRecord.save();
+              } else {
+                throw saveError;
+              }
+            } else {
+              throw saveError;
+            }
+          }
+        }
+
+        // ✨ PASTORAL CARE: Automatically remove child from pastoral care if they attended
+        if (status === "present" || status === "late") {
+          try {
+            const activePastoralCareRecord = await PastoralCare.findOne({
+              child: childId,
+              isActive: true,
+            });
+
+            if (activePastoralCareRecord) {
+              activePastoralCareRecord.isActive = false;
+              activePastoralCareRecord.removedBy = req.user._id;
+              activePastoralCareRecord.removedDate = new Date();
+              activePastoralCareRecord.removalReason = "attended";
+              activePastoralCareRecord.notes += `\n\nتم حذفه تلقائياً من قائمة الافتقاد عند الحضور في ${date} بواسطة ${req.user.name}`;
+
+              await activePastoralCareRecord.save();
+              console.log(
+                `✅ Child ${child.name} automatically removed from pastoral care`
+              );
+            }
+          } catch (pastoralCareError) {
+            console.error(
+              `❌ Error updating pastoral care for ${child.name}:`,
+              pastoralCareError
+            );
+          }
+        }
+
+        results.push({
+          childId,
+          childName: child.name,
+          status,
+          action: existingRecord ? "updated" : "created",
+          attendanceId: attendanceRecord._id,
+        });
+
+        console.log(`✅ Successfully processed ${child.name}: ${status}`);
+      } catch (recordError) {
+        console.error(`❌ Error processing record ${i + 1}:`, recordError);
+        errors.push({
+          index: i,
+          childId,
+          error: recordError.message,
+        });
+      }
+    }
+
+    console.log(`📊 Batch processing complete:`);
+    console.log(`   ✅ Successful: ${results.length}`);
+    console.log(`   ❌ Errors: ${errors.length}`);
+
+    // Return results
+    const response = {
+      success: true,
+      message: `تم تسجيل حضور ${results.length} طفل بنجاح`,
+      data: {
+        successful: results,
+        errors: errors,
+        summary: {
+          total: attendanceData.length,
+          successful: results.length,
+          failed: errors.length,
+        },
+      },
+    };
+
+    if (errors.length > 0) {
+      response.message += ` (${errors.length} خطأ)`;
+    }
+
+    res.json(response);
+  } catch (error) {
+    console.error("❌ Error in batch attendance:", error);
+    res.status(500).json({
+      success: false,
+      error: "حدث خطأ في تسجيل الحضور الجماعي: " + error.message,
     });
   }
 });

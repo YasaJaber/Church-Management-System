@@ -14,11 +14,13 @@ import {
   XCircleIcon,
   CalendarIcon,
   UserGroupIcon,
-  ClockIcon
+  ClockIcon,
+  DocumentCheckIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import ServantsAttendanceModal from '@/components/ServantsAttendanceModal'
-import { servantsAPI } from '@/services/api'
+import { servantsAPI, servantsAttendanceAPI } from '@/services/api'
 
 interface Servant {
   _id: string
@@ -29,6 +31,9 @@ interface Servant {
   attendanceId?: string
   notes?: string
   hasAttendanceRecord?: boolean
+  // Add batch editing state
+  batchStatus?: "present" | "absent" | "excused" | null
+  batchNotes?: string
 }
 
 export default function ServantsAttendancePage() {
@@ -46,6 +51,10 @@ export default function ServantsAttendancePage() {
     isOpen: false,
     servant: null
   })
+
+  // Batch mode state
+  const [batchMode, setBatchMode] = useState(false)
+  const [batchSaving, setBatchSaving] = useState(false)
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -85,7 +94,10 @@ export default function ServantsAttendancePage() {
           isPresent: record.status === 'present',
           attendanceId: record._id,
           notes: record.notes || '',
-          hasAttendanceRecord: true
+          hasAttendanceRecord: true,
+          // Reset batch state when loading new data
+          batchStatus: null,
+          batchNotes: "",
         }))
         
         // الحصول على قائمة كل الخدام والتحقق من من لم يُسجل حضوره
@@ -104,7 +116,10 @@ export default function ServantsAttendancePage() {
                 isPresent: undefined,
                 attendanceId: undefined,
                 notes: '',
-                hasAttendanceRecord: false
+                hasAttendanceRecord: false,
+                // Reset batch state when loading new data
+                batchStatus: null,
+                batchNotes: "",
               }
             }
           })
@@ -242,6 +257,272 @@ export default function ServantsAttendancePage() {
     }
   }
 
+  // Toggle servant's batch status
+  const toggleServantBatchStatus = (
+    servantId: string,
+    status: "present" | "absent" | "excused"
+  ) => {
+    setServants((prev) =>
+      prev.map((servant) => {
+        if (servant._id === servantId) {
+          const newStatus = servant.batchStatus === status ? null : status;
+          return {
+            ...servant,
+            batchStatus: newStatus,
+          };
+        }
+        return servant;
+      })
+    );
+  };
+
+  // Update batch notes for a servant
+  const updateServantBatchNotes = (servantId: string, notes: string) => {
+    setServants((prev) =>
+      prev.map((servant) => {
+        if (servant._id === servantId) {
+          return {
+            ...servant,
+            batchNotes: notes,
+          };
+        }
+        return servant;
+      })
+    );
+  };
+
+  // Save all batch changes
+  const saveBatchAttendance = async () => {
+    if (!selectedDate) {
+      toast.error("يرجى تحديد التاريخ");
+      return;
+    }
+
+    // Get servants with batch changes
+    const changedServants = servants.filter(
+      (servant) =>
+        servant.batchStatus !== null && servant.batchStatus !== undefined
+    );
+
+    if (changedServants.length === 0) {
+      toast.error("لا توجد تغييرات لحفظها");
+      return;
+    }
+
+    setBatchSaving(true);
+    try {
+      console.log(
+        "Saving batch attendance for",
+        changedServants.length,
+        "servants"
+      );
+
+      const attendanceData = changedServants.map((servant) => ({
+        servantId: servant._id,
+        status: servant.batchStatus!,
+        notes: servant.batchNotes || "",
+      }));
+
+      const response = await servantsAttendanceAPI.batchSave(
+        attendanceData,
+        selectedDate
+      );
+
+      if (response.success) {
+        const { successful, errors, summary } = response.data;
+
+        if (summary.successful > 0) {
+          toast.success(`تم تسجيل حضور ${summary.successful} خادم بنجاح`);
+        }
+
+        if (summary.failed > 0) {
+          toast.error(`فشل في تسجيل ${summary.failed} سجل`);
+          console.error("Failed records:", errors);
+        }
+
+        // Reset batch mode and reload data
+        setBatchMode(false);
+        setServants((prev) =>
+          prev.map((servant) => ({
+            ...servant,
+            batchStatus: null,
+            batchNotes: "",
+          }))
+        );
+
+        // Reload attendance data
+        await loadAttendanceData();
+      } else {
+        throw new Error(response.error || "فشل في تسجيل حضور الخدام الجماعي");
+      }
+    } catch (error: any) {
+      console.error("Error saving servants batch attendance:", error);
+      toast.error(error.message || "حدث خطأ في تسجيل حضور الخدام الجماعي");
+    } finally {
+      setBatchSaving(false);
+    }
+  };
+
+  // Cancel batch mode
+  const cancelBatchMode = () => {
+    setBatchMode(false);
+    setServants((prev) =>
+      prev.map((servant) => ({
+        ...servant,
+        batchStatus: null,
+        batchNotes: "",
+      }))
+    );
+  };
+
+  // Mark all as present in batch mode
+  const markAllPresentBatch = () => {
+    setServants((prev) =>
+      prev.map((servant) => ({
+        ...servant,
+        batchStatus: "present",
+      }))
+    );
+  };
+
+  // Mark all as absent in batch mode
+  const markAllAbsentBatch = () => {
+    setServants((prev) =>
+      prev.map((servant) => ({
+        ...servant,
+        batchStatus: "absent",
+      }))
+    );
+  };
+
+  // Render batch controls
+  const renderBatchControls = () => {
+    if (!batchMode) return null;
+
+    const changedCount = servants.filter(
+      (servant) => servant.batchStatus !== null
+    ).length;
+
+    return (
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <DocumentCheckIcon className="h-5 w-5 text-blue-600" />
+            <h3 className="text-lg font-semibold text-blue-800">
+              وضع التسجيل الجماعي للخدام
+            </h3>
+          </div>
+          <div className="text-sm text-blue-600">تم تحديد {changedCount} خادم</div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 mb-4">
+          <button
+            onClick={markAllPresentBatch}
+            className="px-3 py-1 bg-green-100 text-green-700 rounded-md text-sm hover:bg-green-200 transition-colors"
+          >
+            تحديد الكل حاضر
+          </button>
+          <button
+            onClick={markAllAbsentBatch}
+            className="px-3 py-1 bg-red-100 text-red-700 rounded-md text-sm hover:bg-red-200 transition-colors"
+          >
+            تحديد الكل غائب
+          </button>
+        </div>
+
+        <div className="flex gap-2">
+          <button
+            onClick={saveBatchAttendance}
+            disabled={batchSaving || changedCount === 0}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 transition-colors"
+          >
+            {batchSaving && (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            )}
+            حفظ الحضور ({changedCount})
+          </button>
+          <button
+            onClick={cancelBatchMode}
+            className="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors"
+          >
+            إلغاء
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Render servant row for batch mode
+  const renderServantRowBatch = (servant: Servant) => {
+    const currentStatus =
+      servant.batchStatus !== null
+        ? servant.batchStatus
+        : servant.hasAttendanceRecord
+        ? servant.isPresent
+          ? "present"
+          : "absent"
+        : null;
+
+    return (
+      <div key={servant._id} className="bg-white border rounded-lg p-4 shadow-sm">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h3 className="font-medium text-gray-900">{servant.name}</h3>
+            <p className="text-sm text-gray-500">{servant.role}</p>
+            {servant.phone && (
+              <p className="text-xs text-gray-400">{servant.phone}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => toggleServantBatchStatus(servant._id, "present")}
+              className={`p-2 rounded-full transition-colors ${
+                currentStatus === "present"
+                  ? "bg-green-100 text-green-600 ring-2 ring-green-300"
+                  : "bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-500"
+              }`}
+              title="حاضر"
+            >
+              <CheckCircleIcon className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => toggleServantBatchStatus(servant._id, "absent")}
+              className={`p-2 rounded-full transition-colors ${
+                currentStatus === "absent"
+                  ? "bg-red-100 text-red-600 ring-2 ring-red-300"
+                  : "bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500"
+              }`}
+              title="غائب"
+            >
+              <XCircleIcon className="h-5 w-5" />
+            </button>
+            <button
+              onClick={() => toggleServantBatchStatus(servant._id, "excused")}
+              className={`p-2 rounded-full transition-colors ${
+                currentStatus === "excused"
+                  ? "bg-yellow-100 text-yellow-600 ring-2 ring-yellow-300"
+                  : "bg-gray-100 text-gray-400 hover:bg-yellow-50 hover:text-yellow-500"
+              }`}
+              title="معذور"
+            >
+              <ExclamationTriangleIcon className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <textarea
+            value={servant.batchNotes || servant.notes || ""}
+            onChange={(e) => updateServantBatchNotes(servant._id, e.target.value)}
+            placeholder="ملاحظات..."
+            className="w-full p-2 border border-gray-200 rounded-md text-sm resize-none"
+            rows={2}
+          />
+        </div>
+      </div>
+    );
+  };
+
   // حساب الإحصائيات
   const presentCount = servants.filter(servant => servant.hasAttendanceRecord && servant.isPresent).length
   const absentCount = servants.filter(servant => servant.hasAttendanceRecord && !servant.isPresent).length  
@@ -283,6 +564,15 @@ export default function ServantsAttendancePage() {
               </h1>
             </div>
             <div className="flex items-center space-x-2 sm:space-x-4 space-x-reverse">
+              {!batchMode && (
+                <button
+                  onClick={() => setBatchMode(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm"
+                >
+                  <DocumentCheckIcon className="h-4 w-4" />
+                  التسجيل الجماعي
+                </button>
+              )}
               <div className="text-sm text-gray-600 hidden sm:flex items-center">
                 <ClockIcon className="w-4 h-4 inline ml-1" />
                 {new Date().toLocaleTimeString('ar-EG')}
@@ -309,6 +599,7 @@ export default function ServantsAttendancePage() {
                   onChange={(e) => setSelectedDate(e.target.value)}
                   className="input-field pr-10"
                   title="اختر التاريخ"
+                  disabled={batchMode}
                 />
               </div>
             </div>
@@ -354,6 +645,9 @@ export default function ServantsAttendancePage() {
           )}
         </div>
 
+        {/* Batch Controls */}
+        {renderBatchControls()}
+
         {/* Servants List */}
         {loading ? (
           <div className="bg-white rounded-lg shadow p-8">
@@ -377,8 +671,13 @@ export default function ServantsAttendancePage() {
               </h2>
             </div>
             
-            <div className="divide-y divide-gray-200">
-              {servants.map((servant) => (
+            {batchMode ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
+                {servants.map((servant) => renderServantRowBatch(servant))}
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200">
+                {servants.map((servant) => (
                 <div
                   key={servant._id}
                   className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors ${
@@ -449,19 +748,22 @@ export default function ServantsAttendancePage() {
                   </div>
                 </div>
               ))}
-            </div>
+              </div>
+            )}
           </div>
         )}
       </main>
 
-      {/* Servants Attendance Modal */}
-      <ServantsAttendanceModal
-        isOpen={attendanceModal.isOpen}
-        onClose={closeAttendanceModal}
-        servant={attendanceModal.servant || { _id: '', name: '' }}
-        onSave={handleAttendanceSave}
-        onDelete={handleAttendanceDelete}
-      />
+      {/* Servants Attendance Modal - only show in normal mode */}
+      {!batchMode && (
+        <ServantsAttendanceModal
+          isOpen={attendanceModal.isOpen}
+          onClose={closeAttendanceModal}
+          servant={attendanceModal.servant || { _id: '', name: '' }}
+          onSave={handleAttendanceSave}
+          onDelete={handleAttendanceDelete}
+        />
+      )}
     </div>
   )
 }

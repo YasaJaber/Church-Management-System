@@ -126,6 +126,8 @@ router.get(
 
       // Get attendance for individual servants
       console.log("🔎 Searching for attendance records...");
+      console.log("🔎 Query:", { date: attendanceDate, personModel: "User" });
+
       const attendanceRecords = await Attendance.find({
         date: attendanceDate,
         personModel: "User",
@@ -136,7 +138,17 @@ router.get(
       });
 
       console.log("📊 Found attendance records:", attendanceRecords.length);
-      console.log("📊 Raw records:", attendanceRecords);
+      console.log(
+        "📊 Raw records sample:",
+        attendanceRecords.slice(0, 3).map((r) => ({
+          _id: r._id,
+          type: r.type,
+          person: r.person?.name || "null",
+          personModel: r.personModel,
+          date: r.date,
+          status: r.status,
+        }))
+      );
 
       // Filter out null persons (non-servants)
       const filteredRecords = attendanceRecords.filter(
