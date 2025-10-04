@@ -969,4 +969,213 @@ router.post("/batch", authMiddleware, async (req, res) => {
   }
 });
 
+// @route   GET /api/attendance/export/teacher
+// @desc    Export all attendance records for teacher's class (present and absent)
+// @access  Protected (Teacher)
+router.get("/export/teacher", authMiddleware, async (req, res) => {
+  try {
+    const { fromDate, toDate } = req.query;
+    const userId = req.user.userId || req.user.id || req.user._id;
+
+    console.log("📄 Teacher attendance export request:", {
+      userId,
+      fromDate,
+      toDate,
+    });
+
+    // التحقق من التواريخ
+    if (!fromDate || !toDate) {
+      return res.status(400).json({
+        success: false,
+        message: "يجب تحديد تاريخ البداية والنهاية",
+      });
+    }
+
+    // جلب الفصل المخصص للمدرس
+    const user = await User.findById(userId).populate("assignedClass");
+
+    if (!user || !user.assignedClass) {
+      return res.status(404).json({
+        success: false,
+        message: "لا يوجد فصل مخصص لهذا المدرس",
+      });
+    }
+
+    console.log("👨‍🏫 Teacher class:", user.assignedClass.name);
+
+    // جلب جميع سجلات الحضور في الفترة المحددة (حضور وغياب)
+    const attendanceRecords = await Attendance.find({
+      type: "child",
+      date: {
+        $gte: fromDate,
+        $lte: toDate,
+      },
+      // بدون فلتر status - جلب كل السجلات
+    })
+      .populate({
+        path: "person",
+        match: { class: user.assignedClass._id }, // فقط أطفال فصل المدرس
+        select: "name class",
+        populate: {
+          path: "class",
+          select: "name",
+        },
+      })
+      .sort({ date: 1 });
+
+    // تصفية السجلات للتأكد من أن person ليس null (بعد populate)
+    const filteredRecords = attendanceRecords.filter(
+      (record) => record.person !== null
+    );
+
+    console.log(
+      `📊 Found ${filteredRecords.length} attendance records for teacher's class`
+    );
+    console.log(`📊 Total attendance records before filter: ${attendanceRecords.length}`);
+    console.log(`📊 Date range: ${fromDate} to ${toDate}`);
+    console.log(`📊 Teacher class ID: ${user.assignedClass._id}`);
+    
+    // إحصائيات
+    const absentCount = filteredRecords.filter(r => r.status === 'absent').length;
+    const presentCount = filteredRecords.filter(r => r.status === 'present').length;
+    console.log(`📊 Breakdown: ${presentCount} present, ${absentCount} absent`);
+
+    // تحويل البيانات للشكل المطلوب
+    const records = filteredRecords.map((record) => ({
+      date: record.date,
+      studentName: record.person.name,
+      status: record.status,
+      notes: record.notes || "",
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        className: user.assignedClass.name,
+        records: records,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error exporting teacher attendance:", error);
+    res.status(500).json({
+      success: false,
+      message: "فشل في جلب بيانات الغياب",
+      error: error.message,
+    });
+  }
+});
+
+// @route   GET /api/attendance/export/admin
+// @desc    Export all attendance records for any class (present and absent)
+// @access  Protected (Admin/Service Minister)
+router.get("/export/admin", authMiddleware, async (req, res) => {
+  try {
+    const { classId, fromDate, toDate } = req.query;
+    const userId = req.user.userId || req.user.id || req.user._id;
+
+    console.log("📄 Admin attendance export request:", {
+      userId,
+      classId,
+      fromDate,
+      toDate,
+    });
+
+    // التحقق من الصلاحيات
+    const user = await User.findById(userId);
+
+    if (
+      !user ||
+      (user.role !== "serviceLeader" &&
+        user.role !== "admin" &&
+        user.role !== "service_minister")
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "غير مصرح لك بهذه العملية",
+      });
+    }
+
+    // التحقق من البيانات
+    if (!classId || !fromDate || !toDate) {
+      return res.status(400).json({
+        success: false,
+        message: "يجب تحديد الفصل وتاريخ البداية والنهاية",
+      });
+    }
+
+    // جلب معلومات الفصل
+    const Class = require("../models/Class");
+    const classInfo = await Class.findById(classId);
+
+    if (!classInfo) {
+      return res.status(404).json({
+        success: false,
+        message: "الفصل غير موجود",
+      });
+    }
+
+    console.log("🏫 Class:", classInfo.name);
+
+    // جلب جميع سجلات الحضور في الفترة المحددة (حضور وغياب)
+    const attendanceRecords = await Attendance.find({
+      type: "child",
+      date: {
+        $gte: fromDate,
+        $lte: toDate,
+      },
+      // بدون فلتر status - جلب كل السجلات
+    })
+      .populate({
+        path: "person",
+        match: { class: classId },
+        select: "name class",
+        populate: {
+          path: "class",
+          select: "name",
+        },
+      })
+      .sort({ date: 1 });
+
+    // تصفية السجلات للتأكد من أن person ليس null
+    const filteredRecords = attendanceRecords.filter(
+      (record) => record.person !== null
+    );
+
+    console.log(
+      `📊 Found ${filteredRecords.length} attendance records for class`
+    );
+    console.log(`📊 Total attendance records before filter: ${attendanceRecords.length}`);
+    console.log(`📊 Date range: ${fromDate} to ${toDate}`);
+    console.log(`📊 Class ID: ${classId}`);
+    
+    // إحصائيات
+    const absentCount = filteredRecords.filter(r => r.status === 'absent').length;
+    const presentCount = filteredRecords.filter(r => r.status === 'present').length;
+    console.log(`📊 Breakdown: ${presentCount} present, ${absentCount} absent`);
+
+    // تحويل البيانات للشكل المطلوب
+    const records = filteredRecords.map((record) => ({
+      date: record.date,
+      studentName: record.person.name,
+      status: record.status,
+      notes: record.notes || "",
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        className: classInfo.name,
+        records: records,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error exporting admin attendance:", error);
+    res.status(500).json({
+      success: false,
+      message: "فشل في جلب بيانات الغياب",
+      error: error.message,
+    });
+  }
+});
+
 module.exports = router;

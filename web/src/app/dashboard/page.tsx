@@ -752,6 +752,25 @@ export default function DashboardPage() {
               </div>
             </button>
           )}
+
+          {/* تصدير الغياب - متاح لجميع المستخدمين */}
+          <button
+            key="nav-export-attendance"
+            onClick={() => router.push('/export-attendance')}
+            className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
+          >
+            <div className="text-center">
+              <div className="w-12 h-12 bg-gradient-to-r from-red-500 to-orange-500 rounded-lg flex items-center justify-center mx-auto mb-4">
+                <span className="text-white text-xl">📄</span>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                تصدير الغياب
+              </h3>
+              <p className="text-sm text-gray-500">
+                تصدير سجلات الغياب إلى ملف PDF
+              </p>
+            </div>
+          </button>
         </div>
       </main>
     </div>
