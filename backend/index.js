@@ -110,8 +110,6 @@ async function startServer() {
     await mongoose.connect(
       process.env.MONGODB_URI || "mongodb://localhost:27017/church_management",
       {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
         serverSelectionTimeoutMS: 15000, // 15 seconds timeout
         heartbeatFrequencyMS: 2000,
       }

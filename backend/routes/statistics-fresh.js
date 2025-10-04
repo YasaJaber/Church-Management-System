@@ -4,6 +4,7 @@ const Attendance = require("../models/Attendance");
 const Child = require("../models/Child");
 const Class = require("../models/Class");
 const User = require("../models/User");
+const GiftDelivery = require("../models/GiftDelivery");
 const { authMiddleware } = require("../middleware/auth");
 
 // @route   GET /api/statistics/church
@@ -355,14 +356,27 @@ router.get("/children-by-class", authMiddleware, async (req, res) => {
 router.get("/consecutive-attendance-by-classes", authMiddleware, async (req, res) => {
   try {
     console.log("📊 Fetching consecutive attendance statistics by classes");
+    console.log("👤 User role:", req.user.role);
+    console.log("📚 User assigned class:", req.user.assignedClass);
 
-    const { classId, minDays = 3 } = req.query;
+    const { classId, minDays = 4 } = req.query; // Changed default from 3 to 4
 
-    // Get all classes or specific class
+    // Get all classes or specific class based on user role
     let classes;
     if (classId) {
       classes = await Class.find({ _id: classId });
+    } else if (req.user.role === 'classTeacher' || req.user.role === 'servant') {
+      // مدرس الفصل يشوف فصله فقط
+      if (!req.user.assignedClass) {
+        return res.status(403).json({
+          success: false,
+          error: "لم يتم تعيين فصل لك. يرجى التواصل مع المسؤول."
+        });
+      }
+      classes = await Class.find({ _id: req.user.assignedClass._id || req.user.assignedClass });
+      console.log("📚 Class teacher accessing their class:", classes[0]?.name);
     } else {
+      // Admin and serviceLeader can see all classes
       classes = await Class.find({});
     }
 
@@ -378,29 +392,43 @@ router.get("/consecutive-attendance-by-classes", authMiddleware, async (req, res
       const consecutiveChildren = [];
 
       for (const child of children) {
-        // Get attendance records for this child, sorted by date desc
+        // Get the last gift delivery date for this child (acts as reset point)
+        const lastGift = await GiftDelivery.findOne({
+          child: child._id,
+          isActive: true
+        }).sort({ deliveryDate: -1 });
+
+        // Get attendance records for this child, sorted by date desc (most recent first)
         const attendanceRecords = await Attendance.find({
           person: child._id,
           type: "child",
         }).sort({ date: -1 });
 
-        // Calculate consecutive attendance (convert days to weeks)
+        // Calculate consecutive attendance from the most recent date
         let consecutiveCount = 0;
+        const lastGiftDate = lastGift ? new Date(lastGift.deliveryDate).toISOString().split('T')[0] : null;
+
         for (const record of attendanceRecords) {
-          if (record.status === "present") {
-            consecutiveCount++;
-          } else {
+          // If we reached a date before the last gift delivery, stop counting
+          if (lastGiftDate && record.date <= lastGiftDate) {
             break;
           }
+
+          if (record.status === "present") {
+            consecutiveCount++;
+          } else if (record.status === "absent") {
+            // إذا غاب، نوقف العد - مش متتالي
+            break;
+          }
+          // إذا كان excused أو أي حالة تانية، نكمل العد
         }
 
-        // Convert days to weeks and only include children with consecutive attendance >= minDays
-        const consecutiveWeeks = Math.floor(consecutiveCount / 1); // Each day counts as attendance
-        if (consecutiveCount >= minDays) {
+        // Only include children with 4+ consecutive weeks of attendance
+        if (consecutiveCount >= parseInt(minDays)) {
           consecutiveChildren.push({
             childId: child._id,
             name: child.name,
-            consecutiveWeeks: consecutiveWeeks, // Frontend expects this field name
+            consecutiveWeeks: consecutiveCount, // Each attendance counts as a week
           });
         }
       }
@@ -534,6 +562,221 @@ router.get("/child/:childId", authMiddleware, async (req, res) => {
       success: false,
       error: "خطأ في استرجاع إحصائيات الطفل",
       details: error.message,
+    });
+  }
+});
+
+// @route   POST /api/statistics/reset-consecutive-attendance
+// @desc    Reset consecutive attendance for a class (add reset marker for all children)
+// @access  Protected (Admin, Service Leader, Class Teacher)
+router.post("/reset-consecutive-attendance", authMiddleware, async (req, res) => {
+  try {
+    console.log("\n" + "=".repeat(60));
+    console.log("🔄 Resetting consecutive attendance");
+    console.log("👤 User:", req.user.name);
+    console.log("🔐 Role:", req.user.role);
+    console.log("=".repeat(60));
+
+    const { classId } = req.body;
+
+    // Determine which class(es) to reset
+    let targetClassId;
+    
+    if (req.user.role === 'admin' || req.user.role === 'serviceLeader') {
+      // Admin/Service Leader can reset any class or all classes
+      if (!classId) {
+        return res.status(400).json({
+          success: false,
+          error: "يرجى تحديد الفصل المراد إعادة تعيينه"
+        });
+      }
+      targetClassId = classId;
+    } else if (req.user.role === 'classTeacher' || req.user.role === 'servant') {
+      // Class teacher can only reset their own class
+      if (!req.user.assignedClass) {
+        return res.status(403).json({
+          success: false,
+          error: "لم يتم تعيين فصل لك"
+        });
+      }
+      targetClassId = req.user.assignedClass._id || req.user.assignedClass;
+    } else {
+      return res.status(403).json({
+        success: false,
+        error: "ليس لديك صلاحية لإعادة تعيين المواظبة"
+      });
+    }
+
+    // Get all children in the class
+    const children = await Child.find({ 
+      class: targetClassId,
+      isActive: true 
+    });
+
+    console.log(`📚 Found ${children.length} children in class`);
+
+    // Create gift delivery records for all children as reset markers
+    // This doesn't affect attendance records at all - just acts as a cutoff point
+    const today = new Date();
+    const giftRecords = [];
+    
+    for (const child of children) {
+      // Check if already has a gift delivery today
+      const existingGift = await GiftDelivery.findOne({
+        child: child._id,
+        deliveryDate: {
+          $gte: new Date(today.setHours(0, 0, 0, 0)),
+          $lt: new Date(today.setHours(23, 59, 59, 999))
+        }
+      });
+
+      if (!existingGift) {
+        giftRecords.push({
+          child: child._id,
+          deliveredBy: req.user.userId || req.user._id,
+          consecutiveWeeksEarned: 0, // Reset marker, not actual gift
+          giftType: "إعادة تعيين عداد المواظبة",
+          notes: `🔄 إعادة تعيين جماعي بواسطة ${req.user.name}`,
+          deliveryDate: new Date(),
+          isActive: true
+        });
+      }
+    }
+
+    if (giftRecords.length > 0) {
+      await GiftDelivery.insertMany(giftRecords);
+      console.log(`✅ Reset ${giftRecords.length} children's consecutive attendance (via gift records)`);
+    }
+
+    // Get class name for response
+    const classData = await Class.findById(targetClassId);
+
+    res.json({
+      success: true,
+      message: `تم إعادة تعيين المواظبة لـ ${children.length} طفل في فصل ${classData.name} (بدون تأثير على سجل الحضور)`,
+      data: {
+        classId: targetClassId,
+        className: classData.name,
+        childrenCount: children.length,
+        resetCount: giftRecords.length,
+        date: today
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error resetting consecutive attendance:", error);
+    res.status(500).json({
+      success: false,
+      error: "خطأ في إعادة تعيين المواظبة",
+      details: error.message
+    });
+  }
+});
+
+// @route   POST /api/statistics/deliver-gift
+// @desc    Mark gift as delivered and reset child's consecutive attendance
+// @access  Protected (Admin, Service Leader, Class Teacher)
+router.post("/deliver-gift", authMiddleware, async (req, res) => {
+  try {
+    console.log("\n" + "=".repeat(60));
+    console.log("🎁 Delivering gift");
+    console.log("👤 User:", req.user.name);
+    console.log("🔐 Role:", req.user.role);
+    console.log("=".repeat(60));
+
+    const { childId } = req.body;
+
+    if (!childId) {
+      return res.status(400).json({
+        success: false,
+        error: "يرجى تحديد الطفل"
+      });
+    }
+
+    // Get child info
+    const child = await Child.findById(childId).populate('class', 'name');
+    
+    if (!child) {
+      return res.status(404).json({
+        success: false,
+        error: "الطفل غير موجود"
+      });
+    }
+
+    console.log(`👶 Child: ${child.name}`);
+    console.log(`📚 Class: ${child.class?.name}`);
+
+    // Check permissions
+    if (req.user.role === 'classTeacher' || req.user.role === 'servant') {
+      // Verify the child belongs to their class
+      const assignedClassId = req.user.assignedClass?._id || req.user.assignedClass;
+      if (!assignedClassId || child.class?._id?.toString() !== assignedClassId.toString()) {
+        return res.status(403).json({
+          success: false,
+          error: "لا يمكنك تسليم هدية لطفل من فصل آخر"
+        });
+      }
+    }
+
+    // Calculate consecutive weeks
+    const attendanceRecords = await Attendance.find({
+      person: child._id,
+      type: "child",
+    }).sort({ date: -1 });
+
+    let consecutiveCount = 0;
+    for (const record of attendanceRecords) {
+      if (record.status === "present") {
+        consecutiveCount++;
+      } else if (record.status === "absent" || record.status === "reset") {
+        break;
+      }
+    }
+
+    console.log(`📊 Consecutive weeks: ${consecutiveCount}`);
+
+    // Check if already delivered gift recently
+    const recentGift = await GiftDelivery.findOne({
+      child: childId,
+      deliveryDate: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) } // Last 7 days
+    });
+
+    if (recentGift) {
+      return res.status(400).json({
+        success: false,
+        error: "تم تسليم هدية لهذا الطفل مؤخراً"
+      });
+    }
+
+    // Create gift delivery record
+    const giftDelivery = await GiftDelivery.create({
+      child: childId,
+      deliveredBy: req.user.userId || req.user._id,
+      consecutiveWeeksEarned: consecutiveCount,
+      giftType: `مواظبة ${consecutiveCount} أسبوع`,
+      notes: `تم التسليم بواسطة ${req.user.name}`
+    });
+
+    console.log(`✅ Gift delivery recorded: ${giftDelivery._id}`);
+    console.log(`🎯 The gift delivery record will act as reset point - no attendance record needed`);
+    // Note: The gift delivery date will be used as the reset point when calculating consecutive attendance
+
+    res.json({
+      success: true,
+      message: `تم تسليم الهدية لـ ${child.name} وإعادة تعيين العداد`,
+      data: {
+        childId: child._id,
+        childName: child.name,
+        consecutiveWeeks: consecutiveCount,
+        deliveryDate: giftDelivery.deliveryDate,
+        deliveredBy: req.user.name
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error delivering gift:", error);
+    res.status(500).json({
+      success: false,
+      error: "خطأ في تسليم الهدية",
+      details: error.message
     });
   }
 });

@@ -255,6 +255,60 @@ export default function ConsecutiveAttendancePage() {
     }
   }
 
+  const handleResetConsecutiveAttendance = async () => {
+    // Confirm before reset
+    const confirmed = window.confirm(
+      '⚠️ هل أنت متأكد من إعادة تعيين المواظبة؟\n\n' +
+      'سيتم إعادة تعيين عداد المواظبة لجميع الأطفال في الفصل وسيبدأ العد من الصفر.\n\n' +
+      'هذا الإجراء مناسب بعد توزيع الجوائز لبدء دورة جديدة.'
+    )
+
+    if (!confirmed) return
+
+    try {
+      setLoading(true)
+      
+      const token = localStorage.getItem('token') || 
+                   localStorage.getItem('auth_token')
+      
+      if (!token) {
+        alert('يرجى تسجيل الدخول أولاً')
+        return
+      }
+
+      // Get classId - for class teachers, it will be determined by backend
+      let classIdToReset = selectedClass
+      if ((user?.role === 'classTeacher' || user?.role === 'servant') && classesData.length > 0) {
+        classIdToReset = classesData[0].classId
+      }
+
+      const response = await fetch(`${API_BASE_URL}/statistics/reset-consecutive-attendance`, {
+        method: 'POST',
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ classId: classIdToReset })
+      })
+      
+      const data = await response.json()
+      
+      if (data.success) {
+        alert(`✅ ${data.message}\n\n🎉 تم بدء دورة مواظبة جديدة!`)
+        
+        // Refresh the data
+        await fetchConsecutiveAttendance(selectedClass)
+      } else {
+        alert(`❌ خطأ: ${data.error}`)
+      }
+    } catch (error: any) {
+      console.error('Error resetting consecutive attendance:', error)
+      alert(`❌ حدث خطأ: ${error.message}`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   if (loading && classesData.length === 0) {
     return (
       <div className="flex justify-center items-center min-h-screen">
@@ -284,7 +338,7 @@ export default function ConsecutiveAttendancePage() {
       {/* تصفية الفصول - فقط للأدمن وأمين الخدمة */}
       {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
         <div className="bg-white p-6 rounded-lg shadow mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2 text-right">
                 اختر الفصل
@@ -313,20 +367,38 @@ export default function ConsecutiveAttendancePage() {
                 {loading ? 'جاري التحديث...' : 'تحديث البيانات'}
               </button>
             </div>
+
+            <div className="flex items-end">
+              <button
+                onClick={handleResetConsecutiveAttendance}
+                disabled={loading || !selectedClass}
+                className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors w-full"
+                title={!selectedClass ? 'يرجى اختيار فصل أولاً' : 'إعادة تعيين المواظبة للفصل المحدد'}
+              >
+                {loading ? 'جاري التعيين...' : '🔄 إعادة تعيين المواظبة'}
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* زر تحديث للمدرسين */}
+      {/* أزرار التحديث وإعادة التعيين للمدرسين */}
       {(user?.role === 'classTeacher' || user?.role === 'servant') && (
         <div className="bg-white p-6 rounded-lg shadow mb-8">
-          <div className="text-center">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <button
               onClick={() => fetchConsecutiveAttendance()}
               disabled={loading}
               className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors text-lg"
             >
-              {loading ? 'جاري تحديث بيانات الفصل...' : '🔄 تحديث بيانات المواظبين في فصلي'}
+              {loading ? 'جاري التحديث...' : '🔄 تحديث البيانات'}
+            </button>
+            <button
+              onClick={handleResetConsecutiveAttendance}
+              disabled={loading}
+              className="bg-red-600 text-white px-6 py-3 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors text-lg"
+            >
+              {loading ? 'جاري إعادة التعيين...' : '🔄 إعادة تعيين المواظبة (بعد توزيع الجوائز)'}
             </button>
           </div>
         </div>

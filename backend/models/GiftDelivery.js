@@ -20,7 +20,7 @@ const giftDeliverySchema = new mongoose.Schema(
     consecutiveWeeksEarned: {
       type: Number,
       required: true,
-      min: 4, // Minimum 4 weeks to earn a gift
+      min: 0, // 0 for reset markers, 4+ for actual gifts
     },
     giftType: {
       type: String,
