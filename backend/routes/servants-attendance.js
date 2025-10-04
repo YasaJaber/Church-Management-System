@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const ServantAttendance = require("../models/ServantAttendance");
 const Attendance = require("../models/Attendance"); // إضافة الموديل الصحيح
 const User = require("../models/User");
+const GiftDelivery = require("../models/GiftDelivery"); // لتسليم المكافآت وإعادة تعيين المواظبة
 const { authMiddleware, adminOrServiceLeader } = require("../middleware/auth");
 const { zonedTimeToUtc, utcToZonedTime, format } = require("date-fns-tz");
 
@@ -961,5 +962,387 @@ router.post(
     }
   }
 );
+
+// ========================================================================================
+// 🎯 SERVANTS CONSECUTIVE ATTENDANCE ENDPOINTS (4+ Weeks)
+// ========================================================================================
+
+// Helper function to get last N attendance dates (NOT necessarily Fridays!)
+async function getLastAttendanceDates(count) {
+  try {
+    // Get the most recent dates when servant attendance was recorded
+    const dates = await Attendance.distinct("date", { type: "servant" });
+    
+    // Sort dates in descending order (newest first) and take the last 'count' dates
+    const sortedDates = dates
+      .map((date) => {
+        if (typeof date === "string") {
+          return date;
+        } else if (date instanceof Date) {
+          return date.toISOString().split("T")[0];
+        } else {
+          return new Date(date).toISOString().split("T")[0];
+        }
+      })
+      .sort((a, b) => new Date(b) - new Date(a))
+      .slice(0, parseInt(count));
+    
+    return sortedDates.reverse(); // عرض من الأقدم للأحدث
+  } catch (error) {
+    console.error('Error getting last attendance dates:', error);
+    return [];
+  }
+}
+
+// @route   GET /api/servants-attendance/consecutive-attendance
+// @desc    Get servants with 4+ consecutive weeks of attendance
+// @access  Protected (Service Leader only)
+router.get("/consecutive-attendance", authMiddleware, async (req, res) => {
+  try {
+    console.log("📊 Fetching servants consecutive attendance statistics");
+    console.log("👤 Full user object:", JSON.stringify(req.user, null, 2));
+    console.log("👤 User role:", req.user.role);
+    console.log("👤 User role type:", typeof req.user.role);
+    console.log("👤 Role comparison - serviceLeader:", req.user.role === 'serviceLeader');
+    console.log("👤 Role comparison - admin:", req.user.role === 'admin');
+
+    // Check permissions - Service Leader only
+    if (req.user.role !== 'serviceLeader' && req.user.role !== 'admin') {
+      console.log("❌ Access denied for role:", req.user.role);
+      return res.status(403).json({
+        success: false,
+        error: "هذا القسم متاح لأمين الخدمة فقط"
+      });
+    }
+
+    const { minDays = 4 } = req.query;
+
+    // Get all active servants
+    const servants = await User.find({
+      role: { $in: ['servant', 'classTeacher'] },
+      isActive: true
+    }).populate('assignedClass', 'name');
+
+    const consecutiveServants = [];
+
+    for (const servant of servants) {
+      // Get the last gift delivery date for this servant (acts as reset point)
+      const lastGift = await GiftDelivery.findOne({
+        servant: servant._id,
+        isActive: true
+      }).sort({ deliveryDate: -1 });
+
+      // Get attendance records for this servant, sorted by date desc
+      const attendanceRecords = await Attendance.find({
+        person: servant._id,
+        type: "servant"
+      }).sort({ date: -1 });
+
+      // Calculate consecutive attendance from the most recent date
+      let consecutiveCount = 0;
+      const lastGiftDate = lastGift ? new Date(lastGift.deliveryDate).toISOString().split('T')[0] : null;
+
+      for (const record of attendanceRecords) {
+        // If we reached a date before the last gift delivery, stop counting
+        if (lastGiftDate && record.date <= lastGiftDate) {
+          break;
+        }
+
+        if (record.status === "present") {
+          consecutiveCount++;
+        } else if (record.status === "absent") {
+          // إذا غاب، نوقف العد - مش متتالي
+          break;
+        }
+        // إذا كان excused أو أي حالة تانية، نكمل العد
+      }
+
+      // Only include servants with 4+ consecutive weeks
+      if (consecutiveCount >= parseInt(minDays)) {
+        consecutiveServants.push({
+          servantId: servant._id,
+          name: servant.name,
+          username: servant.username,
+          role: servant.role,
+          assignedClass: servant.assignedClass?.name || 'غير محدد',
+          consecutiveWeeks: consecutiveCount,
+        });
+      }
+    }
+
+    // Sort by consecutive weeks desc
+    consecutiveServants.sort((a, b) => b.consecutiveWeeks - a.consecutiveWeeks);
+
+    console.log(`✅ Found ${consecutiveServants.length} servants with consecutive attendance`);
+
+    res.json({
+      success: true,
+      data: consecutiveServants,
+      summary: {
+        totalServants: consecutiveServants.length,
+        minDays: parseInt(minDays),
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error fetching consecutive attendance:", error);
+    res.status(500).json({
+      success: false,
+      error: "خطأ في استرجاع إحصائيات المواظبة المتتالية",
+    });
+  }
+});
+
+// @route   GET /api/servants-attendance/weekly-stats
+// @desc    Get attendance statistics for last 4 recorded attendance sessions (not necessarily Fridays)
+// @access  Protected (Service Leader only)
+router.get("/weekly-stats", authMiddleware, async (req, res) => {
+  try {
+    console.log("📊 Fetching attendance statistics for last 4 sessions");
+    console.log("👤 User role:", req.user.role);
+    console.log("👤 User role type:", typeof req.user.role);
+
+    // Check permissions
+    if (req.user.role !== 'serviceLeader' && req.user.role !== 'admin') {
+      console.log("❌ Access denied for role:", req.user.role);
+      return res.status(403).json({
+        success: false,
+        error: "هذا القسم متاح لأمين الخدمة فقط"
+      });
+    }
+
+    // Get last 4 dates when attendance was recorded (NOT necessarily Fridays!)
+    const recentDates = await getLastAttendanceDates(4);
+    
+    if (recentDates.length === 0) {
+      return res.json({
+        success: true,
+        data: []
+      });
+    }
+
+    console.log("📅 Last attendance dates:", recentDates);
+
+    const weeklyStats = [];
+    const totalServants = await User.countDocuments({
+      role: { $in: ['servant', 'classTeacher'] },
+      isActive: true
+    });
+
+    for (const date of recentDates) {
+      const attendanceRecords = await Attendance.find({
+        date: date,
+        type: "servant"
+      });
+
+      const presentCount = attendanceRecords.filter(
+        record => record.status === 'present'
+      ).length;
+
+      const attendanceRate = totalServants > 0 
+        ? (presentCount / totalServants) * 100 
+        : 0;
+
+      weeklyStats.push({
+        date: date,
+        totalServants,
+        presentCount,
+        attendanceRate: Math.round(attendanceRate * 10) / 10
+      });
+    }
+
+    console.log(`✅ Found ${weeklyStats.length} attendance sessions`);
+
+    res.json({
+      success: true,
+      data: weeklyStats // Already in order from oldest to newest
+    });
+  } catch (error) {
+    console.error("❌ Error fetching attendance stats:", error);
+    res.status(500).json({
+      success: false,
+      error: "خطأ في استرجاع الإحصائيات"
+    });
+  }
+});
+
+// @route   POST /api/servants-attendance/deliver-gift
+// @desc    Mark gift as delivered and reset servant's consecutive attendance
+// @access  Protected (Service Leader only)
+router.post("/deliver-gift", authMiddleware, async (req, res) => {
+  try {
+    console.log("\n" + "=".repeat(60));
+    console.log("🎁 Delivering gift to servant");
+    console.log("👤 User:", req.user.name);
+    console.log("=".repeat(60));
+
+    // Check permissions
+    if (req.user.role !== 'serviceLeader' && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: "ليس لديك صلاحية لتسليم المكافآت"
+      });
+    }
+
+    const { servantId } = req.body;
+
+    if (!servantId) {
+      return res.status(400).json({
+        success: false,
+        error: "يرجى تحديد الخادم"
+      });
+    }
+
+    // Get servant info
+    const servant = await User.findById(servantId);
+    
+    if (!servant) {
+      return res.status(404).json({
+        success: false,
+        error: "الخادم غير موجود"
+      });
+    }
+
+    console.log(`👤 Servant: ${servant.name}`);
+
+    // Calculate consecutive weeks
+    const attendanceRecords = await Attendance.find({
+      person: servant._id,
+      type: "servant"
+    }).sort({ date: -1 });
+
+    let consecutiveCount = 0;
+    for (const record of attendanceRecords) {
+      if (record.status === "present") {
+        consecutiveCount++;
+      } else if (record.status === "absent") {
+        break;
+      }
+    }
+
+    console.log(`📊 Consecutive weeks: ${consecutiveCount}`);
+
+    // Check if already delivered gift recently (within last 7 days)
+    const recentGift = await GiftDelivery.findOne({
+      servant: servantId,
+      deliveryDate: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+    });
+
+    if (recentGift) {
+      return res.status(400).json({
+        success: false,
+        error: "تم تسليم مكافأة لهذا الخادم مؤخراً (خلال آخر 7 أيام)"
+      });
+    }
+
+    // Create gift delivery record
+    const giftDelivery = await GiftDelivery.create({
+      servant: servantId,
+      deliveredBy: req.user._id,
+      consecutiveWeeksEarned: consecutiveCount,
+      giftType: `مواظبة ${consecutiveCount} أسبوع`,
+      notes: `تم التسليم بواسطة ${req.user.name}`,
+      deliveryDate: new Date(),
+      isActive: true
+    });
+
+    console.log(`✅ Gift delivery recorded: ${giftDelivery._id}`);
+
+    res.json({
+      success: true,
+      message: `تم تسليم المكافأة لـ ${servant.name} وإعادة تعيين العداد`,
+      data: {
+        servantId: servant._id,
+        servantName: servant.name,
+        consecutiveWeeks: consecutiveCount,
+        deliveryDate: giftDelivery.deliveryDate,
+        deliveredBy: req.user.name
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error delivering gift:", error);
+    res.status(500).json({
+      success: false,
+      error: "خطأ في تسليم المكافأة",
+      details: error.message
+    });
+  }
+});
+
+// @route   POST /api/servants-attendance/reset-consecutive
+// @desc    Reset consecutive attendance for all servants
+// @access  Protected (Service Leader only)
+router.post("/reset-consecutive", authMiddleware, async (req, res) => {
+  try {
+    console.log("\n" + "=".repeat(60));
+    console.log("🔄 Resetting all servants consecutive attendance");
+    console.log("👤 User:", req.user.name);
+    console.log("=".repeat(60));
+
+    // Check permissions
+    if (req.user.role !== 'serviceLeader' && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        error: "ليس لديك صلاحية لإعادة تعيين المواظبة"
+      });
+    }
+
+    // Get all active servants
+    const servants = await User.find({
+      role: { $in: ['servant', 'classTeacher'] },
+      isActive: true
+    });
+
+    console.log(`📚 Found ${servants.length} servants`);
+
+    // Create gift delivery records as reset markers
+    const today = new Date();
+    const giftRecords = [];
+    
+    for (const servant of servants) {
+      // Check if already has a gift delivery today
+      const existingGift = await GiftDelivery.findOne({
+        servant: servant._id,
+        deliveryDate: {
+          $gte: new Date(today.setHours(0, 0, 0, 0)),
+          $lt: new Date(today.setHours(23, 59, 59, 999))
+        }
+      });
+
+      if (!existingGift) {
+        giftRecords.push({
+          servant: servant._id,
+          deliveredBy: req.user._id,
+          consecutiveWeeksEarned: 0,
+          giftType: "إعادة تعيين عداد المواظبة",
+          notes: `🔄 إعادة تعيين جماعي بواسطة ${req.user.name}`,
+          deliveryDate: new Date(),
+          isActive: true
+        });
+      }
+    }
+
+    if (giftRecords.length > 0) {
+      await GiftDelivery.insertMany(giftRecords);
+      console.log(`✅ Reset ${giftRecords.length} servants' consecutive attendance`);
+    }
+
+    res.json({
+      success: true,
+      message: `تم إعادة تعيين المواظبة لـ ${servants.length} خادم (بدون تأثير على سجل الحضور)`,
+      data: {
+        servantsCount: servants.length,
+        resetCount: giftRecords.length,
+        date: today
+      }
+    });
+  } catch (error) {
+    console.error("❌ Error resetting consecutive attendance:", error);
+    res.status(500).json({
+      success: false,
+      error: "خطأ في إعادة تعيين المواظبة",
+      details: error.message
+    });
+  }
+});
 
 module.exports = router;

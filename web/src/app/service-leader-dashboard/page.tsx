@@ -32,6 +32,7 @@ interface DashboardStats {
     children: number
     averageWeeks: number
   }
+  consecutiveServants: number
 }
 
 export default function ServiceLeaderDashboard() {
@@ -42,7 +43,8 @@ export default function ServiceLeaderDashboard() {
     children: { total: 0, present: 0, attendanceRate: 0 },
     servants: { total: 0, present: 0, attendanceRate: 0, needingFollowUp: 0 },
     classes: { total: 0, excellentAttendance: 0, needsImprovement: 0 },
-    consecutive: { children: 0, averageWeeks: 0 }
+    consecutive: { children: 0, averageWeeks: 0 },
+    consecutiveServants: 0
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -91,11 +93,17 @@ export default function ServiceLeaderDashboard() {
         headers: { 'Authorization': `Bearer ${token}` }
       })
 
-      const [childrenData, servantsData, followUpData, consecutiveData] = await Promise.all([
+      // جلب الخدام المواظبين
+      const servantsConsecutiveResponse = await fetch(`${API_BASE_URL}/servants-attendance/consecutive-attendance?minDays=4`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+
+      const [childrenData, servantsData, followUpData, consecutiveData, servantsConsecutiveData] = await Promise.all([
         childrenResponse.ok ? childrenResponse.json() : { success: false },
         servantsResponse.ok ? servantsResponse.json() : { success: false },
         followUpResponse.ok ? followUpResponse.json() : { success: false },
-        consecutiveResponse.ok ? consecutiveResponse.json() : { success: false }
+        consecutiveResponse.ok ? consecutiveResponse.json() : { success: false },
+        servantsConsecutiveResponse.ok ? servantsConsecutiveResponse.json() : { success: false }
       ])
 
       // تجميع البيانات
@@ -121,7 +129,8 @@ export default function ServiceLeaderDashboard() {
           averageWeeks: consecutiveData.success && consecutiveData.data?.length > 0 
             ? consecutiveData.data.reduce((sum: number, child: any) => sum + child.consecutiveWeeks, 0) / consecutiveData.data.length 
             : 0
-        }
+        },
+        consecutiveServants: servantsConsecutiveData.success ? (servantsConsecutiveData.data || []).length : 0
       }
 
       setStats(newStats)
@@ -210,7 +219,7 @@ export default function ServiceLeaderDashboard() {
       </div>
 
       {/* الروابط السريعة */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <Link href="/consecutive-attendance" className="block">
           <div className="bg-gradient-to-r from-blue-500 to-blue-600 p-6 rounded-lg shadow hover:shadow-md transition-shadow text-white">
             <div className="flex items-center justify-between">
@@ -220,6 +229,21 @@ export default function ServiceLeaderDashboard() {
                 <div className="text-2xl font-bold mt-2">{stats.consecutive.children} طفل</div>
               </div>
               <div className="text-3xl">🏆</div>
+            </div>
+          </div>
+        </Link>
+
+        <Link href="/servants-consecutive-attendance" className="block">
+          <div className="bg-gradient-to-r from-purple-500 to-pink-500 p-6 rounded-lg shadow hover:shadow-md transition-shadow text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold">مواظبة الخدام المتتالية</h3>
+                <p className="text-purple-100 text-sm mt-1">الخدام الملتزمون بالحضور 4 أسابيع متتالية أو أكثر</p>
+                <div className="text-2xl font-bold mt-2">
+                  {stats.consecutiveServants || 0} خادم
+                </div>
+              </div>
+              <div className="text-3xl">👥</div>
             </div>
           </div>
         </Link>
@@ -240,11 +264,11 @@ export default function ServiceLeaderDashboard() {
         </Link>
 
         <Link href="/statistics" className="block">
-          <div className="bg-gradient-to-r from-purple-500 to-purple-600 p-6 rounded-lg shadow hover:shadow-md transition-shadow text-white">
+          <div className="bg-gradient-to-r from-indigo-500 to-indigo-600 p-6 rounded-lg shadow hover:shadow-md transition-shadow text-white">
             <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-lg font-bold">الإحصائيات التفصيلية</h3>
-                <p className="text-purple-100 text-sm mt-1">تقارير شاملة عن الحضور والفصول</p>
+                <p className="text-indigo-100 text-sm mt-1">تقارير شاملة عن الحضور والفصول</p>
                 <div className="text-2xl font-bold mt-2">{stats.children.attendanceRate.toFixed(1)}%</div>
               </div>
               <div className="text-3xl">📊</div>

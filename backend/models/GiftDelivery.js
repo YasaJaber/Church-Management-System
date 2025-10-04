@@ -2,10 +2,16 @@ const mongoose = require("mongoose");
 
 const giftDeliverySchema = new mongoose.Schema(
   {
+    // يدعم الأطفال والخدام
     child: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Child",
-      required: true,
+      required: function() { return !this.servant; } // مطلوب إذا لم يكن servant
+    },
+    servant: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: function() { return !this.child; } // مطلوب إذا لم يكن child
     },
     deliveredBy: {
       type: mongoose.Schema.Types.ObjectId,
@@ -42,6 +48,7 @@ const giftDeliverySchema = new mongoose.Schema(
 
 // Index for faster queries
 giftDeliverySchema.index({ child: 1, deliveryDate: -1 });
+giftDeliverySchema.index({ servant: 1, deliveryDate: -1 });
 giftDeliverySchema.index({ deliveredBy: 1, deliveryDate: -1 });
 
 module.exports = mongoose.model("GiftDelivery", giftDeliverySchema);

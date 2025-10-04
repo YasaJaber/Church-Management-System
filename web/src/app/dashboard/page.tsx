@@ -197,15 +197,9 @@ export default function DashboardPage() {
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
                 <span className="hidden sm:inline">
                   نظام إدارة كنيسة الشهيد مار جرجس - بأولاد علي
-                  {user?.assignedClass && (
-                    <span className="text-blue-600 font-medium"> - {user.assignedClass.name}</span>
-                  )}
                 </span>
                 <span className="sm:hidden">
                   مار جرجس
-                  {user?.assignedClass && (
-                    <span className="text-blue-600 font-medium"> - {user.assignedClass.name}</span>
-                  )}
                 </span>
               </h1>
             </div>
@@ -214,9 +208,6 @@ export default function DashboardPage() {
                 <>
                   <span className="text-sm text-gray-700 hidden sm:inline">
                     {user.name || user.username}
-                    {user.assignedClass && (
-                      <span className="text-gray-500 mr-2">- خادم {user.assignedClass.name}</span>
-                    )}
                   </span>
                   <button
                     onClick={handleLogout}
@@ -496,6 +487,27 @@ export default function DashboardPage() {
                 </h3>
                 <p className="text-sm text-gray-500">
                   تسجيل حضور الخدام مع إمكانية الملاحظات
+                </p>
+              </div>
+            </button>
+          )}
+
+          {/* مواظبة الخدام المتتالية - لأمين الخدمة والأدمن فقط */}
+          {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
+            <button
+              key="nav-servants-consecutive-attendance"
+              onClick={() => router.push('/servants-consecutive-attendance')}
+              className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
+            >
+              <div className="text-center">
+                <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-xl">🎖️</span>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  مواظبة الخدام المتتالية
+                </h3>
+                <p className="text-sm text-gray-500">
+                  الخدام المواظبين لـ 4 أسابيع متتالية والجوائز
                 </p>
               </div>
             </button>
