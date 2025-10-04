@@ -200,6 +200,9 @@ export default function DashboardPage() {
                 </span>
                 <span className="sm:hidden">
                   مار جرجس
+                  {user?.assignedClass && (
+                    <span className="text-blue-600 font-medium"> - {user.assignedClass.name}</span>
+                  )}
                 </span>
               </h1>
             </div>
