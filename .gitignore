@@ -4,8 +4,10 @@ node_modules/
 
 # Environment variables
 .env
-.env.*
-*.env
+.env.local
+.env.development
+.env.test
+# Note: .env.production is committed to repo for deployment configuration
 
 # Build outputs
 dist/
