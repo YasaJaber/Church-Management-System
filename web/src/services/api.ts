@@ -3,20 +3,28 @@ import { tr } from 'date-fns/locale'
 import { EnhancedStorage } from '@/utils/storage'
 import Cookies from 'js-cookie'
 
-// Base URL for the API
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://church-management-system-b6h7.onrender.com/api'
-const LOCAL_URL = process.env.NEXT_PUBLIC_API_LOCAL || 'http://localhost:5000/api'
+// Base URL for the API - الرابط الصحيح للباك إند
+const PRODUCTION_API_URL = 'https://church-management-system-b6h7.onrender.com/api'
+const LOCAL_URL = 'http://localhost:5000/api'
 
 // Use production environment check
-const USE_PRODUCTION_BACKEND = process.env.NEXT_PUBLIC_USE_PRODUCTION === 'true' || process.env.NODE_ENV === 'production'
+const USE_PRODUCTION_BACKEND = process.env.NEXT_PUBLIC_USE_PRODUCTION === 'true' || 
+                               process.env.NODE_ENV === 'production' ||
+                               (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
 
-// Determine which API URL to use
+// Determine which API URL to use - استخدم الرابط الصحيح
 export const API_BASE_URL = USE_PRODUCTION_BACKEND ? 
-  (process.env.NEXT_PUBLIC_API_URL || 'https://church-management-system-b6h7.onrender.com/api') : 
+  (process.env.NEXT_PUBLIC_API_URL || PRODUCTION_API_URL) : 
   LOCAL_URL
 
-console.log('API Base URL:', API_BASE_URL)
-console.log('Environment:', process.env.NODE_ENV)
+console.log('🔧 API Configuration:', {
+  API_BASE_URL,
+  USE_PRODUCTION_BACKEND,
+  NODE_ENV: process.env.NODE_ENV,
+  NEXT_PUBLIC_USE_PRODUCTION: process.env.NEXT_PUBLIC_USE_PRODUCTION,
+  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+  hostname: typeof window !== 'undefined' ? window.location.hostname : 'server'
+})
 
 // Create axios instance with enhanced CORS settings
 const api = axios.create({

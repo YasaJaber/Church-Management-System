@@ -11,7 +11,8 @@
   ],
   "env": {
     "NEXT_PUBLIC_API_URL": "https://church-management-system-b6h7.onrender.com/api",
-    "NEXT_PUBLIC_USE_PRODUCTION": "true"
+    "NEXT_PUBLIC_USE_PRODUCTION": "true",
+    "NODE_ENV": "production"
   },
   "functions": {
     "src/app/**": {

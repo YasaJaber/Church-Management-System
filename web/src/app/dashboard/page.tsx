@@ -96,6 +96,14 @@ export default function DashboardPage() {
       
       // جلب الإحصائيات من API المخصص للكنيسة
       console.log('📊 جلب إحصائيات الكنيسة من:', `${api.defaults.baseURL}/statistics/church`)
+      console.log('🔗 API Base URL:', api.defaults.baseURL)
+      
+      // التأكد من استخدام الرابط الصحيح
+      if (api.defaults.baseURL && api.defaults.baseURL.includes('i51l')) {
+        console.error('❌ خطأ: يتم استخدام رابط API خاطئ!', api.defaults.baseURL)
+        throw new Error('رابط API خاطئ - يرجى التحقق من الإعدادات')
+      }
+      
       const statsResponse = await api.get('/statistics/church')
       console.log('✅ استجابة الإحصائيات:', statsResponse.data)
       

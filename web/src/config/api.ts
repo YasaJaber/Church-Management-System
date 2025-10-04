@@ -1,10 +1,20 @@
-// Local development configuration
+// Production API configuration
+const PRODUCTION_URL = 'https://church-management-system-b6h7.onrender.com/api'
 const LOCAL_URL = 'http://localhost:5000/api'
 
-// Use local URL for development
-export const API_BASE_URL = LOCAL_URL
+// Use production URL by default, local only in development
+const isProduction = process.env.NODE_ENV === 'production' || 
+                    process.env.NEXT_PUBLIC_USE_PRODUCTION === 'true' ||
+                    (typeof window !== 'undefined' && window.location.hostname !== 'localhost')
 
-// For critical pages, also use local during development
-export const FORCE_PRODUCTION_API = LOCAL_URL
+export const API_BASE_URL = isProduction ? PRODUCTION_URL : LOCAL_URL
 
-console.log('⚙️ API Config loaded - LOCAL DEVELOPMENT:', { API_BASE_URL })
+// For critical pages, always use production API when deployed
+export const FORCE_PRODUCTION_API = PRODUCTION_URL
+
+console.log('⚙️ API Config loaded:', { 
+  API_BASE_URL, 
+  isProduction, 
+  environment: process.env.NODE_ENV,
+  useProduction: process.env.NEXT_PUBLIC_USE_PRODUCTION 
+})
