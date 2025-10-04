@@ -1,6 +1,9 @@
 'use client'
 
 import React, { useEffect } from 'react'
+
+// Force dynamic rendering to avoid SSR issues with html2pdf.js
+export const dynamic = 'force-dynamic'
 import { useAuth } from '@/context/AuthContextSimple'
 import { ExportAttendanceTeacher } from '@/components/ExportAttendanceTeacher'
 import { ExportAttendanceAdmin } from '@/components/ExportAttendanceAdmin'

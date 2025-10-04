@@ -1,5 +1,3 @@
-import html2pdf from 'html2pdf.js'
-
 export interface AttendanceRecord {
   date: string
   studentName: string
@@ -82,6 +80,14 @@ const generateMiniChart = (present: number, absent: number, late: number) => {
 }
 
 export const generateAttendancePDF = async (data: AttendanceReportData) => {
+  // Dynamic import of html2pdf to avoid SSR issues
+  if (typeof window === 'undefined') {
+    throw new Error('PDF generation is only available in browser environment')
+  }
+  
+  const html2pdfModule = await import('html2pdf.js')
+  const html2pdf = html2pdfModule.default
+  
   const groupedByDate = groupRecordsByDate(data.records)
   const dates = Object.keys(groupedByDate).sort()
   
@@ -613,7 +619,7 @@ export const generateAttendancePDF = async (data: AttendanceReportData) => {
   `
 
   const options = {
-    margin: [10, 10, 10, 10],
+    margin: 10,
     filename: `attendance-report-${data.className.replace(/\s+/g, '-')}-${Date.now()}.pdf`,
     image: { type: 'jpeg', quality: 0.98 },
     html2canvas: { 
@@ -630,7 +636,7 @@ export const generateAttendancePDF = async (data: AttendanceReportData) => {
       compress: true
     },
     pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-  }
+  } as any
 
   try {
     await html2pdf().from(htmlContent).set(options).save()
