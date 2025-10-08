@@ -280,6 +280,10 @@ router.get("/class-comparison", authMiddleware, async (req, res) => {
 // @access  Protected
 router.get("/attendance-frequency", authMiddleware, async (req, res) => {
   try {
+    console.log("🔄 Attendance frequency API called");
+    console.log("📊 Query params:", req.query);
+    console.log("👤 User role:", req.user.role);
+
     const { period = "month", startDate, endDate, classId } = req.query;
     const userRole = req.user.role;
 
@@ -306,6 +310,8 @@ router.get("/attendance-frequency", authMiddleware, async (req, res) => {
     const startDateStr = startDateObj.toISOString().split("T")[0];
     const endDateStr = endDateObj.toISOString().split("T")[0];
 
+    console.log(`📅 Date range: ${startDateStr} to ${endDateStr}`);
+
     let filter = {
       type: "child",
       date: { $gte: startDateStr, $lte: endDateStr },
@@ -317,9 +323,17 @@ router.get("/attendance-frequency", authMiddleware, async (req, res) => {
       req.user.assignedClass
     ) {
       filter.class = req.user.assignedClass;
+      console.log(
+        `🔒 Teacher/Servant filter - class: ${req.user.assignedClass}`
+      );
     } else if (classId) {
       filter.class = classId;
+      console.log(`🔍 Filter by class: ${classId}`);
+    } else {
+      console.log(`📊 Filter all classes`);
     }
+
+    console.log(`🔍 Final filter:`, filter);
 
     // تجميع البيانات حسب التاريخ والفصل
     const frequencyData = await Attendance.aggregate([
@@ -387,7 +401,10 @@ router.get("/attendance-frequency", authMiddleware, async (req, res) => {
           ) / totalDays
         : 0;
 
-    res.json({
+    console.log(`📊 Frequency data generated: ${totalDays} days`);
+    console.log(`📊 Total frequency records: ${frequencyData.length}`);
+
+    const response = {
       success: true,
       data: {
         frequencyByDate: Object.values(dateFrequency),
@@ -397,9 +414,16 @@ router.get("/attendance-frequency", authMiddleware, async (req, res) => {
           period,
         },
       },
-    });
+    };
+
+    console.log(
+      "✅ Sending frequency response with",
+      response.data.frequencyByDate.length,
+      "records"
+    );
+    res.json(response);
   } catch (error) {
-    console.error("Error fetching attendance frequency:", error);
+    console.error("❌ Error fetching attendance frequency:", error);
     res.status(500).json({
       success: false,
       error: "خطأ في استرجاع تكرار الحضور",
@@ -412,6 +436,11 @@ router.get("/attendance-frequency", authMiddleware, async (req, res) => {
 // @access  Protected
 router.get("/individual-class/:classId", authMiddleware, async (req, res) => {
   try {
+    console.log("🎯 Individual class API called");
+    console.log("🎯 Class ID:", req.params.classId);
+    console.log("📊 Query params:", req.query);
+    console.log("👤 User role:", req.user.role);
+
     const { classId } = req.params;
     const { period = "month", startDate, endDate } = req.query;
     const userRole = req.user.role;
@@ -541,7 +570,13 @@ router.get("/individual-class/:classId", authMiddleware, async (req, res) => {
     const classAttendanceRate =
       totalRecords > 0 ? (presentTotal / totalRecords) * 100 : 0;
 
-    res.json({
+    console.log(`📊 Individual class data generated for: ${classInfo.name}`);
+    console.log(
+      `📊 Total children: ${totalChildren}, Total sessions: ${sessionDates.length}`
+    );
+    console.log(`📊 Attendance records: ${attendanceRecords.length}`);
+
+    const response = {
       success: true,
       data: {
         classInfo: {
@@ -568,9 +603,12 @@ router.get("/individual-class/:classId", authMiddleware, async (req, res) => {
         childrenAnalysis: Object.values(childrenAnalysis),
         sessionDates,
       },
-    });
+    };
+
+    console.log("✅ Sending individual class response");
+    res.json(response);
   } catch (error) {
-    console.error("Error fetching individual class statistics:", error);
+    console.error("❌ Error fetching individual class statistics:", error);
     res.status(500).json({
       success: false,
       error: "خطأ في استرجاع إحصائيات الفصل",

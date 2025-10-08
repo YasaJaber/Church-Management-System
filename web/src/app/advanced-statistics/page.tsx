@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
 import { FORCE_PRODUCTION_API } from '@/config/api'
@@ -39,6 +39,45 @@ interface FrequencyData {
   totalAttendanceRecords: number
 }
 
+interface ChildAnalysis {
+  childId: string
+  name: string
+  presentCount: number
+  absentCount: number
+  attendanceRate: number
+  consecutiveAbsent: number
+  lastAttendance: string | null
+}
+
+interface IndividualClassData {
+  classInfo: {
+    id: string
+    name: string
+    category: string
+    totalChildren: number
+  }
+  period: {
+    start: string
+    end: string
+    totalSessions: number
+  }
+  overallStats: {
+    totalRecords: number
+    presentTotal: number
+    absentTotal: number
+    attendanceRate: number
+    avgAttendancePerSession: number
+  }
+  childrenAnalysis: ChildAnalysis[]
+  sessionDates: string[]
+}
+
+interface ClassItem {
+  _id: string
+  name: string
+  category: string
+}
+
 export default function AdvancedStatisticsPage() {
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
@@ -54,26 +93,8 @@ export default function AdvancedStatisticsPage() {
   const [trendsData, setTrendsData] = useState<AttendanceTrend[]>([])
   const [classComparison, setClassComparison] = useState<ClassComparison[]>([])
   const [frequencyData, setFrequencyData] = useState<FrequencyData[]>([])
-  const [individualClassData, setIndividualClassData] = useState<any>(null)
-  const [availableClasses, setAvailableClasses] = useState<any[]>([])
-
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login')
-      return
-    }
-    
-    if (isAuthenticated && user) {
-      fetchAvailableClasses()
-      fetchStatistics()
-    }
-  }, [isAuthenticated, isLoading, router, user])
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      fetchStatistics()
-    }
-  }, [selectedPeriod, selectedClass, startDate, endDate, activeTab])
+  const [individualClassData, setIndividualClassData] = useState<IndividualClassData | null>(null)
+  const [availableClasses, setAvailableClasses] = useState<ClassItem[]>([])
 
   const fetchAvailableClasses = async () => {
     try {
@@ -90,7 +111,7 @@ export default function AdvancedStatisticsPage() {
     }
   }
 
-  const fetchStatistics = async () => {
+  const fetchStatistics = useCallback(async () => {
     try {
       setLoading(true)
       const token = localStorage.getItem('token') || localStorage.getItem('auth_token')
@@ -152,17 +173,25 @@ export default function AdvancedStatisticsPage() {
         }
       }
 
-      if (activeTab === 'individual' && selectedClass) {
-        console.log('🎯 Fetching individual class:', selectedClass)
-        const response = await fetch(`${API_BASE_URL}/advanced-statistics/individual-class/${selectedClass}?${params}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        const data = await response.json()
-        console.log('🎯 Individual response:', data)
-        if (data.success) {
-          setIndividualClassData(data.data)
+      if (activeTab === 'individual') {
+        console.log('🎯 Individual tab active')
+        console.log('🎯 Selected class:', selectedClass)
+        
+        if (selectedClass) {
+          console.log('🎯 Fetching individual class:', selectedClass)
+          const response = await fetch(`${API_BASE_URL}/advanced-statistics/individual-class/${selectedClass}?${params}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          const data = await response.json()
+          console.log('🎯 Individual response:', data)
+          if (data.success) {
+            setIndividualClassData(data.data)
+          } else {
+            console.error('❌ Individual error:', data.error)
+          }
         } else {
-          console.error('❌ Individual error:', data.error)
+          console.log('⚠️ No class selected for individual analysis')
+          setIndividualClassData(null)
         }
       }
 
@@ -171,7 +200,32 @@ export default function AdvancedStatisticsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [activeTab, selectedPeriod, selectedClass, startDate, endDate, user])
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push('/login')
+      return
+    }
+    
+    if (isAuthenticated && user) {
+      fetchAvailableClasses()
+      
+      // للمدرسين، نحط الفصل المخصص لهم تلقائياً
+      if ((user.role === 'classTeacher' || user.role === 'servant') && user.assignedClass) {
+        setSelectedClass(user.assignedClass._id)
+      }
+      
+      fetchStatistics()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated, isLoading, router, user])
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchStatistics()
+    }
+  }, [selectedPeriod, selectedClass, startDate, endDate, activeTab, isAuthenticated, fetchStatistics])
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('ar-EG', {
@@ -240,9 +294,9 @@ export default function AdvancedStatisticsPage() {
               </select>
             </div>
 
-            {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">الفصل</label>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">الفصل</label>
+              {(user?.role === 'admin' || user?.role === 'serviceLeader') ? (
                 <select
                   value={selectedClass}
                   onChange={(e) => setSelectedClass(e.target.value)}
@@ -256,8 +310,12 @@ export default function AdvancedStatisticsPage() {
                     </option>
                   ))}
                 </select>
-              </div>
-            )}
+              ) : (
+                <div className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50">
+                  {availableClasses.find(c => c._id === selectedClass)?.name || 'فصلك'}
+                </div>
+              )}
+            </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">من تاريخ</label>
@@ -765,8 +823,12 @@ export default function AdvancedStatisticsPage() {
                 {!selectedClass ? (
                   <div className="text-center py-12">
                     <div className="text-gray-400 text-6xl mb-4">🎯</div>
-                    <p className="text-gray-600">يرجى اختيار فصل للتحليل المفصل</p>
-                    <p className="text-sm text-gray-500 mt-2">استخدم القائمة المنسدلة أعلاه لاختيار الفصل</p>
+                    <p className="text-gray-600">جاري تحميل بيانات فصلك...</p>
+                    <p className="text-sm text-gray-500 mt-2">
+                      {(user?.role === 'admin' || user?.role === 'serviceLeader') 
+                        ? 'استخدم القائمة المنسدلة أعلاه لاختيار الفصل' 
+                        : 'سيتم تحميل بيانات فصلك تلقائياً'}
+                    </p>
                   </div>
                 ) : individualClassData ? (
                   <div className="space-y-8">
@@ -873,8 +935,8 @@ export default function AdvancedStatisticsPage() {
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
                               {individualClassData.childrenAnalysis
-                                .sort((a: any, b: any) => b.attendanceRate - a.attendanceRate)
-                                .map((child: any, index: number) => (
+                                .sort((a: ChildAnalysis, b: ChildAnalysis) => b.attendanceRate - a.attendanceRate)
+                                .map((child: ChildAnalysis, index: number) => (
                                 <tr key={child.childId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors`}>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                     <div className="flex items-center">
