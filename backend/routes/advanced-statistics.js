@@ -440,22 +440,29 @@ router.get("/individual-class/:classId", authMiddleware, async (req, res) => {
     console.log("🎯 Class ID:", req.params.classId);
     console.log("📊 Query params:", req.query);
     console.log("👤 User role:", req.user.role);
-
+    console.log("👤 User assigned class:", req.user.assignedClass);
+    
     const { classId } = req.params;
     const { period = "month", startDate, endDate } = req.query;
     const userRole = req.user.role;
 
     // التحقق من الصلاحيات
     if (userRole === "classTeacher" || userRole === "servant") {
-      if (
-        !req.user.assignedClass ||
-        req.user.assignedClass.toString() !== classId
-      ) {
+      const assignedClassId = req.user.assignedClass?._id 
+        ? req.user.assignedClass._id.toString() 
+        : req.user.assignedClass?.toString();
+      
+      console.log("🔍 Comparing:", { assignedClassId, classId });
+      
+      if (!assignedClassId || assignedClassId !== classId) {
+        console.log("❌ Access denied - class mismatch");
         return res.status(403).json({
           success: false,
           error: "غير مسموح - يمكنك رؤية فصلك فقط",
         });
       }
+      
+      console.log("✅ Access granted - class matches");
     }
 
     // الحصول على معلومات الفصل
