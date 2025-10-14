@@ -2,17 +2,19 @@
 
 export const dynamic = 'force-dynamic'
 
-
-
-
 import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
-import { FORCE_PRODUCTION_API } from '@/config/api'
+import { FORCE_PRODUCTION_API as API_BASE_URL } from '@/config/api'
+import {
+  AttendanceTrendLineChart,
+  DailyAttendanceRateChart,
+  ClassComparisonBarChart,
+  AttendanceDistributionChart,
+  WeeklyComparisonChart,
+} from '@/components/AdvancedCharts'
 
-// FORCE production API URL - no localhost allowed
-const API_BASE_URL = FORCE_PRODUCTION_API
-console.log('🚀 FORCED Advanced Statistics API URL:', API_BASE_URL)
+console.log('🚀 Advanced Statistics API URL:', API_BASE_URL)
 
 interface AttendanceTrend {
   date: string
@@ -31,45 +33,6 @@ interface ClassComparison {
   absentCount: number
   attendanceRate: number
   avgAttendancePerSession: number
-}
-
-interface FrequencyData {
-  date: string
-  classesWithAttendance: number
-  totalAttendanceRecords: number
-}
-
-interface ChildAnalysis {
-  childId: string
-  name: string
-  presentCount: number
-  absentCount: number
-  attendanceRate: number
-  consecutiveAbsent: number
-  lastAttendance: string | null
-}
-
-interface IndividualClassData {
-  classInfo: {
-    id: string
-    name: string
-    category: string
-    totalChildren: number
-  }
-  period: {
-    start: string
-    end: string
-    totalSessions: number
-  }
-  overallStats: {
-    totalRecords: number
-    presentTotal: number
-    absentTotal: number
-    attendanceRate: number
-    avgAttendancePerSession: number
-  }
-  childrenAnalysis: ChildAnalysis[]
-  sessionDates: string[]
 }
 
 interface ClassItem {
@@ -92,8 +55,6 @@ export default function AdvancedStatisticsPage() {
   // بيانات الإحصائيات
   const [trendsData, setTrendsData] = useState<AttendanceTrend[]>([])
   const [classComparison, setClassComparison] = useState<ClassComparison[]>([])
-  const [frequencyData, setFrequencyData] = useState<FrequencyData[]>([])
-  const [individualClassData, setIndividualClassData] = useState<IndividualClassData | null>(null)
   const [availableClasses, setAvailableClasses] = useState<ClassItem[]>([])
 
   const fetchAvailableClasses = async () => {
@@ -126,7 +87,7 @@ export default function AdvancedStatisticsPage() {
         ...(endDate && { endDate })
       })
 
-      if (activeTab === 'trends') {
+      if (activeTab === 'trends' || activeTab === 'weekly' || activeTab === 'daily') {
         console.log('📈 Fetching trends...')
         const response = await fetch(`${API_BASE_URL}/advanced-statistics/attendance-trends?${params}`, {
           headers: { 'Authorization': `Bearer ${token}` }
@@ -142,7 +103,6 @@ export default function AdvancedStatisticsPage() {
 
       if (activeTab === 'comparison' && (user?.role === 'admin' || user?.role === 'serviceLeader')) {
         console.log('⚖️ Fetching comparison...')
-        console.log('👤 User role:', user?.role)
         const response = await fetch(`${API_BASE_URL}/advanced-statistics/class-comparison?${params}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
@@ -152,46 +112,6 @@ export default function AdvancedStatisticsPage() {
           setClassComparison(data.data.classComparisons)
         } else {
           console.error('❌ Comparison error:', data.error)
-        }
-      } else if (activeTab === 'comparison') {
-        console.log('❌ Access denied for comparison tab')
-        console.log('👤 Current user role:', user?.role)
-        console.log('🔒 Required roles: admin or serviceLeader')
-      }
-
-      if (activeTab === 'frequency') {
-        console.log('🔄 Fetching frequency...')
-        const response = await fetch(`${API_BASE_URL}/advanced-statistics/attendance-frequency?${params}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        const data = await response.json()
-        console.log('🔄 Frequency response:', data)
-        if (data.success) {
-          setFrequencyData(data.data.frequencyByDate)
-        } else {
-          console.error('❌ Frequency error:', data.error)
-        }
-      }
-
-      if (activeTab === 'individual') {
-        console.log('🎯 Individual tab active')
-        console.log('🎯 Selected class:', selectedClass)
-        
-        if (selectedClass) {
-          console.log('🎯 Fetching individual class:', selectedClass)
-          const response = await fetch(`${API_BASE_URL}/advanced-statistics/individual-class/${selectedClass}?${params}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
-          const data = await response.json()
-          console.log('🎯 Individual response:', data)
-          if (data.success) {
-            setIndividualClassData(data.data)
-          } else {
-            console.error('❌ Individual error:', data.error)
-          }
-        } else {
-          console.log('⚠️ No class selected for individual analysis')
-          setIndividualClassData(null)
         }
       }
 
@@ -267,12 +187,12 @@ export default function AdvancedStatisticsPage() {
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            📊 الإحصائيات المتقدمة والتحليلات
+            📊 الإحصائيات المتقدمة والتحليلات البيانية
           </h1>
           <p className="text-gray-600">
             {user?.role === 'admin' || user?.role === 'serviceLeader' 
-              ? 'إحصائيات شاملة ومقارنات بين الفصول مع تحليل تكرار أخذ الحضور' 
-              : 'إحصائيات متقدمة وتحليل مفصل لفصلك'}
+              ? 'رسوم بيانية تفاعلية ومقارنات شاملة مع تحليل الاتجاهات' 
+              : 'رسوم بيانية وتحليلات مفصلة لفصلك'}
           </p>
         </div>
 
@@ -346,22 +266,44 @@ export default function AdvancedStatisticsPage() {
         {/* Tabs */}
         <div className="bg-white rounded-xl shadow-lg mb-8">
           <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8 px-6" dir="ltr">
+            <nav className="-mb-px flex space-x-8 px-6 overflow-x-auto" dir="ltr">
               <button
                 onClick={() => setActiveTab('trends')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                   activeTab === 'trends'
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                📈 اتجاهات الحضور
+                📈 منحنى الاتجاهات
+              </button>
+
+              <button
+                onClick={() => setActiveTab('daily')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  activeTab === 'daily'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                📅 التحليل اليومي
+              </button>
+
+              <button
+                onClick={() => setActiveTab('weekly')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  activeTab === 'weekly'
+                    ? 'border-blue-500 text-blue-600'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                }`}
+              >
+                📊 المقارنة الأسبوعية
               </button>
 
               {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
                 <button
                   onClick={() => setActiveTab('comparison')}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm ${
+                  className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
                     activeTab === 'comparison'
                       ? 'border-blue-500 text-blue-600'
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -372,43 +314,48 @@ export default function AdvancedStatisticsPage() {
               )}
 
               <button
-                onClick={() => setActiveTab('frequency')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'frequency'
+                onClick={() => setActiveTab('distribution')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  activeTab === 'distribution'
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                🔄 تكرار أخذ الحضور
+                🎯 التوزيع الإجمالي
               </button>
 
               <button
-                onClick={() => setActiveTab('individual')}
-                className={`py-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'individual'
+                onClick={() => setActiveTab('table')}
+                className={`py-4 px-1 border-b-2 font-medium text-sm whitespace-nowrap ${
+                  activeTab === 'table'
                     ? 'border-blue-500 text-blue-600'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                 }`}
               >
-                🎯 تحليل فصل محدد
+                📋 جدول المقارنة اليومية
               </button>
             </nav>
           </div>
 
           {/* Tab Content */}
           <div className="p-6">
-            {/* Trends Tab */}
+            {/* منحنى الاتجاهات */}
             {activeTab === 'trends' && (
               <div>
                 <h3 className="text-xl font-bold text-gray-800 mb-6">
-                  📈 اتجاهات الحضور والغياب عبر الوقت
+                  📈 منحنى الحضور والغياب عبر الوقت
                 </h3>
                 <p className="text-gray-600 mb-6">
-                  هذا القسم يوضح الفرق بين المرات التي أُخذ فيها الحضور والاتجاهات العامة للحضور والغياب
+                  رسم بياني خطي يوضح الاتجاهات والأنماط في الحضور والغياب
                 </p>
                 
                 {trendsData.length > 0 ? (
                   <div className="space-y-8">
+                    {/* Chart */}
+                    <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                      <AttendanceTrendLineChart data={trendsData} />
+                    </div>
+
                     {/* Summary Stats */}
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                       <div className="bg-green-50 border border-green-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
@@ -448,7 +395,7 @@ export default function AdvancedStatisticsPage() {
                             <div className="text-2xl font-bold text-blue-600">
                               {trendsData.length}
                             </div>
-                            <div className="text-sm text-blue-700">أيام أُخذ فيها حضور</div>
+                            <div className="text-sm text-blue-700">عدد الأيام</div>
                           </div>
                         </div>
                       </div>
@@ -470,62 +417,6 @@ export default function AdvancedStatisticsPage() {
                         </div>
                       </div>
                     </div>
-
-                    {/* Data Table */}
-                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                      <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                        <h4 className="text-lg font-semibold">📋 تفاصيل الحضور اليومي</h4>
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                التاريخ
-                              </th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                الحاضرون
-                              </th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                الغائبون
-                              </th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                الإجمالي
-                              </th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                معدل الحضور
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {trendsData.map((item, index) => {
-                              const attendanceRate = item.total > 0 ? (item.present / item.total) * 100 : 0
-                              return (
-                                <tr key={item.date} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors`}>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    {formatDate(item.date)}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-semibold">
-                                    {item.present}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-semibold">
-                                    {item.absent}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-semibold">
-                                    {item.total}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getAttendanceRateColor(attendanceRate)}`}>
-                                      {Math.round(attendanceRate)}%
-                                    </span>
-                                  </td>
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
                   </div>
                 ) : (
                   <div className="text-center py-12">
@@ -537,150 +428,107 @@ export default function AdvancedStatisticsPage() {
               </div>
             )}
 
-            {/* Class Comparison Tab */}
+            {/* التحليل اليومي */}
+            {activeTab === 'daily' && (
+              <div>
+                <h3 className="text-xl font-bold text-gray-800 mb-6">
+                  📅 معدل الحضور اليومي
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  رسم بياني يوضح معدل الحضور بالنسبة المئوية لكل يوم
+                </p>
+                
+                {trendsData.length > 0 ? (
+                  <div className="space-y-6">
+                    <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                      <DailyAttendanceRateChart data={trendsData} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="text-gray-400 text-6xl mb-4">📅</div>
+                    <p className="text-gray-600">لا توجد بيانات للفترة المحددة</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* المقارنة الأسبوعية */}
+            {activeTab === 'weekly' && (
+              <div>
+                <h3 className="text-xl font-bold text-gray-800 mb-6">
+                  📊 المقارنة الأسبوعية
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  مقارنة متوسطات الحضور والغياب بين الأسابيع المختلفة
+                </p>
+                
+                {trendsData.length > 0 ? (
+                  <div className="space-y-6">
+                    <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                      <WeeklyComparisonChart data={trendsData} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="text-gray-400 text-6xl mb-4">📊</div>
+                    <p className="text-gray-600">لا توجد بيانات للفترة المحددة</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* مقارنة الفصول */}
             {activeTab === 'comparison' && (user?.role === 'admin' || user?.role === 'serviceLeader') && (
               <div>
                 <h3 className="text-xl font-bold text-gray-800 mb-6">
-                  ⚖️ مقارنة شاملة بين الفصول
+                  ⚖️ مقارنة معدلات الحضور بين الفصول
                 </h3>
                 <p className="text-gray-600 mb-6">
-                  لأمين الخدمة: إحصائيات كل فصل كاتيجوري مع عدد الحاضرين والغائبين والنسب المئوية
+                  رسم بياني شريطي يوضح معدل الحضور لكل فصل
                 </p>
                 
                 {classComparison.length > 0 ? (
-                  <div className="space-y-8">
-                    {/* Summary Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
-                        <div className="flex items-center">
-                          <div className="p-3 rounded-full bg-blue-100 mr-4">
-                            <span className="text-2xl">🏫</span>
-                          </div>
-                          <div>
-                            <div className="text-2xl font-bold text-blue-600">
-                              {classComparison.length}
-                            </div>
-                            <div className="text-sm text-blue-700">عدد الفصول</div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
-                        <div className="flex items-center">
-                          <div className="p-3 rounded-full bg-green-100 mr-4">
-                            <span className="text-2xl">📈</span>
-                          </div>
-                          <div>
-                            <div className="text-2xl font-bold text-green-600">
-                              {Math.round((classComparison.reduce((sum, item) => sum + item.attendanceRate, 0) / Math.max(classComparison.length, 1)) * 100) / 100}%
-                            </div>
-                            <div className="text-sm text-green-700">متوسط معدل الحضور</div>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
-                        <div className="flex items-center">
-                          <div className="p-3 rounded-full bg-purple-100 mr-4">
-                            <span className="text-2xl">👥</span>
-                          </div>
-                          <div>
-                            <div className="text-2xl font-bold text-purple-600">
-                              {classComparison.reduce((sum, item) => sum + item.presentCount, 0)}
-                            </div>
-                            <div className="text-sm text-purple-700">إجمالي الحضور</div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
-                        <div className="flex items-center">
-                          <div className="p-3 rounded-full bg-orange-100 mr-4">
-                            <span className="text-2xl">👶</span>
-                          </div>
-                          <div>
-                            <div className="text-2xl font-bold text-orange-600">
-                              {classComparison.reduce((sum, item) => sum + item.totalChildren, 0)}
-                            </div>
-                            <div className="text-sm text-orange-700">إجمالي الأطفال</div>
-                          </div>
-                        </div>
-                      </div>
+                  <div className="space-y-6">
+                    <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                      <ClassComparisonBarChart 
+                        data={classComparison.map(item => ({
+                          className: item.className,
+                          attendanceRate: item.attendanceRate,
+                          presentCount: item.presentCount,
+                          absentCount: item.absentCount,
+                        }))} 
+                      />
                     </div>
 
-                    {/* Detailed Table */}
-                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                      <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                        <h4 className="text-lg font-semibold">📊 تفاصيل مقارنة الفصول</h4>
+                    {/* Summary Stats */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                        <div className="text-2xl font-bold text-blue-600">
+                          {classComparison.length}
+                        </div>
+                        <div className="text-sm text-blue-700">عدد الفصول</div>
                       </div>
-                      <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                الفصل
-                              </th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                الفئة
-                              </th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                عدد الأطفال
-                              </th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                عدد الجلسات
-                              </th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                إجمالي الحضور
-                              </th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                إجمالي الغياب
-                              </th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                معدل الحضور
-                              </th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                متوسط الحضور/جلسة
-                              </th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {classComparison.map((classItem, index) => (
-                              <tr key={classItem.classId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors`}>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                  <div className="flex items-center">
-                                    <span className="p-1 rounded-full bg-blue-100 text-blue-600 mr-2">🏫</span>
-                                    {classItem.className}
-                                  </div>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                  <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
-                                    {classItem.category}
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-semibold">
-                                  {classItem.totalChildren}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-semibold">
-                                  {classItem.totalSessions}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-semibold">
-                                  {classItem.presentCount}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-semibold">
-                                  {classItem.absentCount}
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getAttendanceRateColor(classItem.attendanceRate)}`}>
-                                    {classItem.attendanceRate}%
-                                  </span>
-                                </td>
-                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-semibold">
-                                  {classItem.avgAttendancePerSession}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                      
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+                        <div className="text-2xl font-bold text-green-600">
+                          {Math.round((classComparison.reduce((sum, item) => sum + item.attendanceRate, 0) / Math.max(classComparison.length, 1)) * 100) / 100}%
+                        </div>
+                        <div className="text-sm text-green-700">متوسط معدل الحضور</div>
+                      </div>
+                      
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
+                        <div className="text-2xl font-bold text-purple-600">
+                          {classComparison.reduce((sum, item) => sum + item.presentCount, 0)}
+                        </div>
+                        <div className="text-sm text-purple-700">إجمالي الحضور</div>
+                      </div>
+
+                      <div className="bg-orange-50 border border-orange-200 rounded-lg p-6">
+                        <div className="text-2xl font-bold text-orange-600">
+                          {classComparison.reduce((sum, item) => sum + item.totalChildren, 0)}
+                        </div>
+                        <div className="text-sm text-orange-700">إجمالي الأطفال</div>
                       </div>
                     </div>
                   </div>
@@ -688,305 +536,291 @@ export default function AdvancedStatisticsPage() {
                   <div className="text-center py-12">
                     <div className="text-gray-400 text-6xl mb-4">⚖️</div>
                     <p className="text-gray-600">لا توجد بيانات للمقارنة</p>
-                    <p className="text-sm text-gray-500 mt-2">تأكد من وجود بيانات حضور للفترة المحددة</p>
                   </div>
                 )}
               </div>
             )}
 
-            {/* Frequency Tab */}
-            {activeTab === 'frequency' && (
+            {/* التوزيع الإجمالي */}
+            {activeTab === 'distribution' && (
               <div>
                 <h3 className="text-xl font-bold text-gray-800 mb-6">
-                  🔄 تحليل تكرار أخذ الحضور
+                  🎯 التوزيع الإجمالي للحضور والغياب
                 </h3>
                 <p className="text-gray-600 mb-6">
-                  هذا القسم يوضح الفرق بين المرات التي أُخذ فيها الحضور وتكرار النشاط لكل يوم
+                  رسم دائري يوضح نسبة الحضور والغياب من الإجمالي
                 </p>
                 
-                {frequencyData.length > 0 ? (
-                  <div className="space-y-8">
+                {trendsData.length > 0 ? (
+                  <div className="space-y-6">
+                    <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm flex justify-center">
+                      <AttendanceDistributionChart data={trendsData} />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <div className="text-gray-400 text-6xl mb-4">🎯</div>
+                    <p className="text-gray-600">لا توجد بيانات للفترة المحددة</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* جدول المقارنة اليومية */}
+            {activeTab === 'table' && (
+              <div>
+                <h3 className="text-xl font-bold text-gray-800 mb-6">
+                  📋 جدول المقارنة اليومية للحضور والغياب
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  عرض تفصيلي لكل يوم مع إمكانية المقارنة المباشرة بين الأيام
+                </p>
+                
+                {trendsData.length > 0 ? (
+                  <div className="space-y-6">
                     {/* Summary Cards */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
-                        <div className="flex items-center">
-                          <div className="p-3 rounded-full bg-blue-100 mr-4">
-                            <span className="text-2xl">📅</span>
-                          </div>
-                          <div>
-                            <div className="text-2xl font-bold text-blue-600">
-                              {frequencyData.length}
-                            </div>
-                            <div className="text-sm text-blue-700">أيام أُخذ فيها حضور</div>
-                          </div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="text-sm text-blue-700 mb-1">عدد الأيام</div>
+                        <div className="text-2xl font-bold text-blue-600">{trendsData.length}</div>
+                      </div>
+                      
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="text-sm text-green-700 mb-1">أعلى حضور في يوم</div>
+                        <div className="text-2xl font-bold text-green-600">
+                          {Math.max(...trendsData.map(d => d.present))}
                         </div>
                       </div>
                       
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
-                        <div className="flex items-center">
-                          <div className="p-3 rounded-full bg-green-100 mr-4">
-                            <span className="text-2xl">🏫</span>
-                          </div>
-                          <div>
-                            <div className="text-2xl font-bold text-green-600">
-                              {Math.round((frequencyData.reduce((sum, item) => sum + item.classesWithAttendance, 0) / Math.max(frequencyData.length, 1)) * 100) / 100}
-                            </div>
-                            <div className="text-sm text-green-700">متوسط الفصول/يوم</div>
-                          </div>
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                        <div className="text-sm text-red-700 mb-1">أعلى غياب في يوم</div>
+                        <div className="text-2xl font-bold text-red-600">
+                          {Math.max(...trendsData.map(d => d.absent))}
                         </div>
                       </div>
                       
-                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
-                        <div className="flex items-center">
-                          <div className="p-3 rounded-full bg-purple-100 mr-4">
-                            <span className="text-2xl">📊</span>
-                          </div>
-                          <div>
-                            <div className="text-2xl font-bold text-purple-600">
-                              {frequencyData.reduce((sum, item) => sum + item.totalAttendanceRecords, 0)}
-                            </div>
-                            <div className="text-sm text-purple-700">إجمالي السجلات</div>
-                          </div>
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
+                        <div className="text-sm text-purple-700 mb-1">متوسط الحضور يومياً</div>
+                        <div className="text-2xl font-bold text-purple-600">
+                          {Math.round(trendsData.reduce((sum, d) => sum + d.present, 0) / trendsData.length)}
                         </div>
                       </div>
                     </div>
 
-                    {/* Data Table */}
+                    {/* Detailed Table */}
                     <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                      <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                        <h4 className="text-lg font-semibold">📋 تفاصيل تكرار الحضور اليومي</h4>
+                      <div className="px-6 py-4 bg-gradient-to-r from-blue-500 to-blue-600 border-b border-blue-700">
+                        <h4 className="text-lg font-semibold text-white flex items-center">
+                          <span className="mr-2">📊</span>
+                          تفاصيل الحضور اليومي
+                        </h4>
                       </div>
                       <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-200">
                           <thead className="bg-gray-50">
                             <tr>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                #
+                              </th>
+                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
                                 التاريخ
                               </th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                عدد الفصول النشطة
+                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                اليوم
                               </th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                إجمالي السجلات
+                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider bg-green-50">
+                                الحاضرون
                               </th>
-                              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                متوسط السجلات/فصل
+                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider bg-red-50">
+                                الغائبون
+                              </th>
+                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                الإجمالي
+                              </th>
+                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider bg-blue-50">
+                                معدل الحضور
+                              </th>
+                              <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">
+                                الفرق عن المتوسط
                               </th>
                             </tr>
                           </thead>
                           <tbody className="bg-white divide-y divide-gray-200">
-                            {frequencyData.map((item, index) => {
-                              const avgRecordsPerClass = item.classesWithAttendance > 0 ? 
-                                Math.round((item.totalAttendanceRecords / item.classesWithAttendance) * 100) / 100 : 0
+                            {trendsData.map((item, index) => {
+                              const attendanceRate = item.total > 0 ? Math.round((item.present / item.total) * 100) : 0
+                              const avgPresent = Math.round(trendsData.reduce((sum, d) => sum + d.present, 0) / trendsData.length)
+                              const diff = item.present - avgPresent
+                              const date = new Date(item.date)
+                              const dayName = date.toLocaleDateString('ar-EG', { weekday: 'long' })
+                              
                               return (
-                                <tr key={item.date} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors`}>
+                                <tr 
+                                  key={item.date} 
+                                  className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-all duration-200`}
+                                >
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-500">
+                                    {index + 1}
+                                  </td>
                                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    {formatDate(item.date)}
+                                    {date.toLocaleDateString('ar-EG', { 
+                                      year: 'numeric',
+                                      month: 'long',
+                                      day: 'numeric'
+                                    })}
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-semibold">
-                                    {item.classesWithAttendance}
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                                    <span className="inline-flex px-2 py-1 text-xs font-medium rounded-full bg-indigo-100 text-indigo-800">
+                                      {dayName}
+                                    </span>
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-purple-600 font-semibold">
-                                    {item.totalAttendanceRecords}
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600 bg-green-50">
+                                    <div className="flex items-center">
+                                      <span className="text-xl mr-2">✅</span>
+                                      <span className="text-lg">{item.present}</span>
+                                    </div>
                                   </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-semibold">
-                                    {avgRecordsPerClass}
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-red-600 bg-red-50">
+                                    <div className="flex items-center">
+                                      <span className="text-xl mr-2">❌</span>
+                                      <span className="text-lg">{item.absent}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-700">
+                                    {item.total}
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap bg-blue-50">
+                                    <div className="flex items-center space-x-2 space-x-reverse">
+                                      <div className="flex-1">
+                                        <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                                          <div 
+                                            className={`h-full ${
+                                              attendanceRate >= 80 ? 'bg-green-500' :
+                                              attendanceRate >= 60 ? 'bg-yellow-500' : 'bg-red-500'
+                                            }`}
+                                            style={{ width: `${attendanceRate}%` }}
+                                          ></div>
+                                        </div>
+                                      </div>
+                                      <span className={`inline-flex px-3 py-1 text-xs font-bold rounded-full ${
+                                        attendanceRate >= 80 ? 'bg-green-100 text-green-800' :
+                                        attendanceRate >= 60 ? 'bg-yellow-100 text-yellow-800' : 
+                                        'bg-red-100 text-red-800'
+                                      }`}>
+                                        {attendanceRate}%
+                                      </span>
+                                    </div>
+                                  </td>
+                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold">
+                                    {diff > 0 ? (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-full bg-green-100 text-green-800">
+                                        <span className="mr-1">↑</span>
+                                        +{diff}
+                                      </span>
+                                    ) : diff < 0 ? (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-full bg-red-100 text-red-800">
+                                        <span className="mr-1">↓</span>
+                                        {diff}
+                                      </span>
+                                    ) : (
+                                      <span className="inline-flex items-center px-2 py-1 rounded-full bg-gray-100 text-gray-800">
+                                        <span className="mr-1">→</span>
+                                        0
+                                      </span>
+                                    )}
                                   </td>
                                 </tr>
                               )
                             })}
                           </tbody>
+                          <tfoot className="bg-gradient-to-r from-blue-50 to-indigo-50">
+                            <tr>
+                              <td colSpan={3} className="px-6 py-4 text-sm font-bold text-gray-700">
+                                الإجمالي الكلي
+                              </td>
+                              <td className="px-6 py-4 text-sm font-bold text-green-700 bg-green-100">
+                                {trendsData.reduce((sum, item) => sum + item.present, 0)}
+                              </td>
+                              <td className="px-6 py-4 text-sm font-bold text-red-700 bg-red-100">
+                                {trendsData.reduce((sum, item) => sum + item.absent, 0)}
+                              </td>
+                              <td className="px-6 py-4 text-sm font-bold text-gray-700">
+                                {trendsData.reduce((sum, item) => sum + item.total, 0)}
+                              </td>
+                              <td className="px-6 py-4 text-sm font-bold text-blue-700 bg-blue-100">
+                                {trendsData.length > 0 ? 
+                                  Math.round((trendsData.reduce((sum, item) => 
+                                    sum + (item.total > 0 ? (item.present / item.total) * 100 : 0), 0
+                                  ) / trendsData.length) * 100) / 100 : 0}%
+                              </td>
+                              <td className="px-6 py-4"></td>
+                            </tr>
+                          </tfoot>
                         </table>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <div className="text-gray-400 text-6xl mb-4">🔄</div>
-                    <p className="text-gray-600">لا توجد بيانات تكرار للفترة المحددة</p>
-                    <p className="text-sm text-gray-500 mt-2">جرب تغيير الفترة الزمنية أو الفصل المحدد</p>
-                  </div>
-                )}
-              </div>
-            )}
 
-            {/* Individual Class Tab */}
-            {activeTab === 'individual' && (
-              <div>
-                <h3 className="text-xl font-bold text-gray-800 mb-6">
-                  🎯 تحليل مفصل لفصل محدد
-                </h3>
-                <p className="text-gray-600 mb-6">
-                  تحليل شامل لفصل واحد مع تفاصيل حضور كل طفل وإحصائيات مفصلة
-                </p>
-                
-                {!selectedClass ? (
-                  <div className="text-center py-12">
-                    <div className="text-gray-400 text-6xl mb-4">🎯</div>
-                    <p className="text-gray-600">جاري تحميل بيانات فصلك...</p>
-                    <p className="text-sm text-gray-500 mt-2">
-                      {(user?.role === 'admin' || user?.role === 'serviceLeader') 
-                        ? 'استخدم القائمة المنسدلة أعلاه لاختيار الفصل' 
-                        : 'سيتم تحميل بيانات فصلك تلقائياً'}
-                    </p>
-                  </div>
-                ) : individualClassData ? (
-                  <div className="space-y-8">
-                    {/* Class Info */}
-                    <div className="bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg p-6 shadow-lg">
-                      <h4 className="text-2xl font-bold mb-4 flex items-center">
-                        <span className="mr-3">🏫</span>
-                        {individualClassData.classInfo.name}
+                    {/* Statistics Summary */}
+                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6">
+                      <h4 className="text-lg font-bold text-gray-800 mb-4 flex items-center">
+                        <span className="mr-2">📈</span>
+                        ملخص الإحصائيات
                       </h4>
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                        <div>
-                          <div className="text-blue-100">الفئة</div>
-                          <div className="font-semibold text-lg">{individualClassData.classInfo.category}</div>
-                        </div>
-                        <div>
-                          <div className="text-blue-100">عدد الأطفال</div>
-                          <div className="font-semibold text-lg">{individualClassData.classInfo.totalChildren}</div>
-                        </div>
-                        <div>
-                          <div className="text-blue-100">عدد الجلسات</div>
-                          <div className="font-semibold text-lg">{individualClassData.period.totalSessions}</div>
-                        </div>
-                        <div>
-                          <div className="text-blue-100">معدل الحضور الإجمالي</div>
-                          <div className="font-semibold text-lg">{individualClassData.overallStats.attendanceRate}%</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Overall Statistics */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
-                        <div className="flex items-center">
-                          <div className="p-3 rounded-full bg-green-100 mr-4">
-                            <span className="text-2xl">✅</span>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                          <div className="text-gray-600 mb-1">أفضل يوم حضور</div>
+                          <div className="font-bold text-green-600 text-lg">
+                            {(() => {
+                              const bestDay = trendsData.reduce((best, current) => 
+                                current.present > best.present ? current : best
+                              , trendsData[0])
+                              return new Date(bestDay.date).toLocaleDateString('ar-EG', { 
+                                weekday: 'short', 
+                                day: 'numeric',
+                                month: 'short'
+                              })
+                            })()}
                           </div>
-                          <div>
-                            <div className="text-2xl font-bold text-green-600">
-                              {individualClassData.overallStats.presentTotal}
-                            </div>
-                            <div className="text-sm text-green-700">إجمالي مرات الحضور</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {Math.max(...trendsData.map(d => d.present))} حاضر
                           </div>
                         </div>
-                      </div>
-                      
-                      <div className="bg-red-50 border border-red-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
-                        <div className="flex items-center">
-                          <div className="p-3 rounded-full bg-red-100 mr-4">
-                            <span className="text-2xl">❌</span>
+                        
+                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                          <div className="text-gray-600 mb-1">أسوأ يوم حضور</div>
+                          <div className="font-bold text-red-600 text-lg">
+                            {(() => {
+                              const worstDay = trendsData.reduce((worst, current) => 
+                                current.present < worst.present ? current : worst
+                              , trendsData[0])
+                              return new Date(worstDay.date).toLocaleDateString('ar-EG', { 
+                                weekday: 'short', 
+                                day: 'numeric',
+                                month: 'short'
+                              })
+                            })()}
                           </div>
-                          <div>
-                            <div className="text-2xl font-bold text-red-600">
-                              {individualClassData.overallStats.absentTotal}
-                            </div>
-                            <div className="text-sm text-red-700">إجمالي مرات الغياب</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {Math.min(...trendsData.map(d => d.present))} حاضر
                           </div>
                         </div>
-                      </div>
-                      
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 hover:shadow-lg transition-shadow">
-                        <div className="flex items-center">
-                          <div className="p-3 rounded-full bg-blue-100 mr-4">
-                            <span className="text-2xl">📊</span>
+                        
+                        <div className="bg-white rounded-lg p-4 shadow-sm">
+                          <div className="text-gray-600 mb-1">الفرق بين الأفضل والأسوأ</div>
+                          <div className="font-bold text-purple-600 text-lg">
+                            {Math.max(...trendsData.map(d => d.present)) - Math.min(...trendsData.map(d => d.present))}
                           </div>
-                          <div>
-                            <div className="text-2xl font-bold text-blue-600">
-                              {Math.round(individualClassData.overallStats.avgAttendancePerSession * 100) / 100}
-                            </div>
-                            <div className="text-sm text-blue-700">متوسط الحضور/جلسة</div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            تفاوت في الحضور
                           </div>
                         </div>
                       </div>
                     </div>
-
-                    {/* Children Analysis Table */}
-                    {individualClassData.childrenAnalysis && individualClassData.childrenAnalysis.length > 0 && (
-                      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
-                        <div className="px-6 py-4 bg-gray-50 border-b border-gray-200">
-                          <h4 className="text-lg font-semibold">👥 تفاصيل حضور الأطفال</h4>
-                        </div>
-                        <div className="overflow-x-auto">
-                          <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                              <tr>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  اسم الطفل
-                                </th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  مرات الحضور
-                                </th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  مرات الغياب
-                                </th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  معدل الحضور
-                                </th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  الغياب المتتالي
-                                </th>
-                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                  آخر حضور
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200">
-                              {individualClassData.childrenAnalysis
-                                .sort((a: ChildAnalysis, b: ChildAnalysis) => b.attendanceRate - a.attendanceRate)
-                                .map((child: ChildAnalysis, index: number) => (
-                                <tr key={child.childId} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors`}>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                    <div className="flex items-center">
-                                      <span className="p-1 rounded-full bg-blue-100 text-blue-600 mr-2">👶</span>
-                                      {child.name}
-                                    </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 font-semibold">
-                                    {child.presentCount}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-red-600 font-semibold">
-                                    {child.absentCount}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getAttendanceRateColor(child.attendanceRate)}`}>
-                                      {Math.round(child.attendanceRate)}%
-                                    </span>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    {child.consecutiveAbsent > 0 ? (
-                                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                        child.consecutiveAbsent >= 3 
-                                          ? 'bg-red-100 text-red-800'
-                                          : 'bg-yellow-100 text-yellow-800'
-                                      }`}>
-                                        {child.consecutiveAbsent} مرات
-                                      </span>
-                                    ) : (
-                                      <span className="text-gray-400">لا يوجد</span>
-                                    )}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                    {child.lastAttendance ? 
-                                      formatDate(child.lastAttendance) : 
-                                      <span className="text-red-500">لم يحضر</span>
-                                    }
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 ) : (
                   <div className="text-center py-12">
-                    <div className="text-gray-400 text-6xl mb-4">📊</div>
-                    <p className="text-gray-600">لا توجد بيانات للفصل المحدد</p>
-                    <p className="text-sm text-gray-500 mt-2">تأكد من وجود بيانات حضور للفصل والفترة المحددة</p>
+                    <div className="text-gray-400 text-6xl mb-4">📋</div>
+                    <p className="text-gray-600">لا توجد بيانات للفترة المحددة</p>
+                    <p className="text-sm text-gray-500 mt-2">جرب تغيير الفترة الزمنية أو الفصل المحدد</p>
                   </div>
                 )}
               </div>

@@ -275,10 +275,10 @@ router.get("/class-comparison", authMiddleware, async (req, res) => {
   }
 });
 
-// @route   GET /api/advanced-statistics/attendance-frequency
-// @desc    Get attendance frequency analysis
+// @route   GET /api/advanced-statistics/children-needing-followup
+// @desc    Get children who need pastoral follow-up (consecutive absences)
 // @access  Protected
-router.get("/attendance-frequency", authMiddleware, async (req, res) => {
+router.get("/children-needing-followup", authMiddleware, async (req, res) => {
   try {
     console.log("🔄 Attendance frequency API called");
     console.log("📊 Query params:", req.query);
@@ -441,19 +441,19 @@ router.get("/individual-class/:classId", authMiddleware, async (req, res) => {
     console.log("📊 Query params:", req.query);
     console.log("👤 User role:", req.user.role);
     console.log("👤 User assigned class:", req.user.assignedClass);
-    
+
     const { classId } = req.params;
     const { period = "month", startDate, endDate } = req.query;
     const userRole = req.user.role;
 
     // التحقق من الصلاحيات
     if (userRole === "classTeacher" || userRole === "servant") {
-      const assignedClassId = req.user.assignedClass?._id 
-        ? req.user.assignedClass._id.toString() 
+      const assignedClassId = req.user.assignedClass?._id
+        ? req.user.assignedClass._id.toString()
         : req.user.assignedClass?.toString();
-      
+
       console.log("🔍 Comparing:", { assignedClassId, classId });
-      
+
       if (!assignedClassId || assignedClassId !== classId) {
         console.log("❌ Access denied - class mismatch");
         return res.status(403).json({
@@ -461,7 +461,7 @@ router.get("/individual-class/:classId", authMiddleware, async (req, res) => {
           error: "غير مسموح - يمكنك رؤية فصلك فقط",
         });
       }
-      
+
       console.log("✅ Access granted - class matches");
     }
 
