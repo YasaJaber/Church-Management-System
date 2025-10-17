@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
-import { attendanceAPI, childrenAPI, classesAPI } from '@/services/api'
+import { attendanceAPI } from '@/services/api'
 import { FORCE_PRODUCTION_API } from '@/config/api'
 
 // FORCE production API URL - no localhost allowed
@@ -146,17 +146,6 @@ export default function StatisticsPage() {
         if (user?.role === 'admin' || user?.role === 'serviceLeader') {
           // Get weekly attendance statistics (last 4 weeks)
           weeklyStats = await fetchWeeklyStats(targetClassId)
-          
-          // Get consecutive absent children
-          try {
-            const token = localStorage.getItem('token') || localStorage.getItem('auth_token')
-            const consecutiveResponse = await fetch(`${API_BASE_URL}/statistics/consecutive-attendance${targetClassId ? `?classId=${targetClassId}` : ''}`, {
-              headers: { 'Authorization': `Bearer ${token}` }
-            })
-            consecutiveData = consecutiveResponse.ok ? await consecutiveResponse.json() : { data: [] }
-          } catch (error) {
-            console.error('Error fetching consecutive data:', error)
-          }
 
           // Get church overall statistics (for admin/serviceLeader only)
           try {
@@ -217,7 +206,7 @@ export default function StatisticsPage() {
         if (response.success && response.data) {
           const children = response.data
           const total = children.length
-          const present = children.filter((child: any) => child.present).length
+          const present = children.filter((child: any) => child.attendance?.status === 'present').length
           const rate = total > 0 ? (present / total) * 100 : 0
           
           weeklyData.push({
@@ -276,7 +265,7 @@ export default function StatisticsPage() {
         .map(classId => {
           const classChildren = classGroups[classId]
           const totalChildren = classChildren.length
-          const presentToday = classChildren.filter((child: any) => child.present).length
+          const presentToday = classChildren.filter((child: any) => child.attendance?.status === 'present').length
           const attendanceRate = totalChildren > 0 ? (presentToday / totalChildren) * 100 : 0
           
           return {
