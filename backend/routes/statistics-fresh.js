@@ -350,6 +350,119 @@ router.get("/children-by-class", authMiddleware, async (req, res) => {
   }
 });
 
+// @route   GET /api/statistics/consecutive-attendance
+// @desc    Get children with consecutive absences
+// @access  Protected
+router.get("/consecutive-attendance", authMiddleware, async (req, res) => {
+  try {
+    console.log("📊 Fetching consecutive attendance statistics");
+    console.log("👤 User role:", req.user.role);
+    console.log("📚 User assigned class:", req.user.assignedClass);
+
+    const { classId } = req.query;
+
+    // Role-based filtering
+    let childFilter = {};
+    if (classId) {
+      // If classId is provided, filter by that class
+      childFilter.class = classId;
+    } else if (req.user.role === "classTeacher" || req.user.role === "servant") {
+      // Class teachers and servants see only their class
+      if (req.user.assignedClass) {
+        childFilter.class = req.user.assignedClass._id || req.user.assignedClass;
+      } else {
+        return res.status(403).json({
+          success: false,
+          error: "لا يوجد فصل مخصص لك",
+        });
+      }
+    }
+    // Admin and serviceLeader see all children (no filter)
+
+    // Get children based on filter
+    const children = await Child.find({
+      ...childFilter,
+      isActive: true
+    }).populate("class", "name");
+
+    const consecutiveData = [];
+
+    for (const child of children) {
+      // Get attendance records for this child, sorted by date desc
+      const attendanceRecords = await Attendance.find({
+        person: child._id,
+        type: "child",
+      }).sort({ date: -1 });
+
+      if (attendanceRecords.length === 0) {
+        // Child never attended
+        consecutiveData.push({
+          childId: child._id,
+          name: child.name,
+          className: child.class?.name || "غير محدد",
+          consecutiveAbsences: 999, // Very high number for never attended
+          lastAttendance: null,
+        });
+        continue;
+      }
+
+      // Calculate consecutive absences from most recent dates
+      let consecutiveAbsences = 0;
+      let lastAttendanceDate = null;
+      let foundPresent = false;
+
+      for (const record of attendanceRecords) {
+        if (record.status === "present") {
+          if (!foundPresent) {
+            lastAttendanceDate = record.date;
+            foundPresent = true;
+          }
+          break; // Stop counting when we find a present record
+        } else if (record.status === "absent") {
+          consecutiveAbsences++;
+        }
+      }
+
+      // Only include children with consecutive absences
+      if (consecutiveAbsences > 0) {
+        consecutiveData.push({
+          childId: child._id,
+          name: child.name,
+          className: child.class?.name || "غير محدد",
+          consecutiveAbsences,
+          lastAttendance: lastAttendanceDate,
+        });
+      }
+    }
+
+    // Sort by consecutive absences descending
+    consecutiveData.sort((a, b) => b.consecutiveAbsences - a.consecutiveAbsences);
+
+    // Limit to top 20 for performance
+    const limitedData = consecutiveData.slice(0, 20);
+
+    console.log(
+      `✅ Found ${limitedData.length} children with consecutive absences`
+    );
+
+    res.json({
+      success: true,
+      data: limitedData,
+      summary: {
+        totalChildren: limitedData.length,
+        totalProcessed: children.length,
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error fetching consecutive attendance:", error);
+    res.status(500).json({
+      success: false,
+      error: "خطأ في استرجاع إحصائيات الغياب المتتالي",
+      details: error.message,
+    });
+  }
+});
+
 // @route   GET /api/statistics/consecutive-attendance-by-classes
 // @desc    Get consecutive attendance statistics grouped by classes
 // @access  Protected

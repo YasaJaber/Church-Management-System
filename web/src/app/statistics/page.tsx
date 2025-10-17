@@ -150,7 +150,7 @@ export default function StatisticsPage() {
           // Get consecutive absent children
           try {
             const token = localStorage.getItem('token') || localStorage.getItem('auth_token')
-            const consecutiveResponse = await fetch(`${API_BASE_URL}/statistics/consecutive-attendance${targetClassId ? `?classId=${targetClassId}` : ''}`, {
+            const consecutiveResponse = await fetch(`${API_BASE_URL}/api/statistics/consecutive-attendance${targetClassId ? `?classId=${targetClassId}` : ''}`, {
               headers: { 'Authorization': `Bearer ${token}` }
             })
             consecutiveData = consecutiveResponse.ok ? await consecutiveResponse.json() : { data: [] }
@@ -161,7 +161,7 @@ export default function StatisticsPage() {
           // Get church overall statistics (for admin/serviceLeader only)
           try {
             const token = localStorage.getItem('token') || localStorage.getItem('auth_token')
-            const churchResponse = await fetch(`${API_BASE_URL}/statistics/church`, {
+            const churchResponse = await fetch(`${API_BASE_URL}/api/statistics/church`, {
               headers: { 'Authorization': `Bearer ${token}` }
             })
             churchData = churchResponse.ok ? await churchResponse.json() : { data: null }
