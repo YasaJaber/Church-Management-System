@@ -216,25 +216,25 @@ router.get("/consecutive-attendance", authMiddleware, async (req, res) => {
 });
 
 // @route   GET /api/statistics/consecutive-attendance-by-classes
-// @desc    Get consecutive attendance statistics grouped by classes
+// @desc    Get consecutive attendance statistics grouped by classes (OPTIMIZED)
 // @access  Protected
 router.get("/consecutive-attendance-by-classes", authMiddleware, async (req, res) => {
   try {
     console.log("\n" + "=".repeat(60));
-    console.log("📊 Fetching consecutive attendance statistics by classes");
+    console.log("📊 Fetching consecutive attendance statistics by classes (OPTIMIZED)");
     console.log("👤 User role:", req.user.role);
     console.log("📚 User assigned class:", req.user.assignedClass);
     console.log("🔍 Query classId:", req.query.classId);
     console.log("=".repeat(60));
 
-    const { classId, minDays = 4 } = req.query; // Changed default from 3 to 4
+    const startTime = Date.now();
+    const { classId, minDays = 4 } = req.query;
 
     // Get all classes or specific class based on user role
-    let classes;
+    let classFilter = {};
     if (classId) {
       console.log("✅ Using provided classId:", classId);
-      classes = await Class.find({ _id: classId });
-      console.log("📚 Found", classes.length, "class(es) for classId:", classId);
+      classFilter = { _id: classId };
     } else if (req.user.role === 'classTeacher' || req.user.role === 'servant') {
       // مدرس الفصل يشوف فصله فقط
       if (!req.user.assignedClass) {
@@ -243,43 +243,120 @@ router.get("/consecutive-attendance-by-classes", authMiddleware, async (req, res
           error: "لم يتم تعيين فصل لك. يرجى التواصل مع المسؤول."
         });
       }
-      classes = await Class.find({ _id: req.user.assignedClass._id || req.user.assignedClass });
-      console.log("📚 Class teacher accessing their class:", classes[0]?.name);
+      classFilter = { _id: req.user.assignedClass._id || req.user.assignedClass };
+      console.log("📚 Class teacher accessing their class");
     } else {
       // Admin and serviceLeader can see all classes
       console.log("👑 Admin/ServiceLeader - fetching all classes");
-      classes = await Class.find({});
-      console.log("📚 Found", classes.length, "total classes");
+      classFilter = {};
     }
 
-    console.log("🎯 Will process", classes.length, "class(es)");
+    const classes = await Class.find(classFilter);
+    console.log("📚 Found", classes.length, "class(es)");
+
+    if (classes.length === 0) {
+      return res.json({
+        success: true,
+        data: [],
+        summary: {
+          totalClasses: 0,
+          minDays: parseInt(minDays),
+          totalConsecutiveChildren: 0
+        }
+      });
+    }
+
+    const classIds = classes.map(c => c._id);
+
+    // OPTIMIZATION 1: Fetch all children at once
+    console.log("⚡ Fetching all children in one query...");
+    const allChildren = await Child.find({ 
+      classId: { $in: classIds },
+      isActive: true 
+    }).lean();
+    console.log("✅ Found", allChildren.length, "children");
+
+    if (allChildren.length === 0) {
+      return res.json({
+        success: true,
+        data: [],
+        summary: {
+          totalClasses: 0,
+          minDays: parseInt(minDays),
+          totalConsecutiveChildren: 0
+        }
+      });
+    }
+
+    const childIds = allChildren.map(c => c._id);
+
+    // OPTIMIZATION 2: Fetch all gift deliveries at once
+    console.log("⚡ Fetching all gift deliveries in one query...");
+    const allGifts = await GiftDelivery.find({
+      child: { $in: childIds },
+      isActive: true
+    }).sort({ deliveryDate: -1 }).lean();
+    console.log("✅ Found", allGifts.length, "gift deliveries");
+
+    // Create a map of childId -> last gift date
+    const childGiftMap = new Map();
+    allGifts.forEach(gift => {
+      if (!childGiftMap.has(gift.child.toString())) {
+        childGiftMap.set(gift.child.toString(), new Date(gift.deliveryDate).toISOString().split('T')[0]);
+      }
+    });
+
+    // OPTIMIZATION 3: Fetch all attendance records at once
+    console.log("⚡ Fetching all attendance records in one query...");
+    const allAttendance = await Attendance.find({
+      person: { $in: childIds },
+      type: "child"
+    }).sort({ person: 1, date: -1 }).lean();
+    console.log("✅ Found", allAttendance.length, "attendance records");
+
+    // Create a map of childId -> attendance records
+    const childAttendanceMap = new Map();
+    allAttendance.forEach(record => {
+      const childKey = record.person.toString();
+      if (!childAttendanceMap.has(childKey)) {
+        childAttendanceMap.set(childKey, []);
+      }
+      childAttendanceMap.get(childKey).push(record);
+    });
+
+    // Create a map of classId -> class object
+    const classMap = new Map();
+    classes.forEach(cls => {
+      classMap.set(cls._id.toString(), cls);
+    });
+
+    // Group children by class
+    const childrenByClass = new Map();
+    allChildren.forEach(child => {
+      const classKey = child.classId.toString();
+      if (!childrenByClass.has(classKey)) {
+        childrenByClass.set(classKey, []);
+      }
+      childrenByClass.get(classKey).push(child);
+    });
+
+    // Process each class and calculate consecutive attendance
+    console.log("⚡ Processing consecutive attendance...");
     const classesData = [];
 
-    for (const classObj of classes) {
-      // Get children in this class
-      const children = await Child.find({ 
-        classId: classObj._id,
-        isActive: true 
-      });
+    for (const [classKey, classChildren] of childrenByClass) {
+      const classObj = classMap.get(classKey);
+      if (!classObj) continue;
 
       const consecutiveChildren = [];
 
-      for (const child of children) {
-        // Get the last gift delivery date for this child (acts as reset point)
-        const lastGift = await GiftDelivery.findOne({
-          child: child._id,
-          isActive: true
-        }).sort({ deliveryDate: -1 });
-
-        // Get attendance records for this child, sorted by date desc (most recent first)
-        const attendanceRecords = await Attendance.find({
-          person: child._id,
-          type: "child",
-        }).sort({ date: -1 });
+      for (const child of classChildren) {
+        const childKey = child._id.toString();
+        const lastGiftDate = childGiftMap.get(childKey);
+        const attendanceRecords = childAttendanceMap.get(childKey) || [];
 
         // Calculate consecutive attendance from the most recent date
         let consecutiveCount = 0;
-        const lastGiftDate = lastGift ? new Date(lastGift.deliveryDate).toISOString().split('T')[0] : null;
 
         for (const record of attendanceRecords) {
           // If we reached a date before the last gift delivery, stop counting
@@ -301,7 +378,7 @@ router.get("/consecutive-attendance-by-classes", authMiddleware, async (req, res
           consecutiveChildren.push({
             childId: child._id,
             name: child.name,
-            consecutiveWeeks: consecutiveCount, // Each attendance counts as a week
+            consecutiveWeeks: consecutiveCount,
           });
         }
       }
@@ -314,7 +391,7 @@ router.get("/consecutive-attendance-by-classes", authMiddleware, async (req, res
         classesData.push({
           classId: classObj._id,
           className: classObj.name,
-          children: consecutiveChildren, // Frontend expects this structure
+          children: consecutiveChildren,
         });
       }
     }
@@ -322,9 +399,11 @@ router.get("/consecutive-attendance-by-classes", authMiddleware, async (req, res
     // Sort classes by number of consecutive children desc
     classesData.sort((a, b) => b.children.length - a.children.length);
 
-    console.log(
-      `✅ Found ${classesData.length} classes with consecutive attendance data`
-    );
+    const endTime = Date.now();
+    const executionTime = endTime - startTime;
+
+    console.log(`✅ Found ${classesData.length} classes with consecutive attendance data`);
+    console.log(`⚡ Execution time: ${executionTime}ms`);
 
     res.json({
       success: true,
@@ -332,7 +411,8 @@ router.get("/consecutive-attendance-by-classes", authMiddleware, async (req, res
       summary: {
         totalClasses: classesData.length,
         minDays: parseInt(minDays),
-        totalConsecutiveChildren: classesData.reduce((sum, cls) => sum + cls.children.length, 0)
+        totalConsecutiveChildren: classesData.reduce((sum, cls) => sum + cls.children.length, 0),
+        executionTimeMs: executionTime
       },
     });
   } catch (error) {
