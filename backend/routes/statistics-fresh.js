@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const mongoose = require("mongoose");
 const Attendance = require("../models/Attendance");
 const Child = require("../models/Child");
 const Class = require("../models/Class");
@@ -351,23 +352,24 @@ router.get("/children-by-class", authMiddleware, async (req, res) => {
 });
 
 // @route   GET /api/statistics/consecutive-attendance-by-classes
-// @desc    Get consecutive attendance statistics grouped by classes
+// @desc    Get consecutive attendance statistics grouped by classes (OPTIMIZED with Aggregation)
 // @access  Protected
 router.get(
   "/consecutive-attendance-by-classes",
   authMiddleware,
   async (req, res) => {
     try {
-      console.log("📊 Fetching consecutive attendance statistics by classes");
+      console.log("📊 Fetching consecutive attendance statistics by classes (OPTIMIZED)");
       console.log("👤 User role:", req.user.role);
       console.log("📚 User assigned class:", req.user.assignedClass);
 
+      const startTime = Date.now();
       const { classId, minDays = 4 } = req.query; // Changed default from 3 to 4
 
-      // Get all classes or specific class based on user role
-      let classes;
+      // Build class filter based on user role
+      let classFilterId = null;
       if (classId) {
-        classes = await Class.find({ _id: classId });
+        classFilterId = new mongoose.Types.ObjectId(classId);
       } else if (
         req.user.role === "classTeacher" ||
         req.user.role === "servant"
@@ -379,94 +381,223 @@ router.get(
             error: "لم يتم تعيين فصل لك. يرجى التواصل مع المسؤول.",
           });
         }
-        classes = await Class.find({
-          _id: req.user.assignedClass._id || req.user.assignedClass,
-        });
-        console.log(
-          "📚 Class teacher accessing their class:",
-          classes[0]?.name
-        );
-      } else {
-        // Admin and serviceLeader can see all classes
-        classes = await Class.find({});
+        const assignedClassId = req.user.assignedClass._id || req.user.assignedClass;
+        classFilterId = new mongoose.Types.ObjectId(assignedClassId);
+        console.log("📚 Class teacher accessing their class");
       }
+      // else: Admin and serviceLeader see all classes (no filter)
 
-      const classesData = [];
-
-      for (const classObj of classes) {
-        // Get children in this class
-        const children = await Child.find({
-          class: classObj._id,
-          isActive: true,
-        });
-
-        const consecutiveChildren = [];
-
-        for (const child of children) {
-          // Get the last gift delivery date for this child (acts as reset point)
-          const lastGift = await GiftDelivery.findOne({
-            child: child._id,
+      // ============================================
+      // OPTIMIZED: Single Aggregation Pipeline
+      // ============================================
+      console.log("🚀 Starting optimized aggregation pipeline...");
+      console.log("🔍 Class filter:", classFilterId ? classFilterId.toString() : 'ALL CLASSES');
+      
+      const childrenWithData = await Child.aggregate([
+        // Stage 1: Match active children in allowed classes
+        {
+          $match: {
             isActive: true,
-          }).sort({ deliveryDate: -1 });
-
-          // Get attendance records for this child, sorted by date desc (most recent first)
-          const attendanceRecords = await Attendance.find({
-            person: child._id,
-            type: "child",
-          }).sort({ date: -1 });
-
-          // Calculate consecutive attendance from the most recent date
-          let consecutiveCount = 0;
-          const lastGiftDate = lastGift
-            ? new Date(lastGift.deliveryDate).toISOString().split("T")[0]
-            : null;
-
-          for (const record of attendanceRecords) {
-            // If we reached a date before the last gift delivery, stop counting
-            if (lastGiftDate && record.date <= lastGiftDate) {
-              break;
-            }
-
-            if (record.status === "present") {
-              consecutiveCount++;
-            } else if (record.status === "absent") {
-              // إذا غاب، نوقف العد - مش متتالي
-              break;
-            }
-            // إذا كان excused أو أي حالة تانية، نكمل العد
+            ...(classFilterId ? { class: classFilterId } : {})
           }
-
-          // Only include children with 4+ consecutive weeks of attendance
-          if (consecutiveCount >= parseInt(minDays)) {
-            consecutiveChildren.push({
-              childId: child._id,
-              name: child.name,
-              consecutiveWeeks: consecutiveCount, // Each attendance counts as a week
-            });
+        },
+        
+        // Stage 2: Lookup attendance records (sorted by date desc)
+        {
+          $lookup: {
+            from: 'attendances',
+            let: { childId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$person', '$$childId'] },
+                      { $eq: ['$type', 'child'] }
+                    ]
+                  }
+                }
+              },
+              { $sort: { date: -1 } }
+            ],
+            as: 'attendanceRecords'
+          }
+        },
+        
+        // Stage 3: Lookup last gift delivery
+        {
+          $lookup: {
+            from: 'giftdeliveries',
+            let: { childId: '$_id' },
+            pipeline: [
+              {
+                $match: {
+                  $expr: {
+                    $and: [
+                      { $eq: ['$child', '$$childId'] },
+                      { $eq: ['$isActive', true] }
+                    ]
+                  }
+                }
+              },
+              { $sort: { deliveryDate: -1 } },
+              { $limit: 1 }
+            ],
+            as: 'lastGift'
+          }
+        },
+        
+        // Stage 4: Lookup class information
+        {
+          $lookup: {
+            from: 'classes',
+            localField: 'class',
+            foreignField: '_id',
+            as: 'classInfo'
+          }
+        },
+        
+        // Stage 5: Project only needed fields
+        {
+          $project: {
+            _id: 1,
+            name: 1,
+            class: 1,
+            attendanceRecords: 1,
+            lastGift: { $arrayElemAt: ['$lastGift', 0] },
+            classInfo: { $arrayElemAt: ['$classInfo', 0] }
           }
         }
+      ]);
 
-        // Sort children by consecutive weeks desc
-        consecutiveChildren.sort(
-          (a, b) => b.consecutiveWeeks - a.consecutiveWeeks
-        );
+      console.log(`✅ Aggregation completed in ${Date.now() - startTime}ms`);
+      console.log(`📊 Fetched ${childrenWithData.length} children with all data`);
+      
+      // Debug: Show which classes we're processing
+      const uniqueClasses = [...new Set(childrenWithData.map(c => c.class?.toString()))];
+      console.log(`📚 Processing ${uniqueClasses.length} unique class(es):`, uniqueClasses);
 
-        // Only include classes that have consecutive children
-        if (consecutiveChildren.length > 0) {
-          classesData.push({
-            classId: classObj._id,
-            className: classObj.name,
-            children: consecutiveChildren, // Frontend expects this structure
+      // ============================================
+      // Calculate attendance for LAST 4 WEEKS ONLY
+      // (NEW: Count attendance in last 4 Fridays only)
+      // ============================================
+      
+      // Helper function to get last N Fridays
+      const getLastFridays = (count) => {
+        const fridays = [];
+        const today = new Date();
+        let current = new Date(today);
+        
+        // Find last Friday
+        while (current.getDay() !== 5) {
+          current.setDate(current.getDate() - 1);
+        }
+        
+        // Get last 'count' Fridays
+        for (let i = 0; i < count; i++) {
+          fridays.push(current.toISOString().split('T')[0]);
+          current.setDate(current.getDate() - 7);
+        }
+        
+        return fridays; // Most recent first
+      };
+
+      const last4Fridays = getLastFridays(4);
+      console.log("📅 Last 4 Fridays:", last4Fridays);
+      
+      const classesMap = new Map(); // Group by class
+      let childrenWithResets = 0;
+
+      for (const childData of childrenWithData) {
+        const attendanceRecords = childData.attendanceRecords || [];
+        
+        // Get last gift date (reset marker)
+        const lastGiftDate = childData.lastGift
+          ? new Date(childData.lastGift.deliveryDate).toISOString().split("T")[0]
+          : null;
+        
+        if (lastGiftDate) {
+          childrenWithResets++;
+        }
+        
+        // Create a map of dates to attendance status for quick lookup
+        const attendanceMap = new Map();
+        attendanceRecords.forEach(record => {
+          attendanceMap.set(record.date, record.status);
+        });
+
+        // Count attendance in last 4 Fridays ONLY (but after reset date if exists)
+        let attendanceCount = 0;
+        let presentCount = 0;
+        
+        for (const friday of last4Fridays) {
+          // Skip if this Friday is before or on the reset date
+          if (lastGiftDate && friday <= lastGiftDate) {
+            // Skip this date - it's before the reset
+            continue;
+          }
+          
+          const status = attendanceMap.get(friday);
+          
+          if (status === "present") {
+            attendanceCount++;
+            presentCount++;
+          } else if (status === "absent") {
+            attendanceCount++; // Count as recorded (but absent)
+          }
+          // If no record for this Friday, it's not counted
+        }
+
+        // Only include children with at least minDays attendance in last 4 weeks
+        // Note: presentCount is what matters (how many times they were present)
+        if (presentCount >= parseInt(minDays)) {
+          const classId = childData.class.toString();
+          const className = childData.classInfo?.name || 'Unknown';
+
+          if (!classesMap.has(classId)) {
+            classesMap.set(classId, {
+              classId: childData.class,
+              className: className,
+              children: []
+            });
+          }
+
+          classesMap.get(classId).children.push({
+            childId: childData._id,
+            name: childData.name,
+            consecutiveWeeks: presentCount,  // Number of times present in last 4 weeks (after reset)
+            totalWeeksChecked: 4,            // Always checking last 4 weeks
+            attendanceRate: Math.round((presentCount / 4) * 100), // Percentage
+            lastResetDate: lastGiftDate || 'none'  // For debugging
           });
         }
       }
 
+      // Convert map to array and sort
+      const classesData = Array.from(classesMap.values());
+
+      // Sort children in each class by consecutive weeks desc
+      classesData.forEach(classData => {
+        classData.children.sort((a, b) => b.consecutiveWeeks - a.consecutiveWeeks);
+      });
+
       // Sort classes by number of consecutive children desc
       classesData.sort((a, b) => b.children.length - a.children.length);
 
-      console.log(
-        `✅ Found ${classesData.length} classes with consecutive attendance data`
-      );
+      const totalTime = Date.now() - startTime;
+      console.log(`✅ Total processing time: ${totalTime}ms`);
+      console.log(`✅ Found ${classesData.length} classes with consecutive attendance data`);
+      console.log(`🔄 Children with reset markers: ${childrenWithResets}/${childrenWithData.length}`);
+      
+      // Debug: Show detailed breakdown by class
+      console.log('\n📊 DETAILED BREAKDOWN:');
+      classesData.forEach(classData => {
+        console.log(`   📚 ${classData.className} (${classData.classId}): ${classData.children.length} children`);
+        classData.children.forEach(child => {
+          console.log(`      - ${child.name}: ${child.consecutiveWeeks}/4 weeks (${child.attendanceRate}%)`);
+        });
+      });
+      console.log('');
 
       res.json({
         success: true,
@@ -479,6 +610,10 @@ router.get(
             0
           ),
         },
+        performance: {
+          processingTimeMs: totalTime,
+          optimized: true
+        }
       });
     } catch (error) {
       console.error(
@@ -615,20 +750,30 @@ router.post(
       console.log("🔐 Role:", req.user.role);
       console.log("=".repeat(60));
 
-      const { classId } = req.body;
+      const { classId, resetAll } = req.body;
 
       // Determine which class(es) to reset
-      let targetClassId;
+      let targetClassIds = [];
+      let resetScope = "class";
 
       if (req.user.role === "admin" || req.user.role === "serviceLeader") {
-        // Admin/Service Leader can reset any class or all classes
-        if (!classId) {
+        // Admin/Service Leader can reset any class or ALL classes
+        if (resetAll && !classId) {
+          // Reset ALL classes
+          console.log("🔥 RESET ALL CLASSES requested");
+          const allClasses = await Class.find({});
+          targetClassIds = allClasses.map(c => c._id);
+          resetScope = "all";
+        } else if (classId) {
+          // Reset specific class
+          targetClassIds = [classId];
+          resetScope = "single";
+        } else {
           return res.status(400).json({
             success: false,
-            error: "يرجى تحديد الفصل المراد إعادة تعيينه",
+            error: "يرجى تحديد الفصل المراد إعادة تعيينه أو تفعيل إعادة التعيين للكل",
           });
         }
-        targetClassId = classId;
       } else if (
         req.user.role === "classTeacher" ||
         req.user.role === "servant"
@@ -640,7 +785,8 @@ router.post(
             error: "لم يتم تعيين فصل لك",
           });
         }
-        targetClassId = req.user.assignedClass._id || req.user.assignedClass;
+        targetClassIds = [req.user.assignedClass._id || req.user.assignedClass];
+        resetScope = "single";
       } else {
         return res.status(403).json({
           success: false,
@@ -648,13 +794,16 @@ router.post(
         });
       }
 
-      // Get all children in the class
+      console.log(`📊 Reset scope: ${resetScope}`);
+      console.log(`📚 Target class(es): ${targetClassIds.length} class(es)`);
+
+      // Get all children in the target class(es)
       const children = await Child.find({
-        class: targetClassId,
+        class: { $in: targetClassIds },
         isActive: true,
       });
 
-      console.log(`📚 Found ${children.length} children in class`);
+      console.log(`👶 Found ${children.length} children across ${targetClassIds.length} class(es)`);
 
       // Create gift delivery records for all children as reset markers
       // This doesn't affect attendance records at all - just acts as a cutoff point
@@ -691,19 +840,40 @@ router.post(
         );
       }
 
-      // Get class name for response
-      const classData = await Class.findById(targetClassId);
+      // Build response message based on scope
+      let message;
+      let responseData;
 
-      res.json({
-        success: true,
-        message: `تم إعادة تعيين المواظبة لـ ${children.length} طفل في فصل ${classData.name} (بدون تأثير على سجل الحضور)`,
-        data: {
-          classId: targetClassId,
+      if (resetScope === "all") {
+        // Reset all classes
+        message = `تم إعادة تعيين المواظبة لـ ${children.length} طفل في ${targetClassIds.length} فصل (بدون تأثير على سجل الحضور)`;
+        responseData = {
+          resetScope: "all",
+          classesCount: targetClassIds.length,
+          childrenCount: children.length,
+          resetCount: giftRecords.length,
+          date: today,
+        };
+      } else {
+        // Reset single class
+        const classData = await Class.findById(targetClassIds[0]);
+        message = `تم إعادة تعيين المواظبة لـ ${children.length} طفل في فصل ${classData.name} (بدون تأثير على سجل الحضور)`;
+        responseData = {
+          resetScope: "single",
+          classId: targetClassIds[0],
           className: classData.name,
           childrenCount: children.length,
           resetCount: giftRecords.length,
           date: today,
-        },
+        };
+      }
+
+      console.log(`✅ Success: ${message}`);
+
+      res.json({
+        success: true,
+        message: message,
+        data: responseData,
       });
     } catch (error) {
       console.error("❌ Error resetting consecutive attendance:", error);

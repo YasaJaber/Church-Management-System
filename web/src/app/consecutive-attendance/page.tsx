@@ -256,10 +256,17 @@ export default function ConsecutiveAttendancePage() {
   }
 
   const handleResetConsecutiveAttendance = async () => {
+    // Determine scope
+    const isAllClasses = !selectedClass && (user?.role === 'admin' || user?.role === 'serviceLeader')
+    const scopeText = isAllClasses ? 'جميع الفصول' : selectedClass ? 'الفصل المحدد' : 'فصلك'
+    
     // Confirm before reset
     const confirmed = window.confirm(
-      '⚠️ هل أنت متأكد من إعادة تعيين المواظبة؟\n\n' +
-      'سيتم إعادة تعيين عداد المواظبة لجميع الأطفال في الفصل وسيبدأ العد من الصفر.\n\n' +
+      `⚠️ هل أنت متأكد من إعادة تعيين المواظبة لـ ${scopeText}؟\n\n` +
+      (isAllClasses 
+        ? '⚠️ تحذير: سيتم إعادة تعيين عداد المواظبة لجميع الأطفال في جميع الفصول!\n\n'
+        : 'سيتم إعادة تعيين عداد المواظبة لجميع الأطفال في الفصل وسيبدأ العد من الصفر.\n\n'
+      ) +
       'هذا الإجراء مناسب بعد توزيع الجوائز لبدء دورة جديدة.'
     )
 
@@ -277,6 +284,7 @@ export default function ConsecutiveAttendancePage() {
       }
 
       // Get classId - for class teachers, it will be determined by backend
+      // For service leader, null means ALL classes
       let classIdToReset = selectedClass
       if ((user?.role === 'classTeacher' || user?.role === 'servant') && classesData.length > 0) {
         classIdToReset = classesData[0].classId
@@ -288,7 +296,10 @@ export default function ConsecutiveAttendancePage() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ classId: classIdToReset })
+        body: JSON.stringify({ 
+          classId: classIdToReset,
+          resetAll: isAllClasses // Flag to indicate resetting all classes
+        })
       })
       
       const data = await response.json()
@@ -323,14 +334,14 @@ export default function ConsecutiveAttendancePage() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 text-right">
           {user?.role === 'classTeacher' || user?.role === 'servant' ? 
-            `المواظبون في فصلي (4 أسابيع متتالية)` : 
-            'المواظبون على الحضور (4 أسابيع متتالية)'
+            `المواظبون في فصلي (آخر 4 أسابيع)` : 
+            'المواظبون على الحضور (آخر 4 أسابيع)'
           }
         </h1>
         <p className="text-gray-600 text-right mt-2">
           {user?.role === 'classTeacher' || user?.role === 'servant' ? 
-            'تقرير الأطفال المواظبين في فصلك لمدة 4 أسابيع متتالية أو أكثر' :
-            'تقرير الأطفال المواظبين على الحضور لمدة 4 أسابيع متتالية أو أكثر مقسم حسب الفصول'
+            'تقرير الأطفال المواظبين في فصلك خلال آخر 4 جمعات (حضور 4 من 4 أو 3 من 4)' :
+            'تقرير الأطفال المواظبين على الحضور خلال آخر 4 جمعات مقسم حسب الفصول'
           }
         </p>
       </div>
@@ -371,11 +382,11 @@ export default function ConsecutiveAttendancePage() {
             <div className="flex items-end">
               <button
                 onClick={handleResetConsecutiveAttendance}
-                disabled={loading || !selectedClass}
+                disabled={loading}
                 className="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors w-full"
-                title={!selectedClass ? 'يرجى اختيار فصل أولاً' : 'إعادة تعيين المواظبة للفصل المحدد'}
+                title={selectedClass ? 'إعادة تعيين المواظبة للفصل المحدد' : 'إعادة تعيين المواظبة لجميع الفصول'}
               >
-                {loading ? 'جاري التعيين...' : '🔄 إعادة تعيين المواظبة'}
+                {loading ? 'جاري التعيين...' : selectedClass ? '🔄 إعادة تعيين الفصل المحدد' : '🔄 إعادة تعيين كل الفصول'}
               </button>
             </div>
           </div>
@@ -555,25 +566,25 @@ export default function ConsecutiveAttendancePage() {
                           <td className="px-6 py-4 whitespace-nowrap text-right">
                             <div className="flex items-center justify-end">
                               <div className="text-sm font-medium text-gray-900 mr-2">
-                                {child.consecutiveWeeks} أسبوع
+                                {child.consecutiveWeeks} / 4 أسابيع
                               </div>
                               <div className="w-12 h-2 bg-gray-200 rounded-full">
                                 <div 
                                   className="h-2 bg-green-500 rounded-full" 
-                                  style={{ width: `${Math.min((child.consecutiveWeeks / 8) * 100, 100)}%` }}
+                                  style={{ width: `${(child.consecutiveWeeks / 4) * 100}%` }}
                                 ></div>
                               </div>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right">
                             <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                              child.consecutiveWeeks >= 8 ? 'bg-green-100 text-green-800' :
-                              child.consecutiveWeeks >= 6 ? 'bg-yellow-100 text-yellow-800' :
+                              child.consecutiveWeeks === 4 ? 'bg-green-100 text-green-800' :
+                              child.consecutiveWeeks === 3 ? 'bg-yellow-100 text-yellow-800' :
                               'bg-blue-100 text-blue-800'
                             }`}>
-                              {child.consecutiveWeeks >= 8 ? 'ممتاز ⭐' :
-                               child.consecutiveWeeks >= 6 ? 'جيد جداً 👍' :
-                               'جيد 👌'}
+                              {child.consecutiveWeeks === 4 ? 'ممتاز ⭐ (4/4)' :
+                               child.consecutiveWeeks === 3 ? 'جيد جداً 👍 (3/4)' :
+                               `جيد 👌 (${child.consecutiveWeeks}/4)`}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -614,8 +625,8 @@ export default function ConsecutiveAttendancePage() {
           </div>
           <p className="text-gray-400">
             {user?.role === 'classTeacher' || user?.role === 'servant' ? 
-              'لم يتم العثور على أطفال في فصلك مواظبين لمدة 4 أسابيع متتالية' :
-              'لم يتم العثور على أطفال مواظبين لمدة 4 أسابيع متتالية'
+              'لم يتم العثور على أطفال في فصلك حضروا 4 من آخر 4 جمعات' :
+              'لم يتم العثور على أطفال حضروا 4 من آخر 4 جمعات'
             }
           </p>
           <button 
