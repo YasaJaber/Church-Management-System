@@ -12,9 +12,3 @@ export const API_BASE_URL = isProduction ? PRODUCTION_URL : LOCAL_URL
 // For critical pages, always use production API when deployed
 export const FORCE_PRODUCTION_API = PRODUCTION_URL
 
-console.log('⚙️ API Config loaded:', { 
-  API_BASE_URL, 
-  isProduction, 
-  environment: process.env.NODE_ENV,
-  useProduction: process.env.NEXT_PUBLIC_USE_PRODUCTION 
-})

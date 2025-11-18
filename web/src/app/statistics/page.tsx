@@ -13,7 +13,6 @@ import { FORCE_PRODUCTION_API } from '@/config/api'
 
 // FORCE production API URL - no localhost allowed
 const API_BASE_URL = FORCE_PRODUCTION_API
-console.log('📊 FORCED Statistics API URL:', API_BASE_URL)
 
 interface AttendanceStats {
   totalChildren: number
@@ -92,12 +91,7 @@ export default function StatisticsPage() {
         const data = await response.json()
         if (data.success && data.data && data.data.length > 0) {
           dateToUse = data.data[0]
-          console.log('Using most recent attendance date:', dateToUse)
-        } else {
-          console.log('No attendance data found, using today\'s date')
         }
-      } else {
-        console.log('Failed to fetch recent dates, using today\'s date')
       }
       
       setSelectedDate(dateToUse)
@@ -117,15 +111,12 @@ export default function StatisticsPage() {
   const fetchStatistics = async () => {
     try {
       setLoading(true)
-      console.log('Fetching comprehensive statistics for date:', selectedDate)
-      console.log('User role:', user?.role, 'Selected class:', selectedClass)
       
       // تحديد الفصل المناسب حسب الصلاحيات
       let targetClassId = selectedClass
       if ((user?.role === 'classTeacher' || user?.role === 'servant') && user?.assignedClass) {
         // مدرسي الفصول والخدام يرون فصلهم فقط
         targetClassId = user.assignedClass._id
-        console.log('🔒 Restricted to user class:', targetClassId)
       }
       
       // Get basic children with attendance status for selected date
@@ -158,8 +149,6 @@ export default function StatisticsPage() {
             console.error('Error fetching church data:', error)
           }
         }
-
-        console.log('Statistics calculated:', { totalChildren, presentToday, absentToday, attendanceRate })
 
         setStats({
           totalChildren,

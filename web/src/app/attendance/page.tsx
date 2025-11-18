@@ -133,14 +133,10 @@ export default function AttendancePage() {
 
     setLoading(true)
     try {
-      console.log('Loading attendance data for date:', selectedDate, 'class:', selectedClass)
-      
       // Use the new API to get children with attendance status
       const response = await attendanceAPI.getChildrenWithStatus(selectedDate, selectedClass)
       
       if (response.success && response.data) {
-        console.log('Received children with status:', response.data.length)
-        
         // Transform data to match our interface
         const childrenWithAttendance = response.data.map((child: any) => ({
           _id: child._id,
@@ -157,7 +153,6 @@ export default function AttendancePage() {
         }))
         
         setChildren(childrenWithAttendance)
-        console.log('Set children:', childrenWithAttendance.length)
       } else {
         console.error('Failed to load children with status:', response.error)
         toast.error(response.error || 'فشل في تحميل بيانات الحضور')
@@ -370,12 +365,6 @@ export default function AttendancePage() {
 
     setBatchSaving(true);
     try {
-      console.log(
-        "Saving batch attendance for",
-        changedChildren.length,
-        "children"
-      );
-
       const attendanceData = changedChildren.map((child) => ({
         childId: child._id,
         status: child.batchStatus!,
