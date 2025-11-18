@@ -445,6 +445,29 @@ export const attendanceAPI = {
     }
   },
 
+  deleteAttendanceByDay: async (date: string, classId?: string) => {
+    try {
+      logger.debug('Deleting all attendance for date:', date, 'classId:', classId)
+      const params = new URLSearchParams()
+      params.append('date', date)
+      if (classId) params.append('classId', classId)
+      
+      const response = await api.delete(`/attendance/delete-day?${params}`)
+      logger.debug('Day attendance deleted successfully:', response.data)
+      
+      // Clear cache after deleting attendance
+      clearStatisticsCache()
+      
+      return { success: true, data: response.data.data || response.data }
+    } catch (error: any) {
+      logger.error('Error deleting day attendance:', error)
+      return {
+        success: false,
+        error: error.response?.data?.error || 'حدث خطأ في حذف سجلات الحضور'
+      }
+    }
+  },
+
   // Batch attendance for multiple children
   batchSave: async (attendanceData: Array<{
     childId: string

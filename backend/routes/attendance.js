@@ -573,6 +573,126 @@ router.delete("/:childId/:date", authMiddleware, async (req, res) => {
   }
 });
 
+// @route   DELETE /api/attendance/delete-day
+// @desc    Delete ALL attendance records for a specific date (for a class or all)
+// @access  Protected
+router.delete("/delete-day", authMiddleware, async (req, res) => {
+  try {
+    const { date, classId } = req.query;
+
+    console.log("\n" + "=".repeat(50));
+    console.log("🗑️🗑️🗑️ DELETE ENTIRE DAY ATTENDANCE API CALLED");
+    console.log("📅 Date:", date);
+    console.log("🏫 ClassId:", classId || "ALL CLASSES");
+    console.log("👤 User:", req.user?.username || "UNKNOWN");
+    console.log("🔐 Role:", req.user?.role || "UNKNOWN");
+    console.log("⚠️ WARNING: THIS WILL PERMANENTLY DELETE RECORDS FROM DATABASE");
+    console.log("=".repeat(50));
+
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        error: "التاريخ مطلوب",
+      });
+    }
+
+    // Apply role-based filtering
+    let targetClassId = classId;
+    if (
+      (req.user.role === "servant" || req.user.role === "classTeacher") &&
+      req.user.assignedClass
+    ) {
+      // Servants and classTeachers can only delete their assigned class
+      targetClassId = req.user.assignedClass._id.toString();
+      console.log(
+        "👤 Servant/ClassTeacher access - forced classId:",
+        targetClassId
+      );
+    } else if (
+      req.user.role !== "admin" &&
+      req.user.role !== "serviceLeader" &&
+      !req.user.assignedClass
+    ) {
+      console.log(
+        "❌ Access denied for non-admin/non-serviceLeader without class"
+      );
+      return res.status(403).json({
+        success: false,
+        error: "غير مصرح لك بهذه العملية",
+      });
+    }
+
+    // Build delete query
+    let deleteQuery = {
+      date: date, // Exact string match for YYYY-MM-DD format
+      type: "child",
+    };
+
+    if (targetClassId) {
+      // Need to get children in that class first
+      console.log("🔍 Filtering by class:", targetClassId);
+      const childrenInClass = await Child.find({ class: targetClassId });
+      const childIds = childrenInClass.map((child) => child._id);
+      console.log("👥 Found", childrenInClass.length, "children in class");
+      
+      if (childIds.length === 0) {
+        return res.status(404).json({
+          success: false,
+          error: "لا توجد أطفال في هذا الفصل",
+        });
+      }
+      
+      deleteQuery.person = { $in: childIds };
+    }
+
+    console.log("🔍 Delete query:", JSON.stringify(deleteQuery));
+
+    // Count records before deletion
+    const countBeforeDelete = await Attendance.countDocuments(deleteQuery);
+    console.log(`📊 Found ${countBeforeDelete} records to delete`);
+
+    if (countBeforeDelete === 0) {
+      return res.status(404).json({
+        success: false,
+        error: "لا توجد سجلات حضور لهذا التاريخ",
+      });
+    }
+
+    // PERMANENTLY DELETE ALL MATCHING RECORDS FROM DATABASE
+    const deleteResult = await Attendance.deleteMany(deleteQuery);
+
+    console.log("=".repeat(50));
+    console.log(`🗑️ PERMANENT DELETION COMPLETED:`);
+    console.log(`   Date: ${date}`);
+    console.log(`   Class: ${targetClassId || "ALL CLASSES"}`);
+    console.log(`   Records deleted: ${deleteResult.deletedCount}`);
+    console.log(`   Deleted by: ${req.user.name} (${req.user._id})`);
+    console.log(`   User role: ${req.user.role}`);
+    console.log("=".repeat(50));
+
+    res.json({
+      success: true,
+      message: `تم مسح ${deleteResult.deletedCount} سجل حضور من قاعدة البيانات بنجاح`,
+      data: {
+        date: date,
+        classId: targetClassId || null,
+        deletedCount: deleteResult.deletedCount,
+        deletedBy: {
+          id: req.user._id,
+          name: req.user.name,
+          role: req.user.role,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("❌ Error deleting day attendance:", error);
+    res.status(500).json({
+      success: false,
+      error: "حدث خطأ في مسح سجلات الحضور",
+    });
+  }
+});
+
 // @route   POST /api/attendance/mark-all-present
 // @desc    Mark all children in a class as present for a date
 // @access  Public

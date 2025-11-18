@@ -62,6 +62,11 @@ export default function AttendancePage() {
   const [batchMode, setBatchMode] = useState(false)
   const [batchSaving, setBatchSaving] = useState(false)
 
+  // Delete day confirmation dialog state
+  const [showDeleteDayDialog, setShowDeleteDayDialog] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState('')
+  const [deletingDay, setDeletingDay] = useState(false)
+
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       router.push('/login')
@@ -280,6 +285,35 @@ export default function AttendancePage() {
       toast.error('حدث خطأ في تسجيل الحضور الجماعي')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleDeleteDayAttendance = async () => {
+    if (!selectedDate || deletingDay) return
+
+    // التحقق من كتابة كلمة التأكيد
+    if (deleteConfirmText !== 'مسح') {
+      toast.error('يرجى كتابة "مسح" للتأكيد')
+      return
+    }
+
+    setDeletingDay(true)
+    try {
+      const response = await attendanceAPI.deleteAttendanceByDay(selectedDate, selectedClass)
+      
+      if (response.success) {
+        toast.success(`تم مسح ${response.data.deletedCount} سجل حضور بنجاح`)
+        setShowDeleteDayDialog(false)
+        setDeleteConfirmText('')
+        loadAttendanceData()
+      } else {
+        toast.error(response.error || 'فشل في مسح سجلات الحضور')
+      }
+    } catch (error) {
+      console.error('Error deleting day attendance:', error)
+      toast.error('حدث خطأ في مسح سجلات الحضور')
+    } finally {
+      setDeletingDay(false)
     }
   }
 
@@ -655,7 +689,7 @@ export default function AttendancePage() {
             <div className="flex items-end">
               <button
                 onClick={markAllPresent}
-                disabled={saving || !selectedClass || children.length === 0}
+                disabled={saving || !selectedClass || children.length === 0 || batchMode}
                 className="btn-success w-full disabled:opacity-50"
               >
                 {saving ? (
@@ -669,6 +703,25 @@ export default function AttendancePage() {
               </button>
             </div>
           </div>
+
+          {/* Delete Day Attendance Button */}
+          {!batchMode && selectedClass && (presentCount > 0 || absentCount > 0) && (
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <button
+                onClick={() => setShowDeleteDayDialog(true)}
+                disabled={saving || deletingDay}
+                className="w-full px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors font-medium flex items-center justify-center gap-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+                مسح الحضور في هذا اليوم
+              </button>
+              <p className="text-xs text-red-600 text-center mt-2">
+                ⚠️ هذا الإجراء سيمسح كل سجلات الحضور في هذا التاريخ نهائياً
+              </p>
+            </div>
+          )}
 
           {/* Statistics */}
           {selectedClass && children.length > 0 && (
@@ -808,6 +861,83 @@ export default function AttendancePage() {
           onSave={handleAttendanceSave}
           onDelete={handleAttendanceDelete}
         />
+      )}
+
+      {/* Delete Day Confirmation Dialog */}
+      {showDeleteDayDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-red-600">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">تأكيد مسح الحضور</h3>
+                <p className="text-sm text-gray-500">عملية لا يمكن التراجع عنها</p>
+              </div>
+            </div>
+
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-sm text-red-800 font-medium mb-2">
+                ⚠️ تحذير: هذا الإجراء خطير!
+              </p>
+              <ul className="text-sm text-red-700 space-y-1 list-disc list-inside">
+                <li>سيتم مسح <strong>كل</strong> سجلات الحضور في التاريخ: <strong>{selectedDate}</strong></li>
+                <li>المسح نهائي من قاعدة البيانات</li>
+                <li>لا يمكن استرجاع البيانات بعد المسح</li>
+                <li>سيعود الأطفال كأن الحضور لم يُسجل أصلاً</li>
+              </ul>
+            </div>
+
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                للتأكيد، اكتب كلمة "<strong className="text-red-600">مسح</strong>" في الحقل أدناه:
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder='اكتب "مسح" للتأكيد'
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                disabled={deletingDay}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowDeleteDayDialog(false)
+                  setDeleteConfirmText('')
+                }}
+                disabled={deletingDay}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 disabled:opacity-50 transition-colors"
+              >
+                إلغاء
+              </button>
+              <button
+                onClick={handleDeleteDayAttendance}
+                disabled={deletingDay || deleteConfirmText !== 'مسح'}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50 transition-colors font-bold flex items-center justify-center gap-2"
+              >
+                {deletingDay ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    جاري المسح...
+                  </>
+                ) : (
+                  <>
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                    </svg>
+                    مسح نهائياً
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
