@@ -46,48 +46,11 @@ app.get("/test", (req, res) => {
 
 // Advanced statistics test route
 app.get("/api/advanced-statistics/test", (req, res) => {
-  console.log("🧪 Advanced statistics test endpoint called");
   res.json({
     success: true,
     message: "Advanced statistics working!",
     timestamp: new Date().toISOString(),
   });
-});
-
-// Debug token creation endpoint
-app.get("/debug/create-token", async (req, res) => {
-  try {
-    const mongoose = require("mongoose");
-    const jwt = require("jsonwebtoken");
-    const User = require("./models/User");
-
-    const user = await User.findOne({ role: "serviceLeader" });
-    if (!user) {
-      return res.status(404).json({ error: "Service leader not found" });
-    }
-
-    const secret = process.env.JWT_SECRET;
-    const payload = {
-      id: user._id.toString(),
-      role: user.role,
-      username: user.username,
-    };
-
-    const token = jwt.sign(payload, secret, { expiresIn: "7d" });
-
-    // Test verification immediately
-    const verified = jwt.verify(token, secret);
-
-    res.json({
-      success: true,
-      token: token,
-      payload: payload,
-      verified: verified,
-      secret_found: !!secret,
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
 });
 
 // API Routes

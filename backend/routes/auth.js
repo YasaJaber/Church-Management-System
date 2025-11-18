@@ -47,10 +47,19 @@ router.post("/login", async (req, res) => {
       });
     }
 
+    // Verify JWT_SECRET exists
+    if (!process.env.JWT_SECRET) {
+      console.error('❌ CRITICAL: JWT_SECRET is not configured');
+      return res.status(500).json({
+        success: false,
+        error: "Server configuration error",
+      });
+    }
+
     // Generate JWT token
     const token = jwt.sign(
       { userId: user._id, role: user.role },
-      process.env.JWT_SECRET || "fallback_secret_key",
+      process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
 

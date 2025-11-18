@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
 import { classesAPI, API_BASE_URL } from '@/services/api'
@@ -48,31 +48,7 @@ export default function ConsecutiveAttendancePage() {
   const [error, setError] = useState('')
   const [deliveryLoading, setDeliveryLoading] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push('/login')
-      return
-    }
-    
-    if (isAuthenticated && user) {
-      // مدرسي الفصول، أمين الخدمة والأدمن يمكنهم الوصول لهذه الصفحة
-      if (user.role !== 'admin' && user.role !== 'serviceLeader' && user.role !== 'classTeacher' && user.role !== 'servant') {
-        router.push('/statistics')
-        return
-      }
-      
-      initializePage()
-    }
-  }, [isAuthenticated, isLoading, router, user])
-
-  const initializePage = async () => {
-    await Promise.all([
-      fetchClasses(),
-      fetchConsecutiveAttendance()
-    ])
-  }
-
-  const fetchClasses = async () => {
+  const fetchClasses = useCallback(async () => {
     try {
       const response = await classesAPI.getAll()
       if (response.success && response.data) {
@@ -81,9 +57,69 @@ export default function ConsecutiveAttendancePage() {
     } catch (error) {
       console.error('Error fetching classes:', error)
     }
+  }, [])
+
+  const getLastFridays = (count: number) => {
+    const fridays = []
+    const today = new Date()
+    const current = new Date(today)
+    
+    // البحث عن آخر جمعة
+    while (current.getDay() !== 5) {
+      current.setDate(current.getDate() - 1)
+    }
+    
+    // الحصول على آخر 'count' جمعات
+    for (let i = 0; i < count; i++) {
+      fridays.push(current.toISOString().split('T')[0])
+      current.setDate(current.getDate() - 7)
+    }
+    
+    return fridays
   }
 
-  const fetchConsecutiveAttendance = async (classId?: string) => {
+  const fetchWeeklyData = useCallback(async (classId?: string) => {
+    try {
+      const token = localStorage.getItem('token') || 
+                   localStorage.getItem('auth_token') ||
+                   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4N2FiMDdmYjQ0NjhkMjEwMGUxZDA1NCIsInJvbGUiOiJhZG1pbiIsInVzZXJuYW1lIjoia2Vyb2xlcyIsImlhdCI6MTc1NDM5NDQ0MywiZXhwIjoxNzU0OTk5MjQzfQ._zOJADjrl1HcumdQhPU36tFOG4T1fUUiQd4UV8mOicFs'
+      
+      const last4Fridays = getLastFridays(4)
+      const weeklyStats: WeeklyAttendance[] = []
+
+      for (const friday of last4Fridays) {
+        const url = `${API_BASE_URL}/attendance/children-with-status?date=${friday}${classId ? `&classId=${classId}` : ''}`
+        
+        const response = await fetch(url, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          
+          if (data.success && data.data) {
+            const children = data.data
+            const totalChildren = children.length
+            const presentCount = children.filter((child: { attendance?: { status?: string } }) => child.attendance?.status === 'present').length
+            const attendanceRate = totalChildren > 0 ? (presentCount / totalChildren) * 100 : 0
+            
+            weeklyStats.push({
+              date: friday,
+              totalChildren,
+              presentCount,
+              attendanceRate
+            })
+          }
+        }
+      }
+
+      setWeeklyData(weeklyStats.reverse()) // عرض من الأقدم للأحدث
+    } catch (error) {
+      console.error('Error fetching weekly data:', error)
+    }
+  }, [])
+
+  const fetchConsecutiveAttendance = useCallback(async (classId?: string) => {
     try {
       setLoading(true)
       setError('')
@@ -130,73 +166,34 @@ export default function ConsecutiveAttendancePage() {
         setError(data.error || 'حدث خطأ في جلب البيانات')
         console.error('❌ API Error:', data.error)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('❌ Error fetching consecutive attendance:', error)
-      setError(error.message || 'حدث خطأ في جلب البيانات')
+      setError(error instanceof Error ? error.message : 'حدث خطأ في جلب البيانات')
     } finally {
       setLoading(false)
     }
-  }
+  }, [fetchWeeklyData])
 
-  const fetchWeeklyData = async (classId?: string) => {
-    try {
-      const token = localStorage.getItem('token') || 
-                   localStorage.getItem('auth_token') ||
-                   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4N2FiMDdmYjQ0NjhkMjEwMGUxZDA1NCIsInJvbGUiOiJhZG1pbiIsInVzZXJuYW1lIjoia2Vyb2xlcyIsImlhdCI6MTc1NDM5NDQ0MywiZXhwIjoxNzU0OTk5MjQzfQ._zOJADjrl1HcumdQhPU36tFOG4T1fUUiQd4UV8mOicFs'
-      
-      const last4Fridays = getLastFridays(4)
-      const weeklyStats: WeeklyAttendance[] = []
-
-      for (const friday of last4Fridays) {
-        const url = `${API_BASE_URL}/attendance/children-with-status?date=${friday}${classId ? `&classId=${classId}` : ''}`
-        
-        const response = await fetch(url, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        
-        if (response.ok) {
-          const data = await response.json()
-          
-          if (data.success && data.data) {
-            const children = data.data
-            const totalChildren = children.length
-            const presentCount = children.filter((child: any) => child.attendance?.status === 'present').length
-            const attendanceRate = totalChildren > 0 ? (presentCount / totalChildren) * 100 : 0
-            
-            weeklyStats.push({
-              date: friday,
-              totalChildren,
-              presentCount,
-              attendanceRate
-            })
-          }
-        }
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push('/login')
+      return
+    }
+    
+    if (isAuthenticated && user) {
+      // مدرسي الفصول، أمين الخدمة والأدمن يمكنهم الوصول لهذه الصفحة
+      if (user.role !== 'admin' && user.role !== 'serviceLeader' && user.role !== 'classTeacher' && user.role !== 'servant') {
+        router.push('/statistics')
+        return
       }
-
-      setWeeklyData(weeklyStats.reverse()) // عرض من الأقدم للأحدث
-    } catch (error) {
-      console.error('Error fetching weekly data:', error)
+      
+      // Initialize page data
+      Promise.all([
+        fetchClasses(),
+        fetchConsecutiveAttendance()
+      ]).catch(console.error)
     }
-  }
-
-  const getLastFridays = (count: number) => {
-    const fridays = []
-    const today = new Date()
-    let current = new Date(today)
-    
-    // البحث عن آخر جمعة
-    while (current.getDay() !== 5) {
-      current.setDate(current.getDate() - 1)
-    }
-    
-    // الحصول على آخر 'count' جمعات
-    for (let i = 0; i < count; i++) {
-      fridays.push(current.toISOString().split('T')[0])
-      current.setDate(current.getDate() - 7)
-    }
-    
-    return fridays.reverse()
-  }
+  }, [isAuthenticated, isLoading, router, user, fetchClasses, fetchConsecutiveAttendance])
 
   const handleClassChange = (classId: string) => {
     setSelectedClass(classId)
@@ -219,7 +216,7 @@ export default function ConsecutiveAttendancePage() {
     return classesData.flatMap(classData => classData.children)
   }
 
-  const handleDeliverGift = async (childId: string, childName: string) => {
+  const handleDeliverGift = async (childId: string) => {
     try {
       setDeliveryLoading(childId)
       
@@ -247,9 +244,9 @@ export default function ConsecutiveAttendancePage() {
       } else {
         alert(`❌ خطأ: ${data.error}`)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error delivering gift:', error)
-      alert(`❌ حدث خطأ في تسليم الهدية: ${error.message}`)
+      alert(`❌ حدث خطأ في تسليم الهدية: ${error instanceof Error ? error.message : 'خطأ غير معروف'}`)
     } finally {
       setDeliveryLoading(null)
     }
@@ -312,9 +309,9 @@ export default function ConsecutiveAttendancePage() {
       } else {
         alert(`❌ خطأ: ${data.error}`)
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error resetting consecutive attendance:', error)
-      alert(`❌ حدث خطأ: ${error.message}`)
+      alert(`❌ حدث خطأ: ${error instanceof Error ? error.message : 'خطأ غير معروف'}`)
     } finally {
       setLoading(false)
     }
@@ -589,7 +586,7 @@ export default function ConsecutiveAttendancePage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right">
                             <button
-                              onClick={() => handleDeliverGift(child.childId, child.name)}
+                              onClick={() => handleDeliverGift(child.childId)}
                               disabled={deliveryLoading === child.childId}
                               className="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-lg hover:from-green-600 hover:to-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 text-sm font-medium flex items-center gap-2"
                             >

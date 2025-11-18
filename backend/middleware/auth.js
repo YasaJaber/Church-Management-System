@@ -4,26 +4,23 @@ const User = require("../models/User");
 // Middleware to verify JWT token
 const authMiddleware = async (req, res, next) => {
   try {
-    console.log('🔐 Auth middleware called');
     const token = req.header("Authorization")?.replace("Bearer ", "");
-    console.log('🔑 Token:', token ? 'Present' : 'Missing');
-    console.log('🔑 Full token:', token);
 
     if (!token) {
-      console.log('❌ No token provided');
       return res
         .status(401)
         .json({ message: "Access denied. No token provided." });
     }
 
-    console.log('🔍 Verifying token...');
-    console.log('🔑 JWT_SECRET in middleware:', process.env.JWT_SECRET ? 'Found' : 'Not found');
-    console.log('🔑 Actual JWT_SECRET:', process.env.JWT_SECRET);
-    const secret = process.env.JWT_SECRET || "fallback_secret_key";
-    console.log('🔐 Using secret:', secret === process.env.JWT_SECRET ? 'ENV secret' : 'Fallback secret');
-    console.log('🔐 Secret value:', secret);
-    const decoded = jwt.verify(token, secret);
-    console.log('✅ Token decoded successfully:', { userId: decoded.userId || decoded.id, role: decoded.role });
+    // Verify JWT_SECRET exists
+    if (!process.env.JWT_SECRET) {
+      console.error('❌ CRITICAL: JWT_SECRET is not configured');
+      return res
+        .status(500)
+        .json({ message: "Server configuration error." });
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     // Support both 'userId' and 'id' fields for backward compatibility
     const userId = decoded.userId || decoded.id;
@@ -31,19 +28,16 @@ const authMiddleware = async (req, res, next) => {
       .select("-password")
       .populate("assignedClass");
 
-    console.log('👤 User found:', user ? user.name : 'Not found');
     if (!user || !user.isActive) {
-      console.log('❌ Invalid token or inactive user');
       return res
         .status(401)
         .json({ message: "Invalid token or inactive user." });
     }
 
     req.user = { ...user.toObject(), userId: userId };
-    console.log('✅ Auth middleware passed for:', user.name);
     next();
   } catch (error) {
-    console.log('❌ Auth middleware error:', error.message);
+    console.error('Auth error:', error.name); // Log only error type, not details
     res.status(401).json({ message: "Invalid token." });
   }
 };
