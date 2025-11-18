@@ -63,11 +63,18 @@
 - ✅ Password يظهر مرة واحدة فقط عند إنشاء الحساب
 
 ### 9. Secure Logging System ✅ [جديد!]
+**Backend:**
 - ✅ Winston logger مع data sanitization تلقائي
 - ✅ إخفاء البيانات الحساسة (passwords, tokens, api_keys)
 - ✅ Log rotation وحفظ في ملفات منفصلة
 - ✅ مستويات logs مختلفة (error, warn, info, http, debug)
 - ✅ Console output فقط في development mode
+
+**Frontend:**
+- ✅ Secure logger utility (development mode only)
+- ✅ Automatic data sanitization
+- ✅ Replaced 190+ console.log في الملفات الحرجة (api.ts, storage.ts)
+- ⏳ 93 console.log متبقية في ملفات UI (not critical)
 
 ---
 
@@ -1285,6 +1292,59 @@ logs/
 ```
 
 **النتيجة:** لم يعد النظام يكشف معلومات حساسة في الـ logs، وكل البيانات الحساسة تُخفى تلقائياً ✅
+
+---
+
+#### 🌐 تم تطبيق حل مماثل في Frontend!
+
+**Frontend Logging Solution:**
+
+**الخطوة 1: إنشاء Secure Logger للـ Frontend**
+```typescript
+// web/src/utils/logger.ts
+const isDevelopment = process.env.NODE_ENV === 'development';
+
+const logger = {
+  log: (...args) => {
+    if (isDevelopment) console.log(...args);
+  },
+  error: (...args) => {
+    // Always log errors but sanitize them
+    console.error(...sanitize(args));
+  },
+  // ... other methods
+};
+
+export default logger;
+```
+
+**الخطوة 2: تطبيق Logger في الملفات الحرجة**
+- ✅ `web/src/services/api.ts` - استبدال 170 console.log
+- ✅ `web/src/utils/storage.ts` - استبدال 20 console.log
+
+**النتيجة:**
+- **قبل:** Console يكشف API URLs, tokens, user IDs, statistics
+- **بعد:** Logs تظهر فقط في development mode، والـ sensitive data تُخفى تلقائياً
+
+**مثال على التحسين:**
+```typescript
+// قبل:
+console.log('Retrieved auth_token from cookies')
+console.log('Making request to:', url)
+console.log('Token added to request')
+
+// بعد (Production):
+// ❌ لا يطبع شيء في production
+
+// بعد (Development):
+logger.debug('Request', { url: '/api/statistics', hasToken: true })
+// ✅ معلومات مفيدة للـ debugging بدون كشف بيانات حساسة
+```
+
+**الملفات المتبقية:** 
+- 93 console.log في ملفات UI (pages/*.tsx)
+- هذه غير حرجة لأنها debugging messages للـ UI فقط
+- يمكن تنظيفها لاحقاً لتحسين أكبر
 
 ---
 

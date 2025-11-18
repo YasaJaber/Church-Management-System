@@ -2,6 +2,7 @@ import axios from 'axios'
 import { tr } from 'date-fns/locale'
 import { EnhancedStorage } from '@/utils/storage'
 import Cookies from 'js-cookie'
+import logger from '@/utils/logger'
 
 // Base URL for the API - الرابط الصحيح للباك إند
 const PRODUCTION_API_URL = 'https://church-management-system-b6h7.onrender.com/api'
@@ -17,13 +18,10 @@ export const API_BASE_URL = USE_PRODUCTION_BACKEND ?
   (process.env.NEXT_PUBLIC_API_URL || PRODUCTION_API_URL) : 
   LOCAL_URL
 
-console.log('🔧 API Configuration:', {
+logger.info('API Configuration:', {
   API_BASE_URL,
   USE_PRODUCTION_BACKEND,
   NODE_ENV: process.env.NODE_ENV,
-  NEXT_PUBLIC_USE_PRODUCTION: process.env.NEXT_PUBLIC_USE_PRODUCTION,
-  NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
-  hostname: typeof window !== 'undefined' ? window.location.hostname : 'server'
 })
 
 // Create axios instance with enhanced CORS settings
@@ -57,17 +55,16 @@ api.interceptors.request.use(
       // Enhanced token retrieval using EnhancedStorage
       const token = EnhancedStorage.getAuthToken()
       
-      console.log('Token from storage:', token ? 'EXISTS' : 'NOT_FOUND')
-      console.log('Making request to:', (config.baseURL || '') + (config.url || ''))
+      logger.api('Request', {
+        url: config.url,
+        hasToken: !!token,
+      })
       
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
-        console.log('Token added to request')
-      } else {
-        console.log('No token found in storage or cookies')
       }
     } catch (error) {
-      console.error('Error getting token from storage:', error)
+      logger.error('Error getting token from storage:', error)
     }
     return config
   },
@@ -79,26 +76,28 @@ api.interceptors.request.use(
 // Enhanced response interceptor for better mobile token management
 api.interceptors.response.use(
   (response) => {
-    console.log('API Response:', response.status, response.config.url)
+    logger.api('Response', {
+      status: response.status,
+      url: response.config.url,
+    })
     
     // Auto-clear cache for attendance marking to ensure fresh data
     if (response.config.url?.includes('/attendance') && response.config.method === 'post') {
-      console.log('Auto-clearing statistics cache after attendance update')
+      logger.debug('Auto-clearing statistics cache after attendance update')
       clearStatisticsCache()
     }
     
     return response
   },
   async (error) => {
-    console.log(
-      'API Error:',
-      error.response?.status,
-      error.config?.url,
-      error.message
-    )
+    logger.error('API Error:', {
+      status: error.response?.status,
+      url: error.config?.url,
+      message: error.message,
+    })
     
     if (error.response?.status === 401) {
-      console.log('📱 Token expired or invalid, clearing all storage')
+      logger.warn('Token expired or invalid, clearing all storage')
       
       // Clear all possible token storage locations using EnhancedStorage
       EnhancedStorage.clearAuth()
@@ -120,24 +119,24 @@ let statisticsCache: Record<string, any> = {}
 
 const clearStatisticsCache = () => {
   statisticsCache = {}
-  console.log('Statistics cache cleared')
+  logger.debug('Statistics cache cleared')
 }
 
 // Auth API calls
 export const authAPI = {
   login: async (credentials: { username: string; password: string }) => {
     try {
-      console.log('🔐 محاولة تسجيل الدخول للمستخدم:', credentials.username)
-      console.log('🌐 API URL:', `${API_BASE_URL}/auth/login`)
+      logger.debug('🔐 محاولة تسجيل الدخول للمستخدم:', credentials.username)
+      logger.debug('🌐 API URL:', `${API_BASE_URL}/auth/login`)
       
       const response = await api.post('/auth/login', credentials)
-      console.log('✅ تم تسجيل الدخول بنجاح:', response.data)
+      logger.debug('✅ تم تسجيل الدخول بنجاح:', response.data)
       return response.data
     } catch (error: any) {
-      console.error('❌ خطأ في تسجيل الدخول:', error)
-      console.error('📝 Response data:', error.response?.data)
-      console.error('📊 Response status:', error.response?.status)
-      console.error('🔍 Request config:', error.config)
+      logger.error('❌ خطأ في تسجيل الدخول:', error)
+      logger.error('📝 Response data:', error.response?.data)
+      logger.error('📊 Response status:', error.response?.status)
+      logger.error('🔍 Request config:', error.config)
       throw {
         success: false,
         message: error.response?.data?.error || error.response?.data?.message || 'حدث خطأ في تسجيل الدخول',
@@ -151,7 +150,7 @@ export const authAPI = {
       const response = await api.get('/auth/me')
       return response.data
     } catch (error: any) {
-      console.error('Get current user error:', error)
+      logger.error('Get current user error:', error)
       throw error
     }
   },
@@ -161,7 +160,7 @@ export const authAPI = {
       const response = await api.post('/auth/refresh')
       return response.data
     } catch (error: any) {
-      console.error('Refresh token error:', error)
+      logger.error('Refresh token error:', error)
       throw error
     }
   }
@@ -171,14 +170,14 @@ export const authAPI = {
 export const childrenAPI = {
   getAll: async (filters = {}) => {
     try {
-      console.log('Fetching all children with filters:', filters)
+      logger.debug('Fetching all children with filters:', filters)
       const params = new URLSearchParams(filters as Record<string, string>)
       const response = await api.get(`/children?${params}`)
       const children = response.data.data || response.data || []
-      console.log('Children fetched successfully:', children.length, 'children')
+      logger.debug('Children fetched successfully:', children.length, 'children')
       return { success: true, data: children }
     } catch (error: any) {
-      console.error('Error fetching children:', error)
+      logger.error('Error fetching children:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في جلب الأطفال'
@@ -192,12 +191,12 @@ export const childrenAPI = {
 
   getByClass: async (classId: string) => {
     try {
-      console.log('Fetching children by class:', classId)
+      logger.debug('Fetching children by class:', classId)
       const response = await api.get(`/children/class/${classId}`)
-      console.log('Children by class response:', response.data)
+      logger.debug('Children by class response:', response.data)
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error fetching children by class:', error)
+      logger.error('Error fetching children by class:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في جلب الأطفال'
@@ -210,7 +209,7 @@ export const childrenAPI = {
       const response = await api.get(`/children/${id}`)
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error fetching child:', error)
+      logger.error('Error fetching child:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في جلب الطفل'
@@ -220,12 +219,12 @@ export const childrenAPI = {
 
   create: async (childData: any) => {
     try {
-      console.log('Creating new child:', childData)
+      logger.debug('Creating new child:', childData)
       const response = await api.post('/children', childData)
-      console.log('Child created successfully:', response.data)
+      logger.debug('Child created successfully:', response.data)
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error creating child:', error)
+      logger.error('Error creating child:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في إنشاء الطفل'
@@ -239,12 +238,12 @@ export const childrenAPI = {
 
   update: async (id: string, childData: any) => {
     try {
-      console.log('Updating child:', id, childData)
+      logger.debug('Updating child:', id, childData)
       const response = await api.put(`/children/${id}`, childData)
-      console.log('Child updated successfully:', response.data)
+      logger.debug('Child updated successfully:', response.data)
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error updating child:', error)
+      logger.error('Error updating child:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحديث الطفل'
@@ -258,12 +257,12 @@ export const childrenAPI = {
 
   delete: async (id: string) => {
     try {
-      console.log('Deleting child:', id)
+      logger.debug('Deleting child:', id)
       const response = await api.delete(`/children/${id}`)
-      console.log('Child deleted successfully')
+      logger.debug('Child deleted successfully')
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error deleting child:', error)
+      logger.error('Error deleting child:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في حذف الطفل'
@@ -278,12 +277,12 @@ export const childrenAPI = {
   // Get children statistics by class
   getStatisticsByClass: async () => {
     try {
-      console.log('Fetching children statistics by class')
+      logger.debug('Fetching children statistics by class')
       const response = await api.get('/children/statistics/by-class')
-      console.log('Children statistics by class fetched successfully')
+      logger.debug('Children statistics by class fetched successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error fetching children statistics by class:', error)
+      logger.error('Error fetching children statistics by class:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحميل إحصائيات الأطفال'
@@ -294,12 +293,12 @@ export const childrenAPI = {
   // Get individual child statistics
   getIndividualStatistics: async (childId: string) => {
     try {
-      console.log('Fetching individual child statistics for:', childId)
+      logger.debug('Fetching individual child statistics for:', childId)
       const response = await api.get(`/children/statistics/individual/${childId}`)
-      console.log('Individual child statistics fetched successfully')
+      logger.debug('Individual child statistics fetched successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error fetching individual child statistics:', error)
+      logger.error('Error fetching individual child statistics:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحميل إحصائيات الطفل'
@@ -312,16 +311,16 @@ export const childrenAPI = {
 export const attendanceAPI = {
   getChildrenWithStatus: async (date: string, classId?: string) => {
     try {
-      console.log('Fetching children with attendance status for date:', date, 'classId:', classId)
+      logger.debug('Fetching children with attendance status for date:', date, 'classId:', classId)
       const params = new URLSearchParams()
       params.append('date', date)
       if (classId) params.append('classId', classId)
       
       const response = await api.get(`/attendance/children-with-status?${params}`)
-      console.log('Children with status fetched successfully:', response.data.data?.length || 0, 'children')
+      logger.debug('Children with status fetched successfully:', response.data.data?.length || 0, 'children')
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error fetching children with status:', error)
+      logger.error('Error fetching children with status:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في جلب بيانات الحضور'
@@ -331,15 +330,15 @@ export const attendanceAPI = {
 
   getByClass: async (classId: string, date?: string) => {
     try {
-      console.log('Fetching attendance for class:', classId, 'date:', date)
+      logger.debug('Fetching attendance for class:', classId, 'date:', date)
       const params = new URLSearchParams()
       if (date) params.append('date', date)
       
       const response = await api.get(`/attendance/class/${classId}?${params}`)
-      console.log('Attendance fetched successfully')
+      logger.debug('Attendance fetched successfully')
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error fetching attendance:', error)
+      logger.error('Error fetching attendance:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في جلب الحضور'
@@ -349,16 +348,16 @@ export const attendanceAPI = {
 
   getAttendanceByDate: async (date: string, classId?: string) => {
     try {
-      console.log('Fetching attendance by date:', date, 'classId:', classId)
+      logger.debug('Fetching attendance by date:', date, 'classId:', classId)
       const params = new URLSearchParams()
       params.append('date', date)
       if (classId) params.append('classId', classId)
       
       const response = await api.get(`/attendance/children?${params}`)
-      console.log('Attendance by date fetched successfully')
+      logger.debug('Attendance by date fetched successfully')
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error fetching attendance by date:', error)
+      logger.error('Error fetching attendance by date:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في جلب الحضور'
@@ -368,16 +367,16 @@ export const attendanceAPI = {
 
   markAttendance: async (attendanceData: any) => {
     try {
-      console.log('Marking attendance:', attendanceData)
+      logger.debug('Marking attendance:', attendanceData)
       const response = await api.post('/attendance', attendanceData)
-      console.log('Attendance marked successfully')
+      logger.debug('Attendance marked successfully')
       
       // Clear cache after marking attendance
       clearStatisticsCache()
       
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error marking attendance:', error)
+      logger.error('Error marking attendance:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تسجيل الحضور'
@@ -387,19 +386,19 @@ export const attendanceAPI = {
 
   markAllPresent: async (classId: string, date: string) => {
     try {
-      console.log('Marking all present for class:', classId, 'date:', date)
+      logger.debug('Marking all present for class:', classId, 'date:', date)
       const response = await api.post('/attendance/mark-all-present', {
         classId,
         date
       })
-      console.log('All marked present successfully')
+      logger.debug('All marked present successfully')
       
       // Clear cache after bulk attendance
       clearStatisticsCache()
       
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error marking all present:', error)
+      logger.error('Error marking all present:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تسجيل الحضور الجماعي'
@@ -409,16 +408,16 @@ export const attendanceAPI = {
 
   updateAttendance: async (id: string, attendanceData: any) => {
     try {
-      console.log('Updating attendance:', id, attendanceData)
+      logger.debug('Updating attendance:', id, attendanceData)
       const response = await api.put(`/attendance/${id}`, attendanceData)
-      console.log('Attendance updated successfully')
+      logger.debug('Attendance updated successfully')
       
       // Clear cache after updating attendance
       clearStatisticsCache()
       
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error updating attendance:', error)
+      logger.error('Error updating attendance:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحديث الحضور'
@@ -428,17 +427,17 @@ export const attendanceAPI = {
 
   deleteAttendance: async (childId: string, date?: string) => {
     try {
-      console.log('Deleting attendance for child:', childId, 'date:', date)
+      logger.debug('Deleting attendance for child:', childId, 'date:', date)
       const url = date ? `/attendance/${childId}/${date}` : `/attendance/${childId}`
       const response = await api.delete(url)
-      console.log('Attendance deleted successfully')
+      logger.debug('Attendance deleted successfully')
       
       // Clear cache after deleting attendance
       clearStatisticsCache()
       
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error deleting attendance:', error)
+      logger.error('Error deleting attendance:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في حذف تسجيل الحضور'
@@ -453,17 +452,17 @@ export const attendanceAPI = {
     notes?: string
   }>, date: string) => {
     try {
-      console.log('Saving batch attendance:', attendanceData.length, 'records for date:', date)
+      logger.debug('Saving batch attendance:', attendanceData.length, 'records for date:', date)
 
       const response = await api.post('/attendance/batch', {
         attendanceData,
         date
       })
 
-      console.log('Batch attendance saved successfully:', response.data)
+      logger.debug('Batch attendance saved successfully:', response.data)
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error saving batch attendance:', error)
+      logger.error('Error saving batch attendance:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تسجيل الحضور الجماعي'
@@ -476,13 +475,13 @@ export const attendanceAPI = {
 export const classesAPI = {
   getAll: async () => {
     try {
-      console.log('Fetching all classes')
+      logger.debug('Fetching all classes')
       const response = await api.get('/classes')
       const classes = response.data.data || response.data || []
-      console.log('Classes fetched successfully:', classes.length, 'classes')
+      logger.debug('Classes fetched successfully:', classes.length, 'classes')
       return { success: true, data: classes }
     } catch (error: any) {
-      console.error('Error fetching classes:', error)
+      logger.error('Error fetching classes:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في جلب الفصول'
@@ -499,7 +498,7 @@ export const classesAPI = {
       const response = await api.get(`/classes/${id}`)
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error fetching class:', error)
+      logger.error('Error fetching class:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في جلب الفصل'
@@ -509,12 +508,12 @@ export const classesAPI = {
 
   create: async (classData: any) => {
     try {
-      console.log('Creating new class:', classData)
+      logger.debug('Creating new class:', classData)
       const response = await api.post('/classes', classData)
-      console.log('Class created successfully:', response.data)
+      logger.debug('Class created successfully:', response.data)
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error creating class:', error)
+      logger.error('Error creating class:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في إنشاء الفصل'
@@ -524,12 +523,12 @@ export const classesAPI = {
 
   update: async (id: string, classData: any) => {
     try {
-      console.log('Updating class:', id, classData)
+      logger.debug('Updating class:', id, classData)
       const response = await api.put(`/classes/${id}`, classData)
-      console.log('Class updated successfully:', response.data)
+      logger.debug('Class updated successfully:', response.data)
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error updating class:', error)
+      logger.error('Error updating class:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحديث الفصل'
@@ -539,12 +538,12 @@ export const classesAPI = {
 
   delete: async (id: string) => {
     try {
-      console.log('Deleting class:', id)
+      logger.debug('Deleting class:', id)
       const response = await api.delete(`/classes/${id}`)
-      console.log('Class deleted successfully')
+      logger.debug('Class deleted successfully')
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error deleting class:', error)
+      logger.error('Error deleting class:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في حذف الفصل'
@@ -560,18 +559,18 @@ export const statisticsAPI = {
     try {
       const cacheKey = 'overview'
       if (statisticsCache[cacheKey]) {
-        console.log('Returning cached overview statistics')
+        logger.debug('Returning cached overview statistics')
         return statisticsCache[cacheKey]
       }
 
-      console.log('Fetching overview statistics')
+      logger.debug('Fetching overview statistics')
       const response = await api.get('/statistics/overview')
-      console.log('Overview statistics fetched successfully')
+      logger.debug('Overview statistics fetched successfully')
       
       statisticsCache[cacheKey] = response.data
       return response.data
     } catch (error: any) {
-      console.error('Error fetching overview statistics:', error)
+      logger.error('Error fetching overview statistics:', error)
       throw error
     }
   },
@@ -580,18 +579,18 @@ export const statisticsAPI = {
     try {
       const cacheKey = `class-${classId}-${period}`
       if (statisticsCache[cacheKey]) {
-        console.log('Returning cached class statistics')
+        logger.debug('Returning cached class statistics')
         return statisticsCache[cacheKey]
       }
 
-      console.log('Fetching class statistics for:', classId, 'period:', period)
+      logger.debug('Fetching class statistics for:', classId, 'period:', period)
       const response = await api.get(`/statistics/class/${classId}?period=${period}`)
-      console.log('Class statistics fetched successfully')
+      logger.debug('Class statistics fetched successfully')
       
       statisticsCache[cacheKey] = response.data
       return response.data
     } catch (error: any) {
-      console.error('Error fetching class statistics:', error)
+      logger.error('Error fetching class statistics:', error)
       throw error
     }
   },
@@ -600,18 +599,18 @@ export const statisticsAPI = {
     try {
       const cacheKey = `trends-${period}`
       if (statisticsCache[cacheKey]) {
-        console.log('Returning cached attendance trends')
+        logger.debug('Returning cached attendance trends')
         return statisticsCache[cacheKey]
       }
 
-      console.log('Fetching attendance trends for period:', period)
+      logger.debug('Fetching attendance trends for period:', period)
       const response = await api.get(`/statistics/trends?period=${period}`)
-      console.log('Attendance trends fetched successfully')
+      logger.debug('Attendance trends fetched successfully')
       
       statisticsCache[cacheKey] = response.data
       return response.data
     } catch (error: any) {
-      console.error('Error fetching attendance trends:', error)
+      logger.error('Error fetching attendance trends:', error)
       throw error
     }
   },
@@ -620,18 +619,18 @@ export const statisticsAPI = {
     try {
       const cacheKey = `child-${childId}`
       if (statisticsCache[cacheKey]) {
-        console.log('Returning cached child statistics')
+        logger.debug('Returning cached child statistics')
         return statisticsCache[cacheKey]
       }
 
-      console.log('Fetching individual child statistics for:', childId)
+      logger.debug('Fetching individual child statistics for:', childId)
       const response = await api.get(`/children/statistics/individual/${childId}`)
-      console.log('Child statistics fetched successfully')
+      logger.debug('Child statistics fetched successfully')
       
       statisticsCache[cacheKey] = response.data
       return response.data
     } catch (error: any) {
-      console.error('Error fetching child statistics:', error)
+      logger.error('Error fetching child statistics:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحميل إحصائيات الطفل'
@@ -644,12 +643,12 @@ export const statisticsAPI = {
 export const servantsAPI = {
   getAll: async () => {
     try {
-      console.log('Fetching all servants')
+      logger.debug('Fetching all servants')
       const response = await api.get('/servants')
-      console.log('Servants fetched successfully:', response.data)
+      logger.debug('Servants fetched successfully:', response.data)
       return response.data
     } catch (error: any) {
-      console.error('Error fetching servants:', error)
+      logger.error('Error fetching servants:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحميل الخدام'
@@ -662,19 +661,19 @@ export const servantsAPI = {
       const response = await api.get(`/servants/${id}`)
       return response.data
     } catch (error: any) {
-      console.error('Error fetching servant:', error)
+      logger.error('Error fetching servant:', error)
       throw error
     }
   },
 
   create: async (userData: any) => {
     try {
-      console.log('Creating new servant:', userData)
+      logger.debug('Creating new servant:', userData)
       const response = await api.post('/servants', userData)
-      console.log('Servant created successfully:', response.data)
+      logger.debug('Servant created successfully:', response.data)
       return response.data
     } catch (error: any) {
-      console.error('Error creating servant:', error)
+      logger.error('Error creating servant:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في إضافة الخادم'
@@ -684,12 +683,12 @@ export const servantsAPI = {
 
   update: async (id: string, userData: any) => {
     try {
-      console.log('Updating servant:', id, userData)
+      logger.debug('Updating servant:', id, userData)
       const response = await api.put(`/servants/${id}`, userData)
-      console.log('Servant updated successfully:', response.data)
+      logger.debug('Servant updated successfully:', response.data)
       return response.data
     } catch (error: any) {
-      console.error('Error updating servant:', error)
+      logger.error('Error updating servant:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحديث الخادم'
@@ -699,12 +698,12 @@ export const servantsAPI = {
 
   delete: async (id: string) => {
     try {
-      console.log('Deleting servant:', id)
+      logger.debug('Deleting servant:', id)
       const response = await api.delete(`/servants/${id}`)
-      console.log('Servant deleted successfully')
+      logger.debug('Servant deleted successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error deleting servant:', error)
+      logger.error('Error deleting servant:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في حذف الخادم'
@@ -715,12 +714,12 @@ export const servantsAPI = {
   // Get servants statistics by class
   getStatisticsByClass: async () => {
     try {
-      console.log('Fetching servants statistics by class')
+      logger.debug('Fetching servants statistics by class')
       const response = await api.get('/servants/statistics/by-class')
-      console.log('Servants statistics by class fetched successfully')
+      logger.debug('Servants statistics by class fetched successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error fetching servants statistics by class:', error)
+      logger.error('Error fetching servants statistics by class:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحميل إحصائيات الخدام'
@@ -731,12 +730,12 @@ export const servantsAPI = {
   // Get individual servant statistics
   getIndividualStatistics: async (servantId: string) => {
     try {
-      console.log('Fetching individual servant statistics for:', servantId)
+      logger.debug('Fetching individual servant statistics for:', servantId)
       const response = await api.get(`/servants/statistics/individual/${servantId}`)
-      console.log('Individual servant statistics fetched successfully')
+      logger.debug('Individual servant statistics fetched successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error fetching individual servant statistics:', error)
+      logger.error('Error fetching individual servant statistics:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحميل إحصائيات الخادم'
@@ -747,12 +746,12 @@ export const servantsAPI = {
   // Get servants follow-up list (servants needing follow-up)
   getFollowUpList: async () => {
     try {
-      console.log('Fetching servants follow-up list')
+      logger.debug('Fetching servants follow-up list')
       const response = await api.get('/servants/statistics/follow-up')
-      console.log('Servants follow-up list fetched successfully')
+      logger.debug('Servants follow-up list fetched successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error fetching servants follow-up list:', error)
+      logger.error('Error fetching servants follow-up list:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحميل قائمة افتقاد الخدام'
@@ -763,12 +762,12 @@ export const servantsAPI = {
   // Get servants general statistics (including follow-up count)
   getGeneralStatistics: async () => {
     try {
-      console.log('Fetching servants general statistics')
+      logger.debug('Fetching servants general statistics')
       const response = await api.get('/servants/statistics/general')
-      console.log('Servants general statistics fetched successfully')
+      logger.debug('Servants general statistics fetched successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error fetching servants general statistics:', error)
+      logger.error('Error fetching servants general statistics:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحميل الإحصائيات العامة للخدام'
@@ -779,12 +778,12 @@ export const servantsAPI = {
   // Get individual servants statistics with follow-up info
   getIndividualStatisticsList: async () => {
     try {
-      console.log('Fetching individual servants statistics list')
+      logger.debug('Fetching individual servants statistics list')
       const response = await api.get('/servants/statistics/individual')
-      console.log('Individual servants statistics list fetched successfully')
+      logger.debug('Individual servants statistics list fetched successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error fetching individual servants statistics list:', error)
+      logger.error('Error fetching individual servants statistics list:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحميل إحصائيات الخدام الفردية'
@@ -797,12 +796,12 @@ export const servantsAPI = {
   // Get servants attendance by date
   getAttendanceByDate: async (date: string) => {
     try {
-      console.log('Fetching servants attendance for date:', date)
+      logger.debug('Fetching servants attendance for date:', date)
       const response = await api.get(`/servants/attendance?date=${date}`)
-      console.log('Servants attendance fetched successfully')
+      logger.debug('Servants attendance fetched successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error fetching servants attendance:', error)
+      logger.error('Error fetching servants attendance:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحميل بيانات الحضور'
@@ -818,12 +817,12 @@ export const servantsAPI = {
     notes?: string
   }) => {
     try {
-      console.log('Marking servant attendance:', attendanceData)
+      logger.debug('Marking servant attendance:', attendanceData)
       const response = await api.post('/servants/attendance', attendanceData)
-      console.log('Servant attendance marked successfully')
+      logger.debug('Servant attendance marked successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error marking servant attendance:', error)
+      logger.error('Error marking servant attendance:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تسجيل الحضور'
@@ -834,14 +833,14 @@ export const servantsAPI = {
   // Delete servant attendance
   deleteAttendance: async (servantId: string, date: string) => {
     try {
-      console.log('Deleting servant attendance for:', servantId, 'on date:', date)
+      logger.debug('Deleting servant attendance for:', servantId, 'on date:', date)
       const response = await api.delete(`/servants-attendance/remove`, {
         data: { servantId, date }
       })
-      console.log('Servant attendance deleted successfully')
+      logger.debug('Servant attendance deleted successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error deleting servant attendance:', error)
+      logger.error('Error deleting servant attendance:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في مسح تسجيل الحضور'
@@ -852,12 +851,12 @@ export const servantsAPI = {
   // Mark all servants present for a date
   markAllPresent: async (date: string) => {
     try {
-      console.log('Marking all servants present for date:', date)
+      logger.debug('Marking all servants present for date:', date)
       const response = await api.post('/servants/attendance/mark-all-present', { date })
-      console.log('All servants marked present successfully')
+      logger.debug('All servants marked present successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error marking all servants present:', error)
+      logger.error('Error marking all servants present:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تسجيل حضور جميع الخدام'
@@ -868,12 +867,12 @@ export const servantsAPI = {
   // Get servant attendance statistics
   getStatistics: async (servantId: string) => {
     try {
-      console.log('Fetching servant attendance statistics for:', servantId)
+      logger.debug('Fetching servant attendance statistics for:', servantId)
       const response = await api.get(`/servants-attendance/statistics/${servantId}`)
-      console.log('Servant attendance statistics fetched successfully')
+      logger.debug('Servant attendance statistics fetched successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error fetching servant attendance statistics:', error)
+      logger.error('Error fetching servant attendance statistics:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحميل إحصائيات الخادم'
@@ -886,49 +885,49 @@ export const servantsAPI = {
 export const pastoralCareAPI = {
   getAll: async (filters = {}) => {
     try {
-      console.log('Fetching pastoral care records with filters:', filters)
+      logger.debug('Fetching pastoral care records with filters:', filters)
       const params = new URLSearchParams(filters as Record<string, string>)
       const response = await api.get(`/pastoral-care?${params}`)
-      console.log('Pastoral care records fetched successfully')
+      logger.debug('Pastoral care records fetched successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error fetching pastoral care records:', error)
+      logger.error('Error fetching pastoral care records:', error)
       throw error
     }
   },
 
   create: async (recordData: any) => {
     try {
-      console.log('Creating new pastoral care record:', recordData)
+      logger.debug('Creating new pastoral care record:', recordData)
       const response = await api.post('/pastoral-care', recordData)
-      console.log('Pastoral care record created successfully')
+      logger.debug('Pastoral care record created successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error creating pastoral care record:', error)
+      logger.error('Error creating pastoral care record:', error)
       throw error
     }
   },
 
   update: async (id: string, recordData: any) => {
     try {
-      console.log('Updating pastoral care record:', id, recordData)
+      logger.debug('Updating pastoral care record:', id, recordData)
       const response = await api.put(`/pastoral-care/${id}`, recordData)
-      console.log('Pastoral care record updated successfully')
+      logger.debug('Pastoral care record updated successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error updating pastoral care record:', error)
+      logger.error('Error updating pastoral care record:', error)
       throw error
     }
   },
 
   delete: async (id: string) => {
     try {
-      console.log('Deleting pastoral care record:', id)
+      logger.debug('Deleting pastoral care record:', id)
       const response = await api.delete(`/pastoral-care/${id}`)
-      console.log('Pastoral care record deleted successfully')
+      logger.debug('Pastoral care record deleted successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error deleting pastoral care record:', error)
+      logger.error('Error deleting pastoral care record:', error)
       throw error
     }
   },
@@ -936,12 +935,12 @@ export const pastoralCareAPI = {
   // الافتقاد - الحصول على الأطفال الغائبين
   getAbsentChildren: async () => {
     try {
-      console.log('Fetching absent children for pastoral care')
+      logger.debug('Fetching absent children for pastoral care')
       const response = await api.get('/pastoral-care/absent-children')
-      console.log('Absent children fetched successfully')
+      logger.debug('Absent children fetched successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error fetching absent children:', error)
+      logger.error('Error fetching absent children:', error)
       throw error
     }
   },
@@ -949,14 +948,14 @@ export const pastoralCareAPI = {
   // إزالة طفل من قائمة الافتقاد (تم الاتصال به)
   removeChildFromCare: async (childId: string, reason?: string) => {
     try {
-      console.log('Removing child from pastoral care:', childId)
+      logger.debug('Removing child from pastoral care:', childId)
       const response = await api.delete(`/pastoral-care/remove-child/${childId}`, {
         data: { reason }
       })
-      console.log('Child removed from pastoral care successfully')
+      logger.debug('Child removed from pastoral care successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error removing child from pastoral care:', error)
+      logger.error('Error removing child from pastoral care:', error)
       throw error
     }
   },
@@ -964,14 +963,14 @@ export const pastoralCareAPI = {
   // تسجيل اتصال بطفل
   markChildCalled: async (childId: string, notes?: string) => {
     try {
-      console.log('Marking child as called:', childId)
+      logger.debug('Marking child as called:', childId)
       const response = await api.post(`/pastoral-care/mark-called/${childId}`, {
         notes
       })
-      console.log('Child marked as called successfully')
+      logger.debug('Child marked as called successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error marking child as called:', error)
+      logger.error('Error marking child as called:', error)
       throw error
     }
   }
@@ -981,12 +980,12 @@ export const pastoralCareAPI = {
 export const servantsAttendanceAPI = {
   getByDate: async (date: string) => {
     try {
-      console.log('Fetching servants attendance for date:', date)
+      logger.debug('Fetching servants attendance for date:', date)
       const response = await api.get(`/servants-attendance/date/${date}`)
-      console.log('Servants attendance fetched successfully')
+      logger.debug('Servants attendance fetched successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error fetching servants attendance:', error)
+      logger.error('Error fetching servants attendance:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحميل حضور الخدام'
@@ -996,12 +995,12 @@ export const servantsAttendanceAPI = {
 
   create: async (attendanceData: any) => {
     try {
-      console.log('Creating servant attendance:', attendanceData)
+      logger.debug('Creating servant attendance:', attendanceData)
       const response = await api.post('/servants-attendance', attendanceData)
-      console.log('Servant attendance created successfully')
+      logger.debug('Servant attendance created successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error creating servant attendance:', error)
+      logger.error('Error creating servant attendance:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تسجيل الحضور'
@@ -1011,12 +1010,12 @@ export const servantsAttendanceAPI = {
 
   update: async (id: string, attendanceData: any) => {
     try {
-      console.log('Updating servant attendance:', id, attendanceData)
+      logger.debug('Updating servant attendance:', id, attendanceData)
       const response = await api.put(`/servants-attendance/${id}`, attendanceData)
-      console.log('Servant attendance updated successfully')
+      logger.debug('Servant attendance updated successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error updating servant attendance:', error)
+      logger.error('Error updating servant attendance:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحديث الحضور'
@@ -1026,12 +1025,12 @@ export const servantsAttendanceAPI = {
 
   delete: async (id: string) => {
     try {
-      console.log('Deleting servant attendance:', id)
+      logger.debug('Deleting servant attendance:', id)
       const response = await api.delete(`/servants-attendance/${id}`)
-      console.log('Servant attendance deleted successfully')
+      logger.debug('Servant attendance deleted successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error deleting servant attendance:', error)
+      logger.error('Error deleting servant attendance:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في حذف الحضور'
@@ -1041,12 +1040,12 @@ export const servantsAttendanceAPI = {
 
   getStatistics: async (servantId: string) => {
     try {
-      console.log('Fetching servant attendance statistics for:', servantId)
+      logger.debug('Fetching servant attendance statistics for:', servantId)
       const response = await api.get(`/servants-attendance/statistics/${servantId}`)
-      console.log('Servant attendance statistics fetched successfully')
+      logger.debug('Servant attendance statistics fetched successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error fetching servant attendance statistics:', error)
+      logger.error('Error fetching servant attendance statistics:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تحميل إحصائيات الحضور'
@@ -1056,12 +1055,12 @@ export const servantsAttendanceAPI = {
 
   markAllPresent: async (date: string) => {
     try {
-      console.log('Marking all servants present for date:', date)
+      logger.debug('Marking all servants present for date:', date)
       const response = await api.post('/servants-attendance/mark-all-present', { date })
-      console.log('All servants marked present successfully')
+      logger.debug('All servants marked present successfully')
       return response.data
     } catch (error: any) {
-      console.error('Error marking all servants present:', error)
+      logger.error('Error marking all servants present:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تسجيل الحضور الجماعي'
@@ -1076,17 +1075,17 @@ export const servantsAttendanceAPI = {
     notes?: string
   }>, date: string) => {
     try {
-      console.log('Saving servants batch attendance:', attendanceData.length, 'records for date:', date)
+      logger.debug('Saving servants batch attendance:', attendanceData.length, 'records for date:', date)
 
       const response = await api.post('/servants-attendance/batch', {
         attendanceData,
         date
       })
 
-      console.log('Servants batch attendance saved successfully:', response.data)
+      logger.debug('Servants batch attendance saved successfully:', response.data)
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
-      console.error('Error saving servants batch attendance:', error)
+      logger.error('Error saving servants batch attendance:', error)
       return {
         success: false,
         error: error.response?.data?.error || 'حدث خطأ في تسجيل حضور الخدام الجماعي'

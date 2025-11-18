@@ -4,6 +4,7 @@
  */
 
 import Cookies from 'js-cookie'
+import logger from './logger'
 
 export interface StorageOptions {
   cookieExpires?: number // days
@@ -38,10 +39,10 @@ export class EnhancedStorage {
       // 1. Try localStorage first
       if (this.isAvailable('localStorage')) {
         localStorage.setItem(key, value)
-        console.log(`✅ Stored ${key} in localStorage`)
+        logger.debug(`✅ Stored ${key} in localStorage`)
       }
     } catch (error) {
-      console.warn(`⚠️ Failed to store ${key} in localStorage:`, error)
+      logger.warn(`⚠️ Failed to store ${key} in localStorage:`, error)
     }
 
     try {
@@ -52,9 +53,9 @@ export class EnhancedStorage {
         sameSite,
         path
       })
-      console.log(`✅ Stored ${key} in cookies`)
+      logger.debug(`✅ Stored ${key} in cookies`)
     } catch (error) {
-      console.warn(`⚠️ Failed to store ${key} in cookies:`, error)
+      logger.warn(`⚠️ Failed to store ${key} in cookies:`, error)
     }
   }
 
@@ -65,11 +66,11 @@ export class EnhancedStorage {
     try {
       value = Cookies.get(key) || null
       if (value) {
-        console.log(`✅ Retrieved ${key} from cookies`)
+        logger.debug(`✅ Retrieved ${key} from cookies`)
         return value
       }
     } catch (error) {
-      console.warn(`⚠️ Failed to retrieve ${key} from cookies:`, error)
+      logger.warn(`⚠️ Failed to retrieve ${key} from cookies:`, error)
     }
 
     // 2. Try localStorage as fallback
@@ -77,15 +78,15 @@ export class EnhancedStorage {
       if (this.isAvailable('localStorage')) {
         value = localStorage.getItem(key)
         if (value) {
-          console.log(`✅ Retrieved ${key} from localStorage`)
+          logger.debug(`✅ Retrieved ${key} from localStorage`)
           return value
         }
       }
     } catch (error) {
-      console.warn(`⚠️ Failed to retrieve ${key} from localStorage:`, error)
+      logger.warn(`⚠️ Failed to retrieve ${key} from localStorage:`, error)
     }
 
-    console.log(`❌ Could not retrieve ${key} from any storage`)
+    logger.debug(`❌ Could not retrieve ${key} from any storage`)
     return null
   }
 
@@ -94,18 +95,18 @@ export class EnhancedStorage {
     try {
       if (this.isAvailable('localStorage')) {
         localStorage.removeItem(key)
-        console.log(`✅ Removed ${key} from localStorage`)
+        logger.debug(`✅ Removed ${key} from localStorage`)
       }
     } catch (error) {
-      console.warn(`⚠️ Failed to remove ${key} from localStorage:`, error)
+      logger.warn(`⚠️ Failed to remove ${key} from localStorage:`, error)
     }
 
     // Remove from cookies
     try {
       Cookies.remove(key, { path: '/' })
-      console.log(`✅ Removed ${key} from cookies`)
+      logger.debug(`✅ Removed ${key} from cookies`)
     } catch (error) {
-      console.warn(`⚠️ Failed to remove ${key} from cookies:`, error)
+      logger.warn(`⚠️ Failed to remove ${key} from cookies:`, error)
     }
   }
 
@@ -114,10 +115,10 @@ export class EnhancedStorage {
     try {
       if (this.isAvailable('localStorage')) {
         localStorage.clear()
-        console.log('✅ Cleared localStorage')
+        logger.debug('✅ Cleared localStorage')
       }
     } catch (error) {
-      console.warn('⚠️ Failed to clear localStorage:', error)
+      logger.warn('⚠️ Failed to clear localStorage:', error)
     }
 
     // Clear authentication cookies
@@ -126,10 +127,10 @@ export class EnhancedStorage {
       try {
         Cookies.remove(key, { path: '/' })
       } catch (error) {
-        console.warn(`⚠️ Failed to remove cookie ${key}:`, error)
+        logger.warn(`⚠️ Failed to remove cookie ${key}:`, error)
       }
     })
-    console.log('✅ Cleared authentication cookies')
+    logger.debug('✅ Cleared authentication cookies')
   }
 
   // Specific methods for auth tokens
@@ -157,7 +158,7 @@ export class EnhancedStorage {
       const jsonData = JSON.stringify(userData)
       this.setItem('user_data', jsonData)
     } catch (error) {
-      console.warn('⚠️ Failed to stringify user data:', error)
+      logger.warn('⚠️ Failed to stringify user data:', error)
     }
   }
 
@@ -166,7 +167,7 @@ export class EnhancedStorage {
       const jsonData = this.getItem('user_data')
       return jsonData ? JSON.parse(jsonData) : null
     } catch (error) {
-      console.warn('⚠️ Failed to parse user data:', error)
+      logger.warn('⚠️ Failed to parse user data:', error)
       return null
     }
   }
@@ -174,7 +175,7 @@ export class EnhancedStorage {
   static clearAuth(): void {
     const authKeys = ['auth_token', 'userToken', 'user_data']
     authKeys.forEach(key => this.removeItem(key))
-    console.log('🧹 Cleared all authentication data')
+    logger.debug('🧹 Cleared all authentication data')
   }
 }
 
