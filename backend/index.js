@@ -3,6 +3,10 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 require("dotenv").config();
 
+// Import utilities
+const logger = require('./utils/logger');
+const httpLogger = require('./middleware/httpLogger');
+
 // Import rate limiters
 const { generalLimiter, authLimiter, apiLimiter, speedLimiter } = require('./middleware/rateLimiter');
 
@@ -34,11 +38,8 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(generalLimiter);
 app.use(speedLimiter);
 
-// Request logging middleware
-app.use((req, res, next) => {
-  console.log(`📥 ${req.method} ${req.path}`);
-  next();
-});
+// Apply HTTP logging (secure logging)
+app.use(httpLogger);
 
 // Health check endpoint
 app.get("/", (req, res) => {
@@ -47,7 +48,7 @@ app.get("/", (req, res) => {
 
 // Simple test route
 app.get("/test", (req, res) => {
-  console.log("🧪 Simple test endpoint called");
+  logger.debug("Test endpoint called");
   res.json({ success: true, message: "Test working!" });
 });
 
@@ -77,12 +78,12 @@ app.use("/api/pastoral-care", require("./routes/pastoral-care"));
 app.use("/api/statistics", require("./routes/statistics-fresh"));
 app.use("/api/advanced-statistics", require("./routes/advanced-statistics"));
 
-console.log("📍 Routes registered successfully");
+logger.info("Routes registered successfully");
 
 // Connect to MongoDB first, then start the server
 async function startServer() {
   try {
-    console.log("🔄 Connecting to MongoDB...");
+    logger.info("Connecting to MongoDB...");
     await mongoose.connect(
       process.env.MONGODB_URI || "mongodb://localhost:27017/church_management",
       {
@@ -90,16 +91,16 @@ async function startServer() {
         heartbeatFrequencyMS: 2000,
       }
     );
-    console.log("✅ Connected to MongoDB");
+    logger.info("Connected to MongoDB successfully");
 
     const PORT = process.env.PORT || 5000;
 
     app.listen(PORT, () => {
-      console.log(`🚀 Server is running on port ${PORT}`);
-      console.log(`📍 API URL: http://localhost:${PORT}`);
+      logger.info(`Server is running on port ${PORT}`);
+      logger.info(`API URL: http://localhost:${PORT}`);
     });
   } catch (error) {
-    console.error("❌ MongoDB connection error:", error);
+    logger.error("MongoDB connection error", { error: error.message });
     process.exit(1);
   }
 }
