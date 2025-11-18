@@ -3,6 +3,9 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 require("dotenv").config();
 
+// Import rate limiters
+const { generalLimiter, authLimiter, apiLimiter, speedLimiter } = require('./middleware/rateLimiter');
+
 const app = express();
 
 // Middleware
@@ -26,6 +29,10 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Apply rate limiting
+app.use(generalLimiter);
+app.use(speedLimiter);
 
 // Request logging middleware
 app.use((req, res, next) => {
@@ -54,7 +61,13 @@ app.get("/api/advanced-statistics/test", (req, res) => {
 });
 
 // API Routes
+// Apply strict rate limiting to auth routes (protection against brute force)
+app.use("/api/auth/login", authLimiter);
 app.use("/api/auth", require("./routes/auth"));
+
+// Apply API rate limiter to all API routes
+app.use("/api", apiLimiter);
+
 app.use("/api/classes", require("./routes/classes"));
 app.use("/api/children", require("./routes/children"));
 app.use("/api/attendance", require("./routes/attendance"));
