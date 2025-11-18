@@ -251,52 +251,6 @@ export default function ChildrenPage() {
     }
   }
 
-  const fixChildrenWithoutClass = async () => {
-    const childrenWithoutClass = children.filter(child => {
-      // Prioritize class._id over classId to avoid toObject() issues
-      const childClassId = child.class?._id || child.classId
-      return !childClassId || childClassId?.toString() === 'undefined'
-    })
-    
-    if (childrenWithoutClass.length === 0) {
-      toast.success('جميع الأطفال لديهم فصول مُعينة')
-      return
-    }
-
-    if (!confirm(`تم العثور على ${childrenWithoutClass.length} طفل بدون فصل.\nهل تريد تعيين فصل افتراضي لهم؟`)) {
-      return
-    }
-
-    if (classes.length === 0) {
-      toast.error('لا توجد فصول متاحة')
-      return
-    }
-
-    // استخدم أول فصل كفصل افتراضي
-    const defaultClassId = classes[0]._id
-
-    try {
-      let successCount = 0;
-      for (const child of childrenWithoutClass) {
-        const payload = {
-          name: child.name,
-          classId: String(defaultClassId),
-          phone: child.phone || '',
-          notes: child.notes || ''
-        };
-        const response = await childrenAPI.updateChild(child._id, payload);
-        if (response.success) {
-          successCount++;
-        }
-      }
-      toast.success(`تم تعيين فصل لـ ${successCount} طفل بنجاح`);
-      loadData();
-    } catch (error) {
-      console.error('Error fixing children classes:', error);
-      toast.error('حدث خطأ في إصلاح الفصول');
-    }
-  }
-
   // تعيين الفصل تلقائياً للمدرس والخادم عند فتح نموذج الإضافة
   useEffect(() => {
     if (showAddModal && !selectedChild && user && (user.role === 'classTeacher' || user.role === 'servant') && user.assignedClass) {
@@ -420,18 +374,6 @@ export default function ChildrenPage() {
             </div>
             {/* إضافة طفل مسموحة للجميع إلا الخادم العادي */}
             <div className="flex items-center space-x-2 sm:space-x-3 space-x-reverse">
-              {/* زر إصلاح الأطفال بدون فصول - للإداري وأمين الخدمة فقط */}
-              {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
-                <button
-                  onClick={fixChildrenWithoutClass}
-                  className="bg-yellow-600 hover:bg-yellow-700 text-white px-2 sm:px-3 py-2 rounded-md text-sm transition-colors whitespace-nowrap"
-                  title="تعيين فصل للأطفال الذين بدون فصل"
-                >
-                  <span className="hidden sm:inline">🔧 إصلاح الفصول</span>
-                  <span className="sm:hidden">🔧</span>
-                </button>
-              )}
-              
               {(user?.role === 'admin' || user?.role === 'serviceLeader' || user?.role === 'classTeacher' || user?.role === 'servant') && (
                 <button
                   onClick={() => setShowAddModal(true)}
