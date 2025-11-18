@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import { api } from '@/services/api'
 import { EnhancedStorage } from '@/utils/storage'
+import logger from '@/utils/logger'
 
 interface DashboardStats {
   totalChildren: number
@@ -28,13 +29,13 @@ export default function DashboardPage() {
   const [loadingStats, setLoadingStats] = useState(true)
 
   useEffect(() => {
-    console.log('🔄 Dashboard useEffect - Auth state changed:', { isLoading, isAuthenticated, hasUser: !!user })
+    logger.debug('🔄 Dashboard useEffect - Auth state changed:', { isLoading, isAuthenticated, hasUser: !!user })
     
     let isMounted = true
     
     if (!isLoading) {
       if (!isAuthenticated) {
-        console.log('❌ المستخدم غير مسجل دخول - إعادة توجيه للتسجيل')
+        logger.debug('❌ المستخدم غير مسجل دخول - إعادة توجيه للتسجيل')
         if (isMounted) {
           router.push('/login')
         }
@@ -42,7 +43,7 @@ export default function DashboardPage() {
       }
       
       if (isAuthenticated && user && isMounted) {
-        console.log('✅ المستخدم مسجل دخول - جلب الإحصائيات')
+        logger.debug('✅ المستخدم مسجل دخول - جلب الإحصائيات')
         fetchDashboardStats()
       }
     }
@@ -55,7 +56,7 @@ export default function DashboardPage() {
   // Additional effect to handle page focus/visibility for mobile
   useEffect(() => {
     const handleFocus = () => {
-      console.log('🔄 Page gained focus - refreshing auth state')
+      logger.debug('🔄 Page gained focus - refreshing auth state')
       if (isAuthenticated && user) {
         fetchDashboardStats()
       }
@@ -63,7 +64,7 @@ export default function DashboardPage() {
 
     const handleVisibilityChange = () => {
       if (!document.hidden && isAuthenticated && user) {
-        console.log('📱 Page became visible - refreshing data')
+        logger.debug('📱 Page became visible - refreshing data')
         fetchDashboardStats()
       }
     }
@@ -80,32 +81,32 @@ export default function DashboardPage() {
   const fetchDashboardStats = async () => {
     try {
       setLoadingStats(true)
-      console.log('🔍 بدء جلب الإحصائيات...')
-      console.log('👤 Current user:', user)
-      console.log('🔐 Is authenticated:', isAuthenticated)
+      logger.debug('🔍 بدء جلب الإحصائيات...')
+      logger.debug('👤 Current user:', user)
+      logger.debug('🔐 Is authenticated:', isAuthenticated)
       
       // التحقق من وجود توكن مع أولوية للـ cookies
       const token = EnhancedStorage.getAuthToken()
       
       if (!token) {
-        console.log('❌ لا يوجد توكن مصادقة - إعادة توجيه للتسجيل')
+        logger.debug('❌ لا يوجد توكن مصادقة - إعادة توجيه للتسجيل')
         router.push('/login')
         return
       }
-      console.log('✅ توكن المصادقة موجود:', token.substring(0, 20) + '...')
+      logger.debug('✅ توكن المصادقة موجود:', token.substring(0, 20) + '...')
       
       // جلب الإحصائيات من API المخصص للكنيسة
-      console.log('📊 جلب إحصائيات الكنيسة من:', `${api.defaults.baseURL}/statistics/church`)
-      console.log('🔗 API Base URL:', api.defaults.baseURL)
+      logger.debug('📊 جلب إحصائيات الكنيسة من:', `${api.defaults.baseURL}/statistics/church`)
+      logger.debug('🔗 API Base URL:', api.defaults.baseURL)
       
       // التأكد من استخدام الرابط الصحيح
       if (api.defaults.baseURL && api.defaults.baseURL.includes('i51l')) {
-        console.error('❌ خطأ: يتم استخدام رابط API خاطئ!', api.defaults.baseURL)
+        logger.error('❌ خطأ: يتم استخدام رابط API خاطئ!', api.defaults.baseURL)
         throw new Error('رابط API خاطئ - يرجى التحقق من الإعدادات')
       }
       
       const statsResponse = await api.get('/statistics/church')
-      console.log('✅ استجابة الإحصائيات:', statsResponse.data)
+      logger.debug('✅ استجابة الإحصائيات:', statsResponse.data)
       
       const statsData = statsResponse.data.data || {}
       const dashboardStats: DashboardStats = {
@@ -115,23 +116,23 @@ export default function DashboardPage() {
         attendanceRate: Math.round(statsData.attendanceRate || 0)
       }
 
-      console.log('📈 الإحصائيات المحولة للعرض:', dashboardStats)
+      logger.debug('📈 الإحصائيات المحولة للعرض:', dashboardStats)
 
       // للأدمن وأمين الخدمة - البيانات ستأتي من API الإحصائيات
       if (user?.role === 'admin' || user?.role === 'serviceLeader') {
         dashboardStats.totalClasses = statsData.totalClasses || 0
         dashboardStats.totalServants = statsData.totalServants || 0
-        console.log('✅ إحصائيات إضافية من API الإحصائيات:', { classes: dashboardStats.totalClasses, servants: dashboardStats.totalServants })
+        logger.debug('✅ إحصائيات إضافية من API الإحصائيات:', { classes: dashboardStats.totalClasses, servants: dashboardStats.totalServants })
       }
 
-      console.log('📈 النتيجة النهائية:', dashboardStats)
+      logger.debug('📈 النتيجة النهائية:', dashboardStats)
       
       // التأكد من أن المكون ما زال mounted قبل تحديث الحالة
       setStats(dashboardStats)
-      console.log('✅ تم تحديث الإحصائيات بنجاح')
+      logger.debug('✅ تم تحديث الإحصائيات بنجاح')
     } catch (error: any) {
-      console.error('❌ خطأ في جلب إحصائيات Dashboard:', error)
-      console.error('📝 Error details:', {
+      logger.error('❌ خطأ في جلب إحصائيات Dashboard:', error)
+      logger.error('📝 Error details:', {
         message: error.message,
         status: error.response?.status,
         statusText: error.response?.statusText,
@@ -140,7 +141,7 @@ export default function DashboardPage() {
       
       // تحقق من نوع الخطأ
       if (error?.response?.status === 401 || error?.response?.status === 403) {
-        console.log('🔐 خطأ في المصادقة - مسح البيانات وإعادة توجيه للتسجيل')
+        logger.debug('🔐 خطأ في المصادقة - مسح البيانات وإعادة توجيه للتسجيل')
         
         // مسح جميع بيانات المصادقة باستخدام EnhancedStorage
         EnhancedStorage.clearAuth()
@@ -179,7 +180,7 @@ export default function DashboardPage() {
   }
 
   if (!isAuthenticated || !user) {
-    console.log('🚨 إعادة توجيه للتسجيل - isAuthenticated:', isAuthenticated, 'user:', user)
+    logger.debug('🚨 إعادة توجيه للتسجيل - isAuthenticated:', isAuthenticated, 'user:', user)
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
