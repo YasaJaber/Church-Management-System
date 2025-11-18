@@ -9,6 +9,7 @@ const {
   adminOrServiceLeader,
 } = require("../middleware/auth");
 const { subDays, getDay, startOfDay } = require("date-fns");
+const { generateSecurePassword } = require('../utils/passwordGenerator');
 
 const router = express.Router();
 
@@ -1228,10 +1229,13 @@ router.post("/", authMiddleware, adminOnly, async (req, res) => {
       }
     }
 
+    // ✅ Generate secure random password
+    const temporaryPassword = generateSecurePassword(12);
+
     const servant = new User({
       name: name.trim(),
       username,
-      password: "servant123", // Default password
+      password: temporaryPassword, // Will be hashed by pre-save middleware
       phone: phone ? phone.trim() : "",
       role: role || "servant",
       isActive: true, // Always active by default
@@ -1239,7 +1243,7 @@ router.post("/", authMiddleware, adminOnly, async (req, res) => {
 
     await servant.save();
 
-    // Return servant without password
+    // Return servant data with temporary password (shown ONCE)
     const servantData = {
       _id: servant._id,
       name: servant.name,
@@ -1247,12 +1251,14 @@ router.post("/", authMiddleware, adminOnly, async (req, res) => {
       phone: servant.phone,
       role: servant.role,
       createdAt: servant.createdAt,
+      // ⚠️ IMPORTANT: Show password only once during creation
+      temporaryPassword: temporaryPassword,
     };
 
     res.status(201).json({
       success: true,
       data: servantData,
-      message: "تم إضافة الخادم بنجاح",
+      message: "تم إضافة الخادم بنجاح. احفظ كلمة المرور المؤقتة - لن تظهر مرة أخرى!",
     });
   } catch (error) {
     console.error(error);
