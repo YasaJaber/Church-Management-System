@@ -6,11 +6,15 @@ require("dotenv").config();
 // Import utilities
 const logger = require('./utils/logger');
 const httpLogger = require('./middleware/httpLogger');
+const helmetConfig = require('./middleware/helmet.config');
 
 // Import rate limiters
 const { generalLimiter, authLimiter, apiLimiter, speedLimiter } = require('./middleware/rateLimiter');
 
 const app = express();
+
+// Apply Helmet security headers (must be before other middleware)
+app.use(helmetConfig);
 
 // Middleware
 app.use(
