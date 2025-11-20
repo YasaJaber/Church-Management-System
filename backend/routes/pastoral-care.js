@@ -111,9 +111,9 @@ router.get("/absent-children", authMiddleware, async (req, res) => {
 
     // Build children query based on user role
     let childrenQuery = { isActive: true };
-    if (req.user.role === "admin") {
-      // Admin sees all children
-      console.log("👑 Admin access - showing all absent children");
+    if (req.user.role === "admin" || req.user.role === "serviceLeader") {
+      // Admin and Service Leader see all children
+      console.log(`👑 ${req.user.role} access - showing all absent children`);
     } else if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
       // Servant/ClassTeacher sees only their assigned class
       childrenQuery.class = req.user.assignedClass._id;
@@ -329,7 +329,7 @@ router.delete("/remove-child/:childId", authMiddleware, async (req, res) => {
       console.log(`📝 No existing record found, creating new one for tracking follow-up`);
       
       // Check permissions (we already have the child object)
-      if (req.user.role !== "admin") {
+      if (req.user.role !== "admin" && req.user.role !== "serviceLeader") {
         if (!req.user.assignedClass || 
             child.class._id.toString() !== req.user.assignedClass._id.toString()) {
           return res.status(403).json({
@@ -367,7 +367,7 @@ router.delete("/remove-child/:childId", authMiddleware, async (req, res) => {
     }
 
     // If record exists, check permissions
-    if (req.user.role !== "admin") {
+    if (req.user.role !== "admin" && req.user.role !== "serviceLeader") {
       if (!req.user.assignedClass || 
           pastoralCareRecord.child.class._id.toString() !== req.user.assignedClass._id.toString()) {
         return res.status(403).json({
