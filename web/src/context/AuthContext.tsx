@@ -38,22 +38,22 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Enhanced auth check with better mobile support
   const checkAuth = async (): Promise<boolean> => {
     console.log('🔍 AuthContext: بدء التحقق من المصادقة...')
-    
+
     try {
       // Try multiple token sources with priority order
       let token = null
       let userDataFromStorage = null
-      
+
       // Get token using enhanced storage
       token = EnhancedStorage.getAuthToken()
       console.log('� AuthContext: التوكن النهائي:', token ? 'موجود' : 'غير موجود')
-      
+
       // Get cached user data
       userDataFromStorage = EnhancedStorage.getUserData()
       if (userDataFromStorage) {
         console.log('👤 Cached user data found:', userDataFromStorage?.username)
       }
-      
+
       if (!token) {
         console.log('❌ AuthContext: لا يوجد توكن - إعداد حالة غير مصادق')
         setIsLoading(false)
@@ -63,14 +63,14 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       console.log('📡 AuthContext: طلب التحقق من المستخدم الحالي...')
-      
+
       // If we have cached user data, set it immediately for faster UI
       if (userDataFromStorage) {
         console.log('⚡ Setting cached user data for faster load')
         setUser(userDataFromStorage)
         setIsAuthenticated(true)
       }
-      
+
       // Direct fetch call to avoid any service layer issues
       const response = await fetch(`${API_BASE_URL}/auth/me`, {
         method: 'GET',
@@ -79,21 +79,21 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           'Content-Type': 'application/json',
         }
       })
-      
+
       const data = await response.json()
       console.log('📥 AuthContext: استجابة التحقق:', data)
-      
+
       if (response.ok && data.success && data.data && data.data.user) {
         console.log('✅ AuthContext: تم التحقق بنجاح من المستخدم:', data.data.user)
-        
+
         // Update user data and cache it
         setUser(data.data.user)
         setIsAuthenticated(true)
         setIsLoading(false)
-        
+
         // Update cached user data
         EnhancedStorage.setUserData(data.data.user)
-        
+
         return true
       } else {
         console.log('❌ AuthContext: فشل التحقق - مسح التوكن والبيانات')
@@ -106,7 +106,7 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     } catch (error) {
       console.error('❌ AuthContext: فشل التحقق من المصادقة:', error)
-      
+
       // On network error, if we have cached user data, use it temporarily
       try {
         const cachedUserData = EnhancedStorage.getUserData()
@@ -120,7 +120,7 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } catch (storageError) {
         console.warn('⚠️ Could not access cached user data')
       }
-      
+
       // Otherwise clear everything
       EnhancedStorage.clearAuth()
       setUser(null)
@@ -133,37 +133,37 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Login function
   const login = async (credentials: LoginCredentials): Promise<LoginResponse> => {
     console.log('🔐 AuthContext: محاولة تسجيل الدخول...', credentials.username)
-    
+
     try {
       setIsLoading(true)
       const response = await authAPI.login(credentials)
-      
+
       if (response.success && response.data) {
         const { user, token } = response.data
-        
+
         // Store token and user data using enhanced storage
         EnhancedStorage.setAuthToken(token)
         EnhancedStorage.setUserData(user)
-        
+
         setUser(user)
         setIsAuthenticated(true)
         setIsLoading(false)
-        
+
         console.log('✅ AuthContext: تم تسجيل الدخول بنجاح')
         toast.success(`أهلاً وسهلاً ${user.username}!`)
-        
+
         return response
       } else {
         console.log('❌ AuthContext: فشل تسجيل الدخول')
         setIsLoading(false)
-        const errorMessage = response.message || 'فشل في تسجيل الدخول'
+        const errorMessage = response.error || response.message || 'فشل في تسجيل الدخول'
         toast.error(errorMessage)
         throw new Error(errorMessage)
       }
     } catch (error: any) {
       console.error('❌ AuthContext: خطأ في تسجيل الدخول:', error)
       setIsLoading(false)
-      const errorMessage = error.response?.data?.message || error.message || 'فشل في تسجيل الدخول'
+      const errorMessage = error.response?.data?.error || error.response?.data?.message || error.message || 'فشل في تسجيل الدخول'
       toast.error(errorMessage)
       throw error
     }
@@ -172,16 +172,16 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Enhanced logout function
   const logout = async (): Promise<void> => {
     console.log('🚪 AuthContext: تسجيل الخروج...')
-    
+
     try {
       // Clear all authentication data using enhanced storage
       EnhancedStorage.clearAuth()
-      
+
       // Reset state
       setUser(null)
       setIsAuthenticated(false)
       setIsLoading(false)
-      
+
       console.log('✅ AuthContext: تم تسجيل الخروج بنجاح')
       toast.success('تم تسجيل الخروج بنجاح')
     } catch (error) {
@@ -192,7 +192,7 @@ const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   // Initialize auth check on mount with enhanced persistence
   useEffect(() => {
     console.log('🚀 AuthContext: تشغيل useEffect للتحقق الأولي...')
-    
+
     const initAuth = async () => {
       try {
         await checkAuth()

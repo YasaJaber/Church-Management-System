@@ -57,7 +57,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       })
 
       const data = await response.json()
-      
+
       if (response.ok && data.success && data.data && data.data.user) {
         setUser(data.data.user)
         setIsAuthenticated(true)
@@ -80,7 +80,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setIsLoading(false)
         return true
       }
-      
+
       EnhancedStorage.clearAuth()
       setUser(null)
       setIsAuthenticated(false)
@@ -101,22 +101,22 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       })
 
       const data = await response.json()
-      
+
       if (response.ok && data.success && data.data) {
         const { user, token } = data.data
-        
+
         EnhancedStorage.setAuthToken(token)
         EnhancedStorage.setUserData(user)
-        
+
         setUser(user)
         setIsAuthenticated(true)
         setIsLoading(false)
-        
+
         toast.success(`مرحباً ${user.username}!`)
         return data
       } else {
         setIsLoading(false)
-        const errorMessage = data.message || 'فشل في تسجيل الدخول'
+        const errorMessage = data.error || data.message || 'فشل في تسجيل الدخول'
         toast.error(errorMessage)
         throw new Error(errorMessage)
       }
