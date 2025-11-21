@@ -84,6 +84,15 @@ app.use("/api/advanced-statistics", require("./routes/advanced-statistics"));
 
 logger.info("Routes registered successfully");
 
+// Error Handling Middleware (must be AFTER all routes)
+const { errorHandler, notFoundHandler } = require('./middleware/errorHandler');
+
+// 404 handler (must be after all routes)
+app.use(notFoundHandler);
+
+// Global error handler (must be last)
+app.use(errorHandler);
+
 // Connect to MongoDB first, then start the server
 async function startServer() {
   try {

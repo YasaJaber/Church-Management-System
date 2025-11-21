@@ -10,6 +10,8 @@ const {
 } = require("../middleware/auth");
 const { subDays, getDay, startOfDay } = require("date-fns");
 const { generateSecurePassword } = require('../utils/passwordGenerator');
+const { asyncHandler } = require('../middleware/errorHandler');
+const { ValidationError, NotFoundError, ConflictError } = require('../utils/errors');
 
 const router = express.Router();
 
@@ -181,79 +183,59 @@ router.get(
 // @route   POST /api/servants/attendance
 // @desc    Mark attendance for a servant
 // @access  Protected (Admin only)
-router.post("/attendance", authMiddleware, adminOnly, async (req, res) => {
-  try {
-    const { servantId, date, status, notes } = req.body;
+router.post("/attendance", authMiddleware, adminOnly, asyncHandler(async (req, res) => {
+  const { servantId, date, status, notes } = req.body;
 
-    if (!servantId || !date || !status) {
-      return res.status(400).json({
-        success: false,
-        error: "Servant ID, date, and status are required",
-      });
-    }
+  if (!servantId || !date || !status) {
+    throw new ValidationError("رقم الخادم والتاريخ والحالة مطلوبان");
+  }
 
-    // Find the servant
-    const servant = await User.findById(servantId);
-    if (!servant || servant.role !== "servant") {
-      return res.status(404).json({
-        success: false,
-        error: "Servant not found",
-      });
-    }
+  // Find the servant
+  const servant = await User.findById(servantId);
+  if (!servant || servant.role !== "servant") {
+    throw new NotFoundError("الخادم غير موجود");
+  }
 
-    // Check if attendance already exists
-    let attendance = await Attendance.findOne({
-      person: servantId,
-      personModel: "User",
-      date: date,
-    });
+  // Check if attendance already exists
+  let attendance = await Attendance.findOne({
+    person: servantId,
+    personModel: "User",
+    date: date,
+  });
 
-    if (attendance) {
-      // Update existing attendance
-      attendance.status = status;
-      attendance.notes = notes || "";
-      attendance.recordedBy = req.user._id;
-      attendance.updatedAt = new Date();
-      await attendance.save();
-
-      console.log(`📝 Servant attendance updated:
-         Servant: ${servant.name}
-         Status: ${status}
-         Date: ${date}
-         Updated by: ${req.user._id}`);
-    } else {
-      // Create new attendance record
-      attendance = new Attendance({
-        type: "servant",
-        person: servantId,
-        personModel: "User",
-        date: date,
-        status: status,
-        notes: notes || "",
-        recordedBy: req.user._id,
-      });
-      await attendance.save();
-
-      console.log(`📝 Servant attendance recorded:
-         Servant: ${servant.name}
-         Status: ${status}
-         Date: ${date}
-         Recorded by: ${req.user._id}`);
-    }
+  if (attendance) {
+    // Update existing attendance
+    attendance.status = status;
+    attendance.notes = notes || "";
+    attendance.recordedBy = req.user._id;
+    attendance.updatedAt = new Date();
+    await attendance.save();
 
     res.json({
       success: true,
       data: attendance,
-      message: "Attendance recorded successfully",
+      message: "تم تحديث الحضور بنجاح",
     });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      error: "Server error",
+  } else {
+    // Create new attendance record
+    attendance = new Attendance({
+      type: "servant",
+      person: servantId,
+      personModel: "User",
+      date: date,
+      status: status,
+      notes: notes || "",
+      recordedBy: req.user._id,
+    });
+    await attendance.save();
+
+    res.json({
+      success: true,
+      data: attendance,
+      message: "تم تسجيل الحضور بنجاح",
     });
   }
-});
+}));
 
 // @route   POST /api/servants/attendance/mark-all-present
 // @desc    Mark all servants as present for a date

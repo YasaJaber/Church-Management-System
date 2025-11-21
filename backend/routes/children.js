@@ -5,67 +5,40 @@ const Class = require("../models/Class");
 const Attendance = require("../models/Attendance");
 const { authMiddleware, adminOrServiceLeader } = require("../middleware/auth");
 const { subDays, getDay } = require("date-fns");
+const { asyncHandler } = require('../middleware/errorHandler');
+const { ValidationError, AuthorizationError, NotFoundError } = require('../utils/errors');
 
 const router = express.Router();
 
 // @route   GET /api/children
 // @desc    Get all children (role-based filtering)
 // @access  Protected
-router.get("/", authMiddleware, async (req, res) => {
-  try {
-    console.log("\n" + "=".repeat(50));
-    console.log("🔍 GET /children API CALLED");
-    console.log("👤 User:", req.user?.username || "UNKNOWN");
-    console.log("🔐 Role:", req.user?.role || "UNKNOWN");
-    console.log("🏫 Assigned Class:", req.user?.assignedClass || "NONE");
-    console.log("=".repeat(50));
+router.get("/", authMiddleware, asyncHandler(async (req, res) => {
+  let childrenQuery = {};
 
-    let childrenQuery = {};
-
-    // Role-based access control
-    if (req.user.role === "admin" || req.user.role === "serviceLeader") {
-      // Admin and Service Leader see all children
-      childrenQuery = {};
-      console.log("👑 Admin/ServiceLeader access - showing all children");
-    } else if (
-      (req.user.role === "servant" || req.user.role === "classTeacher") &&
-      req.user.assignedClass
-    ) {
-      // Servant or Class Teacher sees only their class children
-      childrenQuery = { class: req.user.assignedClass._id };
-      console.log(
-        "👤 Servant/ClassTeacher access - filtering by class:",
-        req.user.assignedClass._id
-      );
-    } else {
-      console.log(
-        "❌ Access denied - role:",
-        req.user.role,
-        "assignedClass:",
-        req.user.assignedClass
-      );
-      return res.status(403).json({
-        success: false,
-        error: "Access denied",
-      });
-    }
-
-    const children = await Child.find({ ...childrenQuery, isActive: true })
-      .populate("class")
-      .sort({ name: 1 });
-
-    res.json({
-      success: true,
-      data: children,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      error: "Server error",
-    });
+  // Role-based access control
+  if (req.user.role === "admin" || req.user.role === "serviceLeader") {
+    // Admin and Service Leader see all children
+    childrenQuery = {};
+  } else if (
+    (req.user.role === "servant" || req.user.role === "classTeacher") &&
+    req.user.assignedClass
+  ) {
+    // Servant or Class Teacher sees only their class children
+    childrenQuery = { class: req.user.assignedClass._id };
+  } else {
+    throw new AuthorizationError("ليس لديك صلاحية للوصول إلى بيانات الأطفال");
   }
-});
+
+  const children = await Child.find({ ...childrenQuery, isActive: true })
+    .populate("class")
+    .sort({ name: 1 });
+
+  res.json({
+    success: true,
+    data: children,
+  });
+}));
 
 // @route   GET /api/children/class/:classId
 // @desc    Get children by class (with permission check)
@@ -108,43 +81,28 @@ router.get("/class/:classId", authMiddleware, async (req, res) => {
 // @route   GET /api/children/:id
 // @desc    Get single child details (with permission check)
 // @access  Protected
-router.get("/:id", authMiddleware, async (req, res) => {
-  try {
-    const child = await Child.findById(req.params.id).populate("class");
+router.get("/:id", authMiddleware, asyncHandler(async (req, res) => {
+  const child = await Child.findById(req.params.id).populate("class");
 
-    if (!child) {
-      return res.status(404).json({
-        success: false,
-        error: "Child not found",
-      });
-    }
-
-    // Check if user has permission to view this child
-    if (req.user.role !== "admin") {
-      if (
-        !req.user.assignedClass ||
-        child.class._id.toString() !== req.user.assignedClass._id.toString()
-      ) {
-        return res.status(403).json({
-          success: false,
-          error:
-            "Access denied. You can only view children in your assigned class.",
-        });
-      }
-    }
-
-    res.json({
-      success: true,
-      data: child,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      error: "Server error",
-    });
+  if (!child) {
+    throw new NotFoundError("الطفل غير موجود");
   }
-});
+
+  // Check if user has permission to view this child
+  if (req.user.role !== "admin" && req.user.role !== "serviceLeader") {
+    if (
+      !req.user.assignedClass ||
+      child.class._id.toString() !== req.user.assignedClass._id.toString()
+    ) {
+      throw new AuthorizationError("يمكنك فقط عرض الأطفال في فصلك المخصص");
+    }
+  }
+
+  res.json({
+    success: true,
+    data: child,
+  });
+}));
 
 // @route   POST /api/children
 // @desc    Add new child (with permission check)
