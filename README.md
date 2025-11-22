@@ -163,14 +163,95 @@ A comprehensive church management system for Sunday Schools (مدارس الأح
   - Bilingual content support
 
 ### 🔒 Security Features
-- JWT token-based authentication
-- Password hashing with bcrypt
-- Secure HTTP headers configuration
-- CORS with whitelist origins
-- XSS protection headers
-- Request size limits (10MB)
-- Protected by Mongoose parameterization
-- Environment variable management
+
+#### Authentication & Authorization
+- **JWT Token-based Authentication**
+  - Secure token generation with configurable expiry
+  - Bearer token validation on protected routes
+  - Role-based access control (RBAC)
+  - Token refresh mechanism support
+- **Password Security**
+  - Bcrypt hashing with salt rounds = 10
+  - Pre-save middleware for automatic hashing
+  - Strong password generation for new servants (12+ characters)
+  - No default passwords - each servant gets unique secure password
+  - Password validation requirements (uppercase, lowercase, numbers, symbols)
+
+#### HTTP Security Headers (Helmet.js)
+- **XSS Protection**: Browser-level cross-site scripting filtering
+- **Clickjacking Protection**: X-Frame-Options: DENY prevents iframe embedding
+- **MIME Sniffing Protection**: X-Content-Type-Options: nosniff
+- **Content Security Policy (CSP)**: Strict policies for trusted content sources
+- **HSTS**: HTTP Strict Transport Security enforces HTTPS
+- **Referrer Policy**: Controls referrer information leakage
+- **DNS Prefetch Control**: Prevents DNS prefetching
+- **Hidden Server Info**: X-Powered-By header removed
+- **Cross-Domain Policies**: Restricts Flash/PDF cross-domain access
+
+#### Rate Limiting & DDoS Protection
+- **General Rate Limiter**: 100 requests per 15 minutes per IP
+- **Auth Rate Limiter**: 5 login attempts per 15 minutes (brute force protection)
+- **API Rate Limiter**: 200 API requests per 15 minutes
+- **Speed Limiter**: Gradual delay after 50 requests (500ms incremental delays)
+- **Automatic Lockout**: Temporary IP blocking on limit exceed
+- **Smart Headers**: RateLimit-* headers for client awareness
+
+#### Error Handling & Logging
+- **Centralized Error Handler**: 
+  - Custom error classes (ValidationError, AuthenticationError, NotFoundError, etc.)
+  - Clear Arabic error messages for users
+  - Secure error logging without sensitive data exposure
+  - Environment-specific responses (detailed in dev, generic in prod)
+- **Async Error Handler**: Wrapper for async route handlers
+- **Mongoose Error Handling**:
+  - Duplicate key errors (11000) with field-specific messages
+  - Cast errors with clear invalid ID messages
+  - Validation errors with Arabic feedback
+- **JWT Error Handling**:
+  - JsonWebTokenError: "رمز المصادقة غير صحيح"
+  - TokenExpiredError: "انتهت صلاحية رمز المصادقة"
+
+#### Advanced Logging System (Winston)
+- **Secure Logging**:
+  - Automatic data sanitization (passwords, tokens, API keys redacted)
+  - Daily log rotation (14-day retention)
+  - Separate error and combined logs
+  - Log levels: error, warn, info, http, debug
+  - Console output only in development mode
+  - Structured JSON logging for production
+- **HTTP Request Logging**:
+  - Request/response tracking with duration
+  - IP address and user agent logging
+  - Sanitized request body logging
+  - No sensitive data in logs
+- **Frontend Logging**:
+  - Development-only console logs
+  - Automatic sensitive data redaction
+  - Replaced 190+ unsafe console.log calls in critical files
+
+#### Data Protection
+- **CORS Configuration**:
+  - Whitelist-only origins (no wildcards in production)
+  - Credentials enabled for trusted origins
+  - Specific allowed headers: Content-Type, Authorization
+  - Methods: GET, POST, PUT, DELETE, OPTIONS
+- **Request Validation**:
+  - Request size limits (10MB maximum)
+  - JSON body parsing with size limits
+  - URL-encoded body parsing with limits
+- **Database Security**:
+  - Mongoose parameterization prevents basic NoSQL injection
+  - Password fields excluded from queries (.select("-password"))
+  - Manual password removal from API responses
+  - MongoDB connection with authentication
+
+#### Environment & Configuration Security
+- **Environment Variables**: Sensitive data in .env (not committed)
+- **Secrets Management**: JWT_SECRET, MONGODB_URI stored securely
+- **Production Configuration**: 
+  - Secure cookies (httpOnly, sameSite)
+  - HTTPS enforcement in production
+  - Debug mode disabled in production
 
 ---
 
@@ -200,9 +281,20 @@ backend/
 │   ├── statistics-fresh.js     # Fresh stats API
 │   └── advanced-statistics.js  # Advanced analytics
 ├── middleware/
-│   └── auth.js        # JWT verification
-├── scripts/           # Database utilities
-└── index.js           # Main server file
+│   ├── auth.js         # JWT verification
+│   ├── errorHandler.js # Global error handling
+│   ├── helmet.config.js # Security headers configuration
+│   ├── rateLimiter.js  # Rate limiting rules
+│   └── httpLogger.js   # HTTP request/response logging
+├── utils/               # Utility functions
+│   ├── logger.js        # Winston logger with sanitization
+│   ├── errors.js        # Custom error classes
+│   └── passwordGenerator.js # Secure password generation
+├── scripts/            # Database utilities
+├── logs/               # Application logs (gitignored)
+│   ├── error-*.log     # Error logs (daily rotation)
+│   └── combined-*.log  # Combined logs (daily rotation)
+└── index.js            # Main server file
 ```
 
 ### Frontend (Next.js + React)
@@ -271,6 +363,16 @@ web/
   - Multer (File uploads)
 - **Date Handling**: date-fns & date-fns-tz
 - **HTTP Client**: Axios
+- **Security**:
+  - helmet (HTTP security headers)
+  - express-rate-limit (Rate limiting)
+  - express-slow-down (Speed limiting)
+  - bcrypt (Password hashing)
+  - jsonwebtoken (JWT authentication)
+- **Logging**: 
+  - winston (Advanced logging)
+  - winston-daily-rotate-file (Log rotation)
+- **Error Handling**: Custom error classes and middleware
 - **CORS**: cors middleware
 
 ### Frontend
@@ -449,7 +551,18 @@ MIT License - Open Source
 
 **Version**: 1.0  
 **Last Updated**: November 2025  
+**Security Audit**: Completed ✅ (Score: 8.7/10)  
 **Status**: Production Ready ✅
+
+> 🔒 **Security Note**: This system has undergone comprehensive security hardening including:
+> - Helmet.js security headers protection
+> - Advanced rate limiting and DDoS protection  
+> - Centralized error handling with Arabic user-friendly messages
+> - Winston logging system with automatic sensitive data sanitization
+> - Strong password generation and bcrypt hashing
+> - JWT authentication with role-based access control
+> 
+> For detailed security audit report, see [`SECURITY_AUDIT_REPORT.md`](SECURITY_AUDIT_REPORT.md)
 
 ---
 
