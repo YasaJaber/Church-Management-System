@@ -554,16 +554,6 @@ MIT License - Open Source
 **Security Audit**: Completed ✅ (Score: 8.7/10)  
 **Status**: Production Ready ✅
 
-> 🔒 **Security Note**: This system has undergone comprehensive security hardening including:
-> - Helmet.js security headers protection
-> - Advanced rate limiting and DDoS protection  
-> - Centralized error handling with Arabic user-friendly messages
-> - Winston logging system with automatic sensitive data sanitization
-> - Strong password generation and bcrypt hashing
-> - JWT authentication with role-based access control
-> 
-> For detailed security audit report, see [`SECURITY_AUDIT_REPORT.md`](SECURITY_AUDIT_REPORT.md)
-
 ---
 
 **Built with modern web technologies for a modern church management experience.** 🏛️✨
