@@ -269,10 +269,10 @@ export default function ConsecutiveAttendancePage() {
     const confirmed = window.confirm(
       `⚠️ هل أنت متأكد من إعادة تعيين المواظبة لـ ${scopeText}؟\n\n` +
       (isAllClasses 
-        ? '⚠️ تحذير: سيتم إعادة تعيين عداد المواظبة لجميع الأطفال في جميع الفصول!\n\n'
-        : 'سيتم إعادة تعيين عداد المواظبة لجميع الأطفال في الفصل وسيبدأ العد من الصفر.\n\n'
+        ? '⚠️ تحذير: سيتم إعادة تعيين عداد الحضور المتتالي لجميع الأطفال في جميع الفصول!\n\n'
+        : 'سيتم إعادة تعيين عداد الحضور المتتالي لجميع الأطفال في الفصل وسيبدأ العد من جديد.\n\n'
       ) +
-      'هذا الإجراء مناسب بعد توزيع الجوائز لبدء دورة جديدة.'
+      'هذا الإجراء مناسب بعد توزيع الهدايا لبدء دورة مواظبة جديدة.'
     )
 
     if (!confirmed) return
@@ -342,14 +342,14 @@ export default function ConsecutiveAttendancePage() {
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 text-right">
           {user?.role === 'classTeacher' || user?.role === 'servant' ? 
-            `المواظبون في فصلي (آخر 4 أسابيع)` : 
-            'المواظبون على الحضور (آخر 4 أسابيع)'
+            `المواظبون في فصلي (4 مرات متتالية)` : 
+            'المواظبون على الحضور (4 مرات متتالية)'
           }
         </h1>
         <p className="text-gray-600 text-right mt-2">
           {user?.role === 'classTeacher' || user?.role === 'servant' ? 
-            'تقرير الأطفال المواظبين في فصلك خلال آخر 4 جمعات (حضور 4 من 4 أو 3 من 4)' :
-            'تقرير الأطفال المواظبين على الحضور خلال آخر 4 جمعات مقسم حسب الفصول'
+            'تقرير الأطفال المواظبين في فصلك (حضروا 4 مرات متتالية من آخر 4 مرات تم تسجيل الحضور فيها)' :
+            'تقرير الأطفال المواظبين على الحضور (حضروا 4 مرات متتالية) مقسم حسب الفصول'
           }
         </p>
       </div>
@@ -460,7 +460,7 @@ export default function ConsecutiveAttendancePage() {
                   '0'
               })()}
             </div>
-            <div className="text-sm text-gray-600">متوسط أسابيع المواظبة</div>
+            <div className="text-sm text-gray-600">متوسط مرات الحضور المتتالي</div>
           </div>
         </div>
 
@@ -475,7 +475,7 @@ export default function ConsecutiveAttendancePage() {
                 return allChildren.length > 0 ? Math.max(...allChildren.map(child => child.consecutiveWeeks)) : 0
               })()}
             </div>
-            <div className="text-sm text-gray-600">أعلى عدد أسابيع</div>
+            <div className="text-sm text-gray-600">أعلى عدد متتالي</div>
           </div>
         </div>
       </div>
@@ -483,7 +483,7 @@ export default function ConsecutiveAttendancePage() {
       {/* الرسم البياني للحضور الأسبوعي */}
       {weeklyData.length > 0 && (
         <div className="bg-white p-6 rounded-lg shadow mb-8">
-          <h2 className="text-xl font-bold text-gray-900 mb-4 text-right">الحضور الأسبوعي (آخر 4 جمعات)</h2>
+          <h2 className="text-xl font-bold text-gray-900 mb-4 text-right">إحصائيات الحضور (آخر 4 جمعات للمرجعية)</h2>
           <div className="grid grid-cols-4 gap-4">
             {weeklyData.map((week, index) => (
               <div key={index} className="text-center">
@@ -537,7 +537,7 @@ export default function ConsecutiveAttendancePage() {
                           اسم الطفل
                         </th>
                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          عدد أسابيع المواظبة
+                          عدد مرات الحضور المتتالي
                         </th>
                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                           التقدير
@@ -574,7 +574,7 @@ export default function ConsecutiveAttendancePage() {
                           <td className="px-6 py-4 whitespace-nowrap text-right">
                             <div className="flex items-center justify-end">
                               <div className="text-sm font-medium text-gray-900 mr-2">
-                                {child.consecutiveWeeks} / 4 أسابيع
+                                {child.consecutiveWeeks} / 4 مرات
                               </div>
                               <div className="w-12 h-2 bg-gray-200 rounded-full">
                                 <div 
@@ -633,8 +633,8 @@ export default function ConsecutiveAttendancePage() {
           </div>
           <p className="text-gray-400">
             {user?.role === 'classTeacher' || user?.role === 'servant' ? 
-              'لم يتم العثور على أطفال في فصلك حضروا 4 من آخر 4 جمعات' :
-              'لم يتم العثور على أطفال حضروا 4 من آخر 4 جمعات'
+              'لم يتم العثور على أطفال حضروا 4 مرات متتالية من آخر 4 سجلات حضور' :
+              'لم يتم العثور على أطفال حضروا 4 مرات متتالية من آخر 4 سجلات حضور'
             }
           </p>
           <button 

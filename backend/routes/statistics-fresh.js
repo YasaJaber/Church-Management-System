@@ -478,32 +478,9 @@ router.get(
       console.log(`📚 Processing ${uniqueClasses.length} unique class(es):`, uniqueClasses);
 
       // ============================================
-      // Calculate attendance for LAST 4 WEEKS ONLY
-      // (NEW: Count attendance in last 4 Fridays only)
+      // Calculate attendance for LAST 4 ATTENDANCE RECORDS
+      // (NEW: Count from last 4 actual attendance records, not calendar dates)
       // ============================================
-      
-      // Helper function to get last N Fridays
-      const getLastFridays = (count) => {
-        const fridays = [];
-        const today = new Date();
-        let current = new Date(today);
-        
-        // Find last Friday
-        while (current.getDay() !== 5) {
-          current.setDate(current.getDate() - 1);
-        }
-        
-        // Get last 'count' Fridays
-        for (let i = 0; i < count; i++) {
-          fridays.push(current.toISOString().split('T')[0]);
-          current.setDate(current.getDate() - 7);
-        }
-        
-        return fridays; // Most recent first
-      };
-
-      const last4Fridays = getLastFridays(4);
-      console.log("📅 Last 4 Fridays:", last4Fridays);
       
       const classesMap = new Map(); // Group by class
       let childrenWithResets = 0;
@@ -520,37 +497,35 @@ router.get(
           childrenWithResets++;
         }
         
-        // Create a map of dates to attendance status for quick lookup
-        const attendanceMap = new Map();
-        attendanceRecords.forEach(record => {
-          attendanceMap.set(record.date, record.status);
+        // Filter attendance records after reset date (if exists)
+        const validRecords = attendanceRecords.filter(record => {
+          if (lastGiftDate && record.date <= lastGiftDate) {
+            return false; // Skip records before or on reset date
+          }
+          return true;
         });
 
-        // Count attendance in last 4 Fridays ONLY (but after reset date if exists)
-        let attendanceCount = 0;
-        let presentCount = 0;
+        // Take LAST 4 ATTENDANCE RECORDS (most recent ones)
+        const last4Records = validRecords.slice(0, 4);
         
-        for (const friday of last4Fridays) {
-          // Skip if this Friday is before or on the reset date
-          if (lastGiftDate && friday <= lastGiftDate) {
-            // Skip this date - it's before the reset
-            continue;
-          }
-          
-          const status = attendanceMap.get(friday);
-          
-          if (status === "present") {
-            attendanceCount++;
+        // Count how many are present
+        let presentCount = 0;
+        let consecutivePresent = 0;
+        
+        for (const record of last4Records) {
+          if (record.status === "present") {
             presentCount++;
-          } else if (status === "absent") {
-            attendanceCount++; // Count as recorded (but absent)
+            consecutivePresent++;
+          } else {
+            // إذا غاب في أي مرة، مش متتالي
+            break;
           }
-          // If no record for this Friday, it's not counted
         }
 
-        // Only include children with at least minDays attendance in last 4 weeks
-        // Note: presentCount is what matters (how many times they were present)
-        if (presentCount >= parseInt(minDays)) {
+        // Only include children who:
+        // 1. Have at least 4 attendance records
+        // 2. Were present in ALL 4 records (consecutivePresent === 4)
+        if (last4Records.length >= 4 && consecutivePresent >= parseInt(minDays)) {
           const classId = childData.class.toString();
           const className = childData.classInfo?.name || 'Unknown';
 
@@ -565,10 +540,11 @@ router.get(
           classesMap.get(classId).children.push({
             childId: childData._id,
             name: childData.name,
-            consecutiveWeeks: presentCount,  // Number of times present in last 4 weeks (after reset)
-            totalWeeksChecked: 4,            // Always checking last 4 weeks
-            attendanceRate: Math.round((presentCount / 4) * 100), // Percentage
-            lastResetDate: lastGiftDate || 'none'  // For debugging
+            consecutiveWeeks: consecutivePresent,  // Number of consecutive attendance
+            totalWeeksChecked: last4Records.length, // How many records we checked
+            attendanceRate: Math.round((presentCount / last4Records.length) * 100), // Percentage
+            lastResetDate: lastGiftDate || 'none',  // For debugging
+            recordDates: last4Records.map(r => r.date) // For debugging
           });
         }
       }
