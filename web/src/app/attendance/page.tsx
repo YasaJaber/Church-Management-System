@@ -129,7 +129,7 @@ export default function AttendancePage() {
   }
 
   const loadAttendanceData = async () => {
-    if (!selectedDate) return
+    if (!selectedDate || !selectedClass) return
 
     setLoading(true)
     try {
