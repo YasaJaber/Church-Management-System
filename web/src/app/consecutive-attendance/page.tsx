@@ -188,9 +188,14 @@ export default function ConsecutiveAttendancePage() {
       }
       
       // Initialize page data
+      // للمدرسين والخدام، نرسل classId الخاص بهم
+      const classIdToFetch = (user.role === 'classTeacher' || user.role === 'servant') && user.assignedClass 
+        ? user.assignedClass._id 
+        : undefined
+      
       Promise.all([
         fetchClasses(),
-        fetchConsecutiveAttendance()
+        fetchConsecutiveAttendance(classIdToFetch)
       ]).catch(console.error)
     }
   }, [isAuthenticated, isLoading, router, user, fetchClasses, fetchConsecutiveAttendance])
@@ -240,7 +245,10 @@ export default function ConsecutiveAttendancePage() {
         alert(`🎁 ${data.message}`)
         
         // Refresh the data to show updated consecutive attendance
-        await fetchConsecutiveAttendance(selectedClass)
+        const classIdToFetch = (user?.role === 'classTeacher' || user?.role === 'servant') && user?.assignedClass 
+          ? user.assignedClass._id 
+          : selectedClass
+        await fetchConsecutiveAttendance(classIdToFetch)
       } else {
         alert(`❌ خطأ: ${data.error}`)
       }
@@ -283,8 +291,8 @@ export default function ConsecutiveAttendancePage() {
       // Get classId - for class teachers, it will be determined by backend
       // For service leader, null means ALL classes
       let classIdToReset = selectedClass
-      if ((user?.role === 'classTeacher' || user?.role === 'servant') && classesData.length > 0) {
-        classIdToReset = classesData[0].classId
+      if ((user?.role === 'classTeacher' || user?.role === 'servant') && user?.assignedClass) {
+        classIdToReset = user.assignedClass._id
       }
 
       const response = await fetch(`${API_BASE_URL}/statistics/reset-consecutive-attendance`, {
@@ -305,7 +313,10 @@ export default function ConsecutiveAttendancePage() {
         alert(`✅ ${data.message}\n\n🎉 تم بدء دورة مواظبة جديدة!`)
         
         // Refresh the data
-        await fetchConsecutiveAttendance(selectedClass)
+        const classIdToFetch = (user?.role === 'classTeacher' || user?.role === 'servant') && user?.assignedClass 
+          ? user.assignedClass._id 
+          : selectedClass
+        await fetchConsecutiveAttendance(classIdToFetch)
       } else {
         alert(`❌ خطأ: ${data.error}`)
       }
@@ -395,7 +406,7 @@ export default function ConsecutiveAttendancePage() {
         <div className="bg-white p-6 rounded-lg shadow mb-8">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <button
-              onClick={() => fetchConsecutiveAttendance()}
+              onClick={() => fetchConsecutiveAttendance(user?.assignedClass?._id)}
               disabled={loading}
               className="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors text-lg"
             >
@@ -627,7 +638,11 @@ export default function ConsecutiveAttendancePage() {
             }
           </p>
           <button 
-            onClick={() => fetchConsecutiveAttendance()}
+            onClick={() => fetchConsecutiveAttendance(
+              (user?.role === 'classTeacher' || user?.role === 'servant') && user?.assignedClass 
+                ? user.assignedClass._id 
+                : undefined
+            )}
             className="mt-4 bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600"
           >
             إعادة المحاولة
