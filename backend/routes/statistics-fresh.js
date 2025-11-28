@@ -527,17 +527,14 @@ router.get(
         });
 
         // Check attendance in last 4 Fridays ONLY (but after reset date if exists)
-        let consecutivePresent = 0;
-        let totalChecked = 0;
+        const fridaysAfterReset = last4Fridays.filter(friday => {
+          return !lastGiftDate || friday > lastGiftDate;
+        });
         
-        for (const friday of last4Fridays) {
-          // Skip if this Friday is before or on the reset date
-          if (lastGiftDate && friday <= lastGiftDate) {
-            // Skip this date - it's before the reset
-            continue;
-          }
-          
-          totalChecked++;
+        // Count consecutive attendance from most recent Friday
+        let consecutivePresent = 0;
+        
+        for (const friday of fridaysAfterReset) {
           const status = attendanceMap.get(friday);
           
           if (status === "present") {
@@ -549,9 +546,9 @@ router.get(
         }
 
         // Only include children who:
-        // 1. Were checked in at least 4 Fridays (after reset)
-        // 2. Were present in ALL checked Fridays consecutively from most recent
-        if (totalChecked >= 4 && consecutivePresent >= parseInt(minDays)) {
+        // 1. Have at least 4 Fridays to check (after reset)
+        // 2. Were present in ALL 4 Fridays consecutively
+        if (fridaysAfterReset.length >= 4 && consecutivePresent >= parseInt(minDays)) {
           const classId = childData.class.toString();
           const className = childData.classInfo?.name || 'Unknown';
 
@@ -567,8 +564,8 @@ router.get(
             childId: childData._id,
             name: childData.name,
             consecutiveWeeks: consecutivePresent,  // Number of consecutive Fridays attended
-            totalWeeksChecked: totalChecked,       // How many Fridays we checked
-            attendanceRate: Math.round((consecutivePresent / totalChecked) * 100), // Percentage
+            totalWeeksChecked: fridaysAfterReset.length,  // How many Fridays we checked
+            attendanceRate: Math.round((consecutivePresent / fridaysAfterReset.length) * 100), // Percentage
             lastResetDate: lastGiftDate || 'none'  // For debugging
           });
         }
