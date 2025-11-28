@@ -482,13 +482,28 @@ router.get(
       // (Check attendance in specific last 4 Fridays only)
       // ============================================
       
-      // Helper function to get last N Fridays
-      const getLastFridays = (count) => {
+      // Find the most recent attendance date across ALL children to use as reference
+      // This handles scenarios where server time (2024) differs from data time (2025)
+      let maxDateStr = new Date().toISOString().split('T')[0];
+      
+      for (const childData of childrenWithData) {
+        if (childData.attendanceRecords && childData.attendanceRecords.length > 0) {
+          const latestRecord = childData.attendanceRecords[0]; // Already sorted desc
+          if (latestRecord.date > maxDateStr) {
+            maxDateStr = latestRecord.date;
+          }
+        }
+      }
+      
+      console.log(`📅 Reference Date (Latest Data): ${maxDateStr}`);
+
+      // Helper function to get last N Fridays based on a reference date
+      const getLastFridays = (count, referenceDateStr) => {
         const fridays = [];
-        const today = new Date();
-        let current = new Date(today);
+        const refDate = new Date(referenceDateStr);
+        let current = new Date(refDate);
         
-        // Find last Friday
+        // Find last Friday (including today if it is Friday)
         while (current.getDay() !== 5) {
           current.setDate(current.getDate() - 1);
         }
@@ -502,7 +517,7 @@ router.get(
         return fridays; // Most recent first
       };
 
-      const last4Fridays = getLastFridays(4);
+      const last4Fridays = getLastFridays(4, maxDateStr);
       console.log("📅 Last 4 Fridays:", last4Fridays);
       
       const classesMap = new Map(); // Group by class
