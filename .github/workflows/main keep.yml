@@ -3,7 +3,7 @@ name: Keep Render Services Alive on Friday
 on:
   schedule:
     - cron: "*/5 * * * 5" # كل 5 دقايق يوم الجمعة
-  workflow_dispatch: # تشغيل يدوي لو حبيت
+  workflow_dispatch: 
 
 jobs:
   keep_alive:
