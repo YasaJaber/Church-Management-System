@@ -2,6 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { AuthProvider } from '@/context/AuthContextSimple'
 import { NotificationProvider } from '@/context/NotificationContext'
+import { ThemeProvider } from '@/context/ThemeContext'
+import ThemeToggle from '@/components/ui/ThemeToggle'
 import { Toaster } from 'react-hot-toast'
 
 export const metadata: Metadata = {
@@ -16,48 +18,66 @@ export const metadata: Metadata = {
   },
 }
 
+// Script to prevent flash of unstyled content
+const themeScript = `
+  (function() {
+    try {
+      var theme = localStorage.getItem('theme');
+      if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+      }
+    } catch (e) {}
+  })();
+`;
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   return (
-    <html lang="ar" dir="rtl">
-      <body className="bg-gray-50 min-h-screen">
-        <AuthProvider>
-          <NotificationProvider>
-            {children}
-            <Toaster 
-              position="top-center"
-              reverseOrder={false}
-              gutter={8}
-              containerClassName=""
-              containerStyle={{}}
-              toastOptions={{
-                className: '',
-                duration: 4000,
-                style: {
-                  background: '#363636',
-                  color: '#fff',
-                  fontFamily: 'Tajawal',
-                  direction: 'rtl',
-                },
-                success: {
-                  duration: 3000,
+    <html lang="ar" dir="rtl" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+      <body className="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+        <ThemeProvider>
+          <AuthProvider>
+            <NotificationProvider>
+              {children}
+              <ThemeToggle />
+              <Toaster 
+                position="top-center"
+                reverseOrder={false}
+                gutter={8}
+                containerClassName=""
+                containerStyle={{}}
+                toastOptions={{
+                  className: '',
+                  duration: 4000,
                   style: {
-                    background: '#10B981',
+                    background: '#363636',
+                    color: '#fff',
+                    fontFamily: 'Tajawal',
+                    direction: 'rtl',
                   },
-                },
-                error: {
-                  duration: 5000,
-                  style: {
-                    background: '#EF4444',
+                  success: {
+                    duration: 3000,
+                    style: {
+                      background: '#10B981',
+                    },
                   },
-                },
-              }}
-            />
-          </NotificationProvider>
-        </AuthProvider>
+                  error: {
+                    duration: 5000,
+                    style: {
+                      background: '#EF4444',
+                    },
+                  },
+                }}
+              />
+            </NotificationProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
   )
