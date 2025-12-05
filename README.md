@@ -151,7 +151,14 @@ A comprehensive church management system for Sunday Schools (مدارس الأح
   - Lucide React icons
 - **Features**
   - Fully responsive design
-  - Dark mode support (church theme)
+  - **Dark Mode Support**: 
+    - System preference detection (prefers-color-scheme)
+    - Manual toggle with persistent settings (localStorage)
+    - Smooth transitions between themes
+    - Floating theme toggle button (bottom-left)
+    - No flash on page load (SSR-optimized)
+    - Context-based theme management (ThemeContext)
+    - Tailwind's class-based dark mode
   - Toast notifications (react-hot-toast)
   - Loading states with spinners
   - Form validation with React Hook Form + Zod
@@ -328,9 +335,11 @@ web/
 │   │   ├── Charts.tsx
 │   │   ├── AdvancedCharts.tsx
 │   │   └── ui/               # UI components
+│   │       └── ThemeToggle.tsx     # Dark mode toggle button
 │   ├── context/              # React Context
 │   │   ├── AuthContext.tsx
 │   │   ├── AuthContextSimple.tsx
+│   │   ├── ThemeContext.tsx         # Dark mode theme management
 │   │   └── NotificationContext.tsx
 │   ├── services/             # API services
 │   │   ├── api.ts
