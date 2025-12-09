@@ -38,6 +38,8 @@ const ServantAttendanceSchema = new mongoose.Schema({
 // إنشاء مؤشر مركب للبحث السريع
 ServantAttendanceSchema.index({ servantId: 1, date: 1 }, { unique: true });
 ServantAttendanceSchema.index({ date: 1, status: 1 });
+ServantAttendanceSchema.index({ servantId: 1, status: 1 }); // لإحصائيات الخادم الفردية
+ServantAttendanceSchema.index({ markedBy: 1, date: 1 }); // لمعرفة من سجل الحضور
 
 // إضافة middleware للتأكد من صحة التاريخ
 ServantAttendanceSchema.pre('save', function() {

@@ -62,4 +62,9 @@ userSchema.methods.comparePassword = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
+// Indexes for better query performance
+userSchema.index({ role: 1, isActive: 1 }); // للبحث عن خدام نشطين حسب الدور
+userSchema.index({ assignedClass: 1 }); // للبحث عن خدام فصل معين
+userSchema.index({ isActive: 1, name: 1 }); // للبحث والترتيب بالاسم
+
 module.exports = mongoose.model("User", userSchema);

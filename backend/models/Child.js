@@ -56,4 +56,10 @@ const childSchema = new mongoose.Schema(
   }
 );
 
+// Indexes for better query performance
+childSchema.index({ class: 1, isActive: 1 }); // للبحث عن أطفال فصل معين
+childSchema.index({ isActive: 1, name: 1 }); // للبحث والترتيب بالاسم
+childSchema.index({ class: 1, name: 1 }); // للبحث في فصل مع الترتيب
+childSchema.index({ stage: 1, grade: 1 }); // للفلترة حسب المرحلة والصف
+
 module.exports = mongoose.model("Child", childSchema);

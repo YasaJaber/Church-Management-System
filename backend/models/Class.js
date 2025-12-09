@@ -44,6 +44,10 @@ const classSchema = new mongoose.Schema(
 // Compound index for unique stage+grade combination
 classSchema.index({ stage: 1, grade: 1 }, { unique: true });
 
+// Additional indexes for better query performance
+classSchema.index({ isActive: 1, order: 1 }); // للترتيب حسب الـ order
+classSchema.index({ stage: 1, isActive: 1 }); // للفلترة حسب المرحلة
+
 // Virtual for getting children count
 classSchema.virtual("childrenCount", {
   ref: "Child",

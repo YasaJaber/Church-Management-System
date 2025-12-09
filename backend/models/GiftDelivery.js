@@ -50,5 +50,7 @@ const giftDeliverySchema = new mongoose.Schema(
 giftDeliverySchema.index({ child: 1, deliveryDate: -1 });
 giftDeliverySchema.index({ servant: 1, deliveryDate: -1 });
 giftDeliverySchema.index({ deliveredBy: 1, deliveryDate: -1 });
+giftDeliverySchema.index({ isActive: 1, deliveryDate: -1 }); // للبحث عن الهدايا النشطة
+giftDeliverySchema.index({ consecutiveWeeksEarned: 1 }); // للفلترة حسب عدد الأسابيع
 
 module.exports = mongoose.model("GiftDelivery", giftDeliverySchema);

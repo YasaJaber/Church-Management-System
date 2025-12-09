@@ -52,5 +52,9 @@ attendanceSchema.index({ person: 1, date: 1, type: 1 }, { unique: true });
 // Index for better query performance
 attendanceSchema.index({ date: 1, status: 1 });
 attendanceSchema.index({ class: 1, date: 1 });
+attendanceSchema.index({ type: 1, date: 1 }); // للفلترة حسب النوع (child/servant)
+attendanceSchema.index({ recordedBy: 1, date: 1 }); // لمعرفة من سجل الحضور
+attendanceSchema.index({ person: 1, status: 1 }); // لإحصائيات الحضور الفردية
+attendanceSchema.index({ class: 1, status: 1, date: 1 }); // لإحصائيات الفصل
 
 module.exports = mongoose.model("Attendance", attendanceSchema);
