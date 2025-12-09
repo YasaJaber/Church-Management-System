@@ -99,6 +99,7 @@ app.use("/api/servants-attendance", require("./routes/servants-attendance"));
 app.use("/api/pastoral-care", require("./routes/pastoral-care"));
 app.use("/api/statistics", require("./routes/statistics-fresh"));
 app.use("/api/advanced-statistics", require("./routes/advanced-statistics"));
+app.use("/api/audit-logs", require("./routes/audit-logs"));
 
 logger.info("Routes registered successfully");
 

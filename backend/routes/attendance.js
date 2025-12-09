@@ -5,6 +5,7 @@ const User = require("../models/User");
 const PastoralCare = require("../models/PastoralCare");
 const { authMiddleware } = require("../middleware/auth");
 const { attendanceValidation } = require("../middleware/validator");
+const { logAudit } = require("../utils/auditLogger");
 
 const router = express.Router();
 
@@ -443,6 +444,25 @@ router.post("/", authMiddleware, attendanceValidation.mark, async (req, res) => 
       `   Class: ${attendanceRecord.person.class?.name || "Unknown"}`
     );
 
+    // 📋 AUDIT LOG: تسجيل عملية الحضور
+    const statusAr = status === "present" ? "حاضر" : status === "absent" ? "غائب" : "متأخر";
+    await logAudit({
+      action: existingRecord ? "update" : "create",
+      collection: "attendance",
+      documentId: attendanceRecord._id,
+      documentName: `${attendanceRecord.person.name} - ${statusAr}`,
+      user: req.user,
+      classId: attendanceRecord.person.class?._id,
+      className: attendanceRecord.person.class?.name || "",
+      after: {
+        childName: attendanceRecord.person.name,
+        date: date,
+        status: statusAr,
+        notes: notes || "",
+      },
+      ipAddress: req.ip,
+    });
+
     // ✨ PASTORAL CARE: Automatically remove child from pastoral care list if they attended
     if (status === "present" || status === "late") {
       try {
@@ -553,6 +573,26 @@ router.delete("/:childId/:date", authMiddleware, attendanceValidation.delete, as
     console.log(`   Previous Status: ${deletedRecord.status}`);
     console.log(`   Record ID: ${deletedRecord._id}`);
     console.log(`   Deleted by: ${req.user.name} (${req.user._id})`);
+
+    // 📋 AUDIT LOG: تسجيل عملية حذف الحضور
+    // جلب بيانات الطفل للـ audit log
+    const child = await Child.findById(childId).populate("class");
+    const statusAr = deletedRecord.status === "present" ? "حاضر" : deletedRecord.status === "absent" ? "غائب" : "متأخر";
+    await logAudit({
+      action: "delete",
+      collection: "attendance",
+      documentId: deletedRecord._id,
+      documentName: `${child?.name || "طفل"} - ${statusAr}`,
+      user: req.user,
+      classId: child?.class?._id,
+      className: child?.class?.name || "",
+      before: {
+        childName: child?.name,
+        date: date,
+        status: statusAr,
+      },
+      ipAddress: req.ip,
+    });
 
     res.json({
       success: true,
@@ -670,6 +710,29 @@ router.delete("/delete-day", authMiddleware, async (req, res) => {
     console.log(`   Deleted by: ${req.user.name} (${req.user._id})`);
     console.log(`   User role: ${req.user.role}`);
     console.log("=".repeat(50));
+
+    // 📋 AUDIT LOG: تسجيل عملية حذف حضور يوم كامل
+    // جلب اسم الفصل لو موجود
+    let className = "";
+    if (targetClassId) {
+      const classDoc = await require("../models/Class").findById(targetClassId);
+      className = classDoc?.name || "";
+    }
+    await logAudit({
+      action: "delete",
+      collection: "attendance",
+      documentId: req.user._id, // استخدام ID المستخدم لأن مفيش document واحد
+      documentName: `حذف ${deleteResult.deletedCount} سجل حضور - ${date}`,
+      user: req.user,
+      classId: targetClassId || null,
+      className: className,
+      before: {
+        date: date,
+        deletedCount: deleteResult.deletedCount,
+        className: className || "كل الفصول",
+      },
+      ipAddress: req.ip,
+    });
 
     res.json({
       success: true,

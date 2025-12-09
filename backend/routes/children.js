@@ -8,6 +8,7 @@ const { subDays, getDay } = require("date-fns");
 const { asyncHandler } = require('../middleware/errorHandler');
 const { childValidation } = require('../middleware/validator');
 const { ValidationError, AuthorizationError, NotFoundError } = require('../utils/errors');
+const { logAudit, getChanges } = require('../utils/auditLogger');
 
 const router = express.Router();
 
@@ -176,6 +177,19 @@ router.post("/", authMiddleware, childValidation.create, async (req, res) => {
     const savedChild = await newChild.save();
     await savedChild.populate("class");
 
+    // تسجيل العملية في سجل المراجعة
+    await logAudit({
+      action: "create",
+      collection: "children",
+      documentId: savedChild._id,
+      documentName: savedChild.name,
+      user: req.user,
+      classId: savedChild.class._id,
+      className: savedChild.class.name,
+      after: savedChild.toObject(),
+      ipAddress: req.ip,
+    });
+
     res.status(201).json({
       success: true,
       data: savedChild,
@@ -290,6 +304,9 @@ router.put("/:id", authMiddleware, childValidation.update, async (req, res) => {
 
     console.log("📝 Updating with data:", updateData);
 
+    // حفظ البيانات القديمة للـ audit log
+    const oldChildData = child.toObject();
+
     const updatedChild = await Child.findByIdAndUpdate(
       req.params.id,
       updateData,
@@ -297,6 +314,21 @@ router.put("/:id", authMiddleware, childValidation.update, async (req, res) => {
     ).populate("class");
 
     console.log("✅ Child updated successfully:", updatedChild.name);
+
+    // تسجيل العملية في سجل المراجعة
+    const changes = getChanges(oldChildData, updatedChild.toObject());
+    await logAudit({
+      action: "update",
+      collection: "children",
+      documentId: updatedChild._id,
+      documentName: updatedChild.name,
+      user: req.user,
+      classId: updatedChild.class._id,
+      className: updatedChild.class.name,
+      before: changes.before,
+      after: changes.after,
+      ipAddress: req.ip,
+    });
 
     res.json({
       success: true,
@@ -353,7 +385,23 @@ router.delete("/:id", authMiddleware, async (req, res) => {
       }
     }
 
+    // حفظ البيانات للـ audit log قبل الحذف
+    const childData = child.toObject();
+
     await Child.findByIdAndDelete(req.params.id);
+
+    // تسجيل العملية في سجل المراجعة
+    await logAudit({
+      action: "delete",
+      collection: "children",
+      documentId: child._id,
+      documentName: child.name,
+      user: req.user,
+      classId: child.class._id,
+      className: child.class.name,
+      before: childData,
+      ipAddress: req.ip,
+    });
 
     res.json({
       success: true,

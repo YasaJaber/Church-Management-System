@@ -783,6 +783,27 @@ export default function DashboardPage() {
               </p>
             </div>
           </button>
+
+          {/* سجل العمليات - متاح لجميع المستخدمين */}
+          <button
+            key="nav-audit-logs"
+            onClick={() => router.push('/audit-logs')}
+            className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
+          >
+            <div className="text-center">
+              <div className="w-12 h-12 bg-gradient-to-r from-gray-600 to-gray-800 rounded-lg flex items-center justify-center mx-auto mb-4">
+                <span className="text-white text-xl">📋</span>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                سجل العمليات
+              </h3>
+              <p className="text-sm text-gray-500">
+                {user?.role === 'admin' || user?.role === 'serviceLeader' 
+                  ? 'عرض جميع العمليات على البيانات'
+                  : 'عرض العمليات في فصلك'}
+              </p>
+            </div>
+          </button>
         </div>
       </main>
     </div>
