@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const { authMiddleware } = require("../middleware/auth");
 const { asyncHandler } = require("../middleware/errorHandler");
+const { userValidation } = require("../middleware/validator");
 const {
   ValidationError,
   AuthenticationError,
@@ -15,12 +16,8 @@ const router = express.Router();
 // @route   POST /api/auth/login
 // @desc    Login user
 // @access  Public
-router.post("/login", asyncHandler(async (req, res) => {
+router.post("/login", userValidation.login, asyncHandler(async (req, res) => {
   const { username, password } = req.body;
-
-  if (!username || !password) {
-    throw new ValidationError("اسم المستخدم وكلمة المرور مطلوبان");
-  }
 
   // Find user by username and populate assigned class
   const user = await User.findOne({ username }).populate("assignedClass");

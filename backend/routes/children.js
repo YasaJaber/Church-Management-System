@@ -6,6 +6,7 @@ const Attendance = require("../models/Attendance");
 const { authMiddleware, adminOrServiceLeader } = require("../middleware/auth");
 const { subDays, getDay } = require("date-fns");
 const { asyncHandler } = require('../middleware/errorHandler');
+const { childValidation } = require('../middleware/validator');
 const { ValidationError, AuthorizationError, NotFoundError } = require('../utils/errors');
 
 const router = express.Router();
@@ -81,7 +82,7 @@ router.get("/class/:classId", authMiddleware, async (req, res) => {
 // @route   GET /api/children/:id
 // @desc    Get single child details (with permission check)
 // @access  Protected
-router.get("/:id", authMiddleware, asyncHandler(async (req, res) => {
+router.get("/:id", authMiddleware, childValidation.getById, asyncHandler(async (req, res) => {
   const child = await Child.findById(req.params.id).populate("class");
 
   if (!child) {
@@ -107,7 +108,7 @@ router.get("/:id", authMiddleware, asyncHandler(async (req, res) => {
 // @route   POST /api/children
 // @desc    Add new child (with permission check)
 // @access  Protected
-router.post("/", authMiddleware, async (req, res) => {
+router.post("/", authMiddleware, childValidation.create, async (req, res) => {
   try {
     const { name, phone, parentName, classId, notes } = req.body;
 
@@ -205,7 +206,7 @@ router.post("/", authMiddleware, async (req, res) => {
 // @route   PUT /api/children/:id
 // @desc    Update child information (with permission check)
 // @access  Protected
-router.put("/:id", authMiddleware, async (req, res) => {
+router.put("/:id", authMiddleware, childValidation.update, async (req, res) => {
   try {
     console.log("\n" + "=".repeat(50));
     console.log("🔄 PUT /children/:id API CALLED");

@@ -2,6 +2,7 @@ const express = require("express");
 const Class = require("../models/Class");
 const { authMiddleware } = require("../middleware/auth");
 const { asyncHandler } = require('../middleware/errorHandler');
+const { classValidation } = require('../middleware/validator');
 const { AuthorizationError, NotFoundError } = require('../utils/errors');
 
 const router = express.Router();
@@ -35,7 +36,7 @@ router.get("/", authMiddleware, asyncHandler(async (req, res) => {
 // @route   GET /api/classes/:id
 // @desc    Get single class details
 // @access  Public
-router.get("/:id", asyncHandler(async (req, res) => {
+router.get("/:id", classValidation.getById, asyncHandler(async (req, res) => {
   const classData = await Class.findById(req.params.id);
 
   if (!classData) {

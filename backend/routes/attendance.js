@@ -4,13 +4,14 @@ const Attendance = require("../models/Attendance");
 const User = require("../models/User");
 const PastoralCare = require("../models/PastoralCare");
 const { authMiddleware } = require("../middleware/auth");
+const { attendanceValidation } = require("../middleware/validator");
 
 const router = express.Router();
 
 // @route   GET /api/attendance/children-with-status
 // @desc    Get children with attendance status for a specific date (for attendance form)
 // @access  Protected
-router.get("/children-with-status", authMiddleware, async (req, res) => {
+router.get("/children-with-status", authMiddleware, attendanceValidation.query, async (req, res) => {
   try {
     console.log(
       "🚀🚀🚀 CHILDREN-WITH-STATUS API CALLED - TOP OF FUNCTION 🚀🚀🚀"
@@ -258,7 +259,7 @@ router.get("/children", authMiddleware, async (req, res) => {
 // @route   POST /api/attendance
 // @desc    Mark attendance for a child
 // @access  Protected
-router.post("/", authMiddleware, async (req, res) => {
+router.post("/", authMiddleware, attendanceValidation.mark, async (req, res) => {
   try {
     const { childId, date, status, notes } = req.body;
 
@@ -501,7 +502,7 @@ router.post("/", authMiddleware, async (req, res) => {
 // @route   DELETE /api/attendance/:childId/:date
 // @desc    Delete attendance record for a child on a specific date
 // @access  Protected
-router.delete("/:childId/:date", authMiddleware, async (req, res) => {
+router.delete("/:childId/:date", authMiddleware, attendanceValidation.delete, async (req, res) => {
   try {
     const { childId, date } = req.params;
 
