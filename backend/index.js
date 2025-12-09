@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
+const compression = require("compression");
 require("dotenv").config();
 
 // Import utilities
@@ -15,6 +16,23 @@ const app = express();
 
 // Apply Helmet security headers (must be before other middleware)
 app.use(helmetConfig);
+
+// Apply compression for all responses (60-80% size reduction)
+app.use(compression({
+  // Compress responses larger than 1KB
+  threshold: 1024,
+  // Compression level (1-9, higher = more compression but slower)
+  level: 6,
+  // Filter function to decide which responses to compress
+  filter: (req, res) => {
+    // Don't compress if client doesn't accept it
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    // Use compression's default filter (compresses text-based content)
+    return compression.filter(req, res);
+  }
+}));
 
 // Middleware
 app.use(
