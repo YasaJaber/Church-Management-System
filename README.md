@@ -141,6 +141,38 @@ A comprehensive church management system for Sunday Schools (مدارس الأح
   - Customizable date ranges
   - Interactive filtering
 
+### 📋 Audit Trail System (سجل العمليات)
+
+- **Operation Logging**
+  - Automatic tracking of all data changes
+  - Records create, update, and delete operations
+  - Timestamps for every action
+  - User identification (who made the change)
+- **Tracked Operations**
+  - Children management (add/edit/delete)
+  - Attendance marking and modifications
+  - Class assignments changes
+  - User data updates
+- **Role-based Access**
+  - Teachers/Servants: View only their class logs
+  - Service Leaders/Admins: View all logs with class filtering
+- **Advanced Filtering**
+  - Filter by operation type (create/update/delete)
+  - Filter by data type (children/attendance/users/classes)
+  - Date range selection
+  - Class-based filtering
+- **Detailed Change Tracking**
+  - Before and after values for updates
+  - Document names for easy identification
+  - Arabic descriptions for all operations
+- **Audit Log Features**
+  - Pagination for large datasets
+  - Expandable details view
+  - Color-coded operation types:
+    - 🟢 Green: Create operations
+    - 🔵 Blue: Update operations
+    - 🔴 Red: Delete operations
+
 ### 🎨 Modern UI/UX
 - **Tech Stack**
   - Next.js 14 with App Router
@@ -287,7 +319,8 @@ backend/
 │   ├── Attendance.js   # Attendance records
 │   ├── ServantAttendance.js  # Servant attendance
 │   ├── PastoralCare.js # Pastoral care tracking
-│   └── GiftDelivery.js # Gift delivery records
+│   ├── GiftDelivery.js # Gift delivery records
+│   └── AuditLog.js     # Audit trail records
 ├── routes/             # API endpoints
 │   ├── auth.js        # Authentication
 │   ├── children.js    # Children CRUD
@@ -298,7 +331,8 @@ backend/
 │   ├── pastoral-care.js        # Pastoral care
 │   ├── statistics.js           # Statistics API
 │   ├── statistics-fresh.js     # Fresh stats API
-│   └── advanced-statistics.js  # Advanced analytics
+│   ├── advanced-statistics.js  # Advanced analytics
+│   └── audit-logs.js           # Audit trail API
 ├── middleware/
 │   ├── auth.js         # JWT verification
 │   ├── errorHandler.js # Global error handling
@@ -309,7 +343,8 @@ backend/
 ├── utils/               # Utility functions
 │   ├── logger.js        # Winston logger with sanitization
 │   ├── errors.js        # Custom error classes
-│   └── passwordGenerator.js # Secure password generation
+│   ├── passwordGenerator.js # Secure password generation
+│   └── auditLogger.js   # Audit trail logging utility
 ├── scripts/            # Database utilities
 ├── logs/               # Application logs (gitignored)
 │   ├── error-*.log     # Error logs (daily rotation)
@@ -339,7 +374,8 @@ web/
 │   │   ├── individual-tracking/     # Individual stats
 │   │   ├── servants-tracking/       # Servant tracking
 │   │   ├── servants-follow-up/      # Servant pastoral care
-│   │   └── service-leader-dashboard/  # Leader dashboard
+│   │   ├── service-leader-dashboard/  # Leader dashboard
+│   │   └── audit-logs/              # Audit trail page
 │   ├── components/            # React components
 │   │   ├── AttendanceModal.tsx
 │   │   ├── ServantsAttendanceModal.tsx
@@ -545,12 +581,15 @@ web/
 - **servantattendances**: Dedicated servant attendance
 - **pastoralcares**: Pastoral care follow-up list
 - **giftdeliveries**: Gift delivery tracking
+- **auditlogs**: Operation audit trail records
 
 ### Key Indexes
 - `{ person: 1, date: 1, type: 1 }` - Attendance uniqueness
 - `{ child: 1, absentDate: 1 }` - Pastoral care lookup
 - `{ servantId: 1, date: 1 }` - Servant attendance uniqueness
 - `{ stage: 1, grade: 1 }` - Class uniqueness
+- `{ classId: 1, createdAt: -1 }` - Audit logs by class
+- `{ userId: 1, createdAt: -1 }` - Audit logs by user
 
 ---
 
