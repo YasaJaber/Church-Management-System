@@ -4,6 +4,7 @@ import { AuthProvider } from '@/context/AuthContextSimple'
 import { NotificationProvider } from '@/context/NotificationContext'
 import { ThemeProvider } from '@/context/ThemeContext'
 import ThemeToggle from '@/components/ui/ThemeToggle'
+import ErrorBoundary from '@/components/ErrorBoundary'
 import { Toaster } from 'react-hot-toast'
 
 export const metadata: Metadata = {
@@ -42,41 +43,43 @@ export default function RootLayout({
       </head>
       <body className="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
         <ThemeProvider>
-          <AuthProvider>
-            <NotificationProvider>
-              {children}
-              <ThemeToggle />
-              <Toaster 
-                position="top-center"
-                reverseOrder={false}
-                gutter={8}
-                containerClassName=""
-                containerStyle={{}}
-                toastOptions={{
-                  className: '',
-                  duration: 4000,
-                  style: {
-                    background: '#363636',
-                    color: '#fff',
-                    fontFamily: 'Tajawal',
-                    direction: 'rtl',
-                  },
-                  success: {
-                    duration: 3000,
+          <ErrorBoundary>
+            <AuthProvider>
+              <NotificationProvider>
+                {children}
+                <ThemeToggle />
+                <Toaster 
+                  position="top-center"
+                  reverseOrder={false}
+                  gutter={8}
+                  containerClassName=""
+                  containerStyle={{}}
+                  toastOptions={{
+                    className: '',
+                    duration: 4000,
                     style: {
-                      background: '#10B981',
+                      background: '#363636',
+                      color: '#fff',
+                      fontFamily: 'Tajawal',
+                      direction: 'rtl',
                     },
-                  },
-                  error: {
-                    duration: 5000,
-                    style: {
-                      background: '#EF4444',
+                    success: {
+                      duration: 3000,
+                      style: {
+                        background: '#10B981',
+                      },
                     },
-                  },
-                }}
-              />
-            </NotificationProvider>
-          </AuthProvider>
+                    error: {
+                      duration: 5000,
+                      style: {
+                        background: '#EF4444',
+                      },
+                    },
+                  }}
+                />
+              </NotificationProvider>
+            </AuthProvider>
+          </ErrorBoundary>
         </ThemeProvider>
       </body>
     </html>
