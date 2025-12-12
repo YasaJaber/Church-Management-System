@@ -9,13 +9,15 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
-import { 
-  CheckCircleIcon, 
+import {
+  CheckCircleIcon,
   XCircleIcon,
   CalendarIcon,
   UserGroupIcon,
   ClockIcon,
-  DocumentCheckIcon
+  DocumentCheckIcon,
+  MagnifyingGlassIcon,
+  XMarkIcon
 } from '@heroicons/react/24/outline'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import AttendanceModal from '@/components/AttendanceModal'
@@ -43,7 +45,7 @@ interface Class {
 export default function AttendancePage() {
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
-  
+
   const [children, setChildren] = useState<Child[]>([])
   const [classes, setClasses] = useState<Class[]>([])
   const [loading, setLoading] = useState(true)
@@ -65,6 +67,9 @@ export default function AttendancePage() {
   // Delete day confirmation dialog state
   const [showDeleteDayDialog, setShowDeleteDayDialog] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('')
   const [deletingDay, setDeletingDay] = useState(false)
 
   useEffect(() => {
@@ -76,7 +81,7 @@ export default function AttendancePage() {
   useEffect(() => {
     if (isAuthenticated && user) {
       loadClasses()
-      
+
       // إذا كان المستخدم مدرس فصل أو خادم، يجب أن يعرض فصله فقط
       if ((user.role === 'classTeacher' || user.role === 'servant') && user.assignedClass) {
         setSelectedClass(user.assignedClass._id)
@@ -108,12 +113,12 @@ export default function AttendancePage() {
           // فلترة الفصول التجريبية أو الاختبارية
           const filteredClasses = (response.data || []).filter((cls: Class) => {
             const name = cls.name.toLowerCase()
-            return !name.includes('تجريبي') && 
-                   !name.includes('اختبار') && 
-                   !name.includes('test') && 
-                   !name.includes('experimental')
+            return !name.includes('تجريبي') &&
+              !name.includes('اختبار') &&
+              !name.includes('test') &&
+              !name.includes('experimental')
           })
-          
+
           setClasses(filteredClasses)
           if (filteredClasses.length > 0) {
             setSelectedClass(filteredClasses[0]._id)
@@ -135,7 +140,7 @@ export default function AttendancePage() {
     try {
       // Use the new API to get children with attendance status
       const response = await attendanceAPI.getChildrenWithStatus(selectedDate, selectedClass)
-      
+
       if (response.success && response.data) {
         // Transform data to match our interface
         const childrenWithAttendance = response.data.map((child: any) => ({
@@ -151,7 +156,7 @@ export default function AttendancePage() {
           batchStatus: null,
           batchNotes: "",
         }))
-        
+
         setChildren(childrenWithAttendance)
       } else {
         console.error('Failed to load children with status:', response.error)
@@ -189,9 +194,9 @@ export default function AttendancePage() {
 
     // Optimistically update UI
     const updatedChildren = [...children]
-    updatedChildren[childIndex] = { 
-      ...child, 
-      isPresent: status === 'present', 
+    updatedChildren[childIndex] = {
+      ...child,
+      isPresent: status === 'present',
       hasAttendanceRecord: true,
       notes: notes || ''
     }
@@ -214,12 +219,12 @@ export default function AttendancePage() {
       loadAttendanceData()
     } catch (error: any) {
       console.error('Error saving attendance:', error)
-      
+
       // Revert UI change on error
       const revertedChildren = [...children]
       revertedChildren[childIndex] = child
       setChildren(revertedChildren)
-      
+
       throw error // Re-throw to let modal handle the error
     }
   }
@@ -232,8 +237,8 @@ export default function AttendancePage() {
 
     // Optimistically update UI - remove attendance record
     const updatedChildren = [...children]
-    updatedChildren[childIndex] = { 
-      ...child, 
+    updatedChildren[childIndex] = {
+      ...child,
       isPresent: undefined,
       hasAttendanceRecord: false,
       notes: '',
@@ -252,12 +257,12 @@ export default function AttendancePage() {
       loadAttendanceData()
     } catch (error: any) {
       console.error('Error deleting attendance:', error)
-      
+
       // Revert UI change on error
       const revertedChildren = [...children]
       revertedChildren[childIndex] = child
       setChildren(revertedChildren)
-      
+
       throw error // Re-throw to let modal handle the error
     }
   }
@@ -268,7 +273,7 @@ export default function AttendancePage() {
     setSaving(true)
     try {
       const response = await attendanceAPI.markAllPresent(selectedClass, selectedDate)
-      
+
       if (response.success) {
         toast.success('تم تسجيل حضور جميع الأطفال')
         loadAttendanceData()
@@ -295,7 +300,7 @@ export default function AttendancePage() {
     setDeletingDay(true)
     try {
       const response = await attendanceAPI.deleteAttendanceByDay(selectedDate, selectedClass)
-      
+
       if (response.success) {
         toast.success(`تم مسح ${response.data.deletedCount} سجل حضور بنجاح`)
         setShowDeleteDayDialog(false)
@@ -506,10 +511,10 @@ export default function AttendancePage() {
       child.batchStatus !== null
         ? child.batchStatus
         : child.hasAttendanceRecord
-        ? child.isPresent
-          ? "present"
-          : "absent"
-        : null;
+          ? child.isPresent
+            ? "present"
+            : "absent"
+          : null;
 
     return (
       <div key={child._id} className="bg-white border rounded-lg p-4 shadow-sm">
@@ -521,22 +526,20 @@ export default function AttendancePage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => toggleChildBatchStatus(child._id, "present")}
-              className={`p-2 rounded-full transition-colors ${
-                currentStatus === "present"
+              className={`p-2 rounded-full transition-colors ${currentStatus === "present"
                   ? "bg-green-100 text-green-600 ring-2 ring-green-300"
                   : "bg-gray-100 text-gray-400 hover:bg-green-50 hover:text-green-500"
-              }`}
+                }`}
               title="حاضر"
             >
               <CheckCircleIcon className="h-5 w-5" />
             </button>
             <button
               onClick={() => toggleChildBatchStatus(child._id, "absent")}
-              className={`p-2 rounded-full transition-colors ${
-                currentStatus === "absent"
+              className={`p-2 rounded-full transition-colors ${currentStatus === "absent"
                   ? "bg-red-100 text-red-600 ring-2 ring-red-300"
                   : "bg-gray-100 text-gray-400 hover:bg-red-50 hover:text-red-500"
-              }`}
+                }`}
               title="غائب"
             >
               <XCircleIcon className="h-5 w-5" />
@@ -557,9 +560,14 @@ export default function AttendancePage() {
     );
   };
 
+  // فلترة الأطفال حسب البحث
+  const filteredChildren = children.filter(child =>
+    child.name.toLowerCase().includes(searchQuery.toLowerCase())
+  )
+
   // حساب الإحصائيات
   const presentCount = children.filter(child => child.hasAttendanceRecord && child.isPresent).length
-  const absentCount = children.filter(child => child.hasAttendanceRecord && !child.isPresent).length  
+  const absentCount = children.filter(child => child.hasAttendanceRecord && !child.isPresent).length
   const notRecordedCount = children.filter(child => !child.hasAttendanceRecord).length
   const totalCount = children.length
   const attendanceRate = totalCount > 0 ? Math.round((presentCount / totalCount) * 100) : 0
@@ -645,7 +653,7 @@ export default function AttendancePage() {
                 </select>
               </div>
             )}
-            
+
             {/* عرض اسم الفصل للمدرسين */}
             {((user?.role === 'classTeacher' || user?.role === 'servant') && user?.assignedClass) && (
               <div>
@@ -657,7 +665,7 @@ export default function AttendancePage() {
                 </div>
               </div>
             )}
-            
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 التاريخ
@@ -763,78 +771,111 @@ export default function AttendancePage() {
         ) : (
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">
-                قائمة أطفال {classes.find(c => c._id === selectedClass)?.name}
-              </h2>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <h2 className="text-lg font-medium text-gray-900">
+                  قائمة أطفال {classes.find(c => c._id === selectedClass)?.name}
+                </h2>
+                {/* Search Input */}
+                <div className="relative">
+                  <MagnifyingGlassIcon className="w-5 h-5 absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="ابحث عن طفل..."
+                    className="w-full sm:w-64 pl-8 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-right"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      title="مسح البحث"
+                    >
+                      <XMarkIcon className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
-            
+
             {batchMode ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
-                {children.map((child) => renderChildRowBatch(child))}
+                {filteredChildren.length === 0 ? (
+                  <div className="col-span-full text-center py-8 text-gray-500">
+                    <MagnifyingGlassIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                    <p>لا توجد نتائج للبحث "{searchQuery}"</p>
+                  </div>
+                ) : (
+                  filteredChildren.map((child) => renderChildRowBatch(child))
+                )}
               </div>
             ) : (
               <div className="divide-y divide-gray-200">
-                {children.map((child) => (
-                <div
-                  key={child._id}
-                  className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors ${
-                    child.hasAttendanceRecord
-                      ? child.isPresent 
-                        ? 'bg-green-50 border-r-4 border-green-500' 
-                        : 'bg-red-50 border-r-4 border-red-500'
-                      : 'bg-gray-50 border-r-4 border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center">
-                    <div className="flex-shrink-0">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                    child.hasAttendanceRecord
-                      ? child.isPresent 
-                        ? 'bg-green-100 text-green-600' 
-                        : 'bg-red-100 text-red-600'
-                      : 'bg-gray-100 text-gray-400'
-                  }`}>
-                    {child.name.charAt(0)}
+                {filteredChildren.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <MagnifyingGlassIcon className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                    <p>لا توجد نتائج للبحث "{searchQuery}"</p>
                   </div>
-                    </div>
-                    <div className="mr-4">
-                      <div className="text-sm font-medium text-gray-900">
-                        {child.name}
+                ) : (
+                  filteredChildren.map((child) => (
+                    <div
+                      key={child._id}
+                      className={`flex items-center justify-between p-4 hover:bg-gray-50 transition-colors ${child.hasAttendanceRecord
+                          ? child.isPresent
+                            ? 'bg-green-50 border-r-4 border-green-500'
+                            : 'bg-red-50 border-r-4 border-red-500'
+                          : 'bg-gray-50 border-r-4 border-gray-300'
+                        }`}
+                    >
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${child.hasAttendanceRecord
+                              ? child.isPresent
+                                ? 'bg-green-100 text-green-600'
+                                : 'bg-red-100 text-red-600'
+                              : 'bg-gray-100 text-gray-400'
+                            }`}>
+                            {child.name.charAt(0)}
+                          </div>
+                        </div>
+                        <div className="mr-4">
+                          <div className="text-sm font-medium text-gray-900">
+                            {child.name}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-3 space-x-reverse">
+                        {/* عرض حالة الحضور */}
+                        {child.hasAttendanceRecord ? (
+                          <span className={`px-2 py-1 text-xs rounded-full ${child.isPresent
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                            }`}>
+                            {child.isPresent ? 'حاضر' : 'غائب'}
+                            {child.notes && (
+                              <span className="mr-1 text-gray-500" title={child.notes}>📝</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
+                            لم يُسجل
+                          </span>
+                        )}
+
+                        {/* زر تسجيل الحضور */}
+                        <button
+                          onClick={() => openAttendanceModal(child)}
+                          disabled={saving}
+                          className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                          title="تسجيل الحضور"
+                        >
+                          {child.hasAttendanceRecord ? 'تعديل' : 'تسجيل'}
+                        </button>
                       </div>
                     </div>
-                  </div>
-
-                  <div className="flex items-center space-x-3 space-x-reverse">
-                    {/* عرض حالة الحضور */}
-                    {child.hasAttendanceRecord ? (
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        child.isPresent 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {child.isPresent ? 'حاضر' : 'غائب'}
-                        {child.notes && (
-                          <span className="mr-1 text-gray-500" title={child.notes}>📝</span>
-                        )}
-                      </span>
-                    ) : (
-                      <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
-                        لم يُسجل
-                      </span>
-                    )}
-                    
-                    {/* زر تسجيل الحضور */}
-                    <button
-                      onClick={() => openAttendanceModal(child)}
-                      disabled={saving}
-                      className="px-3 py-1 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                      title="تسجيل الحضور"
-                    >
-                      {child.hasAttendanceRecord ? 'تعديل' : 'تسجيل'}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                  ))
+                )}
               </div>
             )}
           </div>
