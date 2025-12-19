@@ -117,6 +117,13 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           touchSupport: rawDeviceInfo.maxTouchPoints > 0,
           online: rawDeviceInfo.online,
           platform: rawDeviceInfo.platform,
+          // Location info
+          location: rawDeviceInfo.location ? {
+            latitude: rawDeviceInfo.location.latitude,
+            longitude: rawDeviceInfo.location.longitude,
+            city: rawDeviceInfo.location.city,
+            country: rawDeviceInfo.location.country,
+          } : null,
         }
       } catch (e) {
         console.warn('Could not collect device info:', e)

@@ -172,6 +172,29 @@ const auditLogSchema = new mongoose.Schema(
         type: String,
         default: "",
       },
+      // الموقع الجغرافي
+      location: {
+        // المدينة
+        city: {
+          type: String,
+          default: "",
+        },
+        // الدولة
+        country: {
+          type: String,
+          default: "",
+        },
+        // خط العرض
+        latitude: {
+          type: Number,
+          default: null,
+        },
+        // خط الطول
+        longitude: {
+          type: Number,
+          default: null,
+        },
+      },
     },
   },
   {

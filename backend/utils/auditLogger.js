@@ -248,6 +248,13 @@ const logAudit = async (options) => {
       touchSupport: deviceInfo?.touchSupport ?? false,
       online: deviceInfo?.online ?? true,
       platform: deviceInfo?.platform || "",
+      // الموقع الجغرافي
+      location: deviceInfo?.location ? {
+        city: deviceInfo.location.city || "",
+        country: deviceInfo.location.country || "",
+        latitude: deviceInfo.location.latitude || null,
+        longitude: deviceInfo.location.longitude || null,
+      } : null,
     };
 
     // إنشاء سجل المراجعة

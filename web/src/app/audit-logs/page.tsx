@@ -27,6 +27,12 @@ interface LoginDetails {
   touchSupport?: boolean
   online?: boolean
   platform?: string
+  location?: {
+    city?: string
+    country?: string
+    latitude?: number
+    longitude?: number
+  }
 }
 
 interface AuditLog {
@@ -561,6 +567,27 @@ export default function AuditLogsPage() {
                                 <span className="font-medium text-gray-900 dark:text-white">
                                   {log.loginDetails.touchSupport ? 'نعم ✓' : 'لا ✗'}
                                 </span>
+                              </div>
+                            )}
+
+                            {/* الموقع الجغرافي */}
+                            {log.loginDetails.location && (log.loginDetails.location.city || log.loginDetails.location.country) && (
+                              <div className="flex items-center gap-2 col-span-2">
+                                <span className="text-gray-500 dark:text-gray-400">📍 الموقع:</span>
+                                <span className="font-medium text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/30 px-2 py-0.5 rounded">
+                                  {[log.loginDetails.location.city, log.loginDetails.location.country].filter(Boolean).join('، ')}
+                                </span>
+                                {log.loginDetails.location.latitude && log.loginDetails.location.longitude && (
+                                  <a
+                                    href={`https://www.google.com/maps?q=${log.loginDetails.location.latitude},${log.loginDetails.location.longitude}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-blue-500 hover:text-blue-700 dark:text-blue-400 text-xs underline"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    🗺️ عرض على الخريطة
+                                  </a>
+                                )}
                               </div>
                             )}
                           </>

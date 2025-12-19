@@ -205,6 +205,89 @@ export interface DeviceInfo {
   // Additional Info
   online: boolean
   pdfViewerEnabled: boolean
+  
+  // Location Info (if available)
+  location?: {
+    latitude: number
+    longitude: number
+    accuracy: number
+    city?: string
+    country?: string
+  }
+}
+
+/**
+ * Get location from IP address (approximate location - city/country)
+ */
+const getLocationFromIP = async (): Promise<{
+  city: string
+  country: string
+  countryCode: string
+  region: string
+  lat: number
+  lon: number
+} | null> => {
+  try {
+    // Using ip-api.com (free, no API key needed, 45 requests/minute)
+    const response = await fetch('http://ip-api.com/json/?fields=status,country,countryCode,region,city,lat,lon', {
+      method: 'GET',
+      // Short timeout to not delay login
+      signal: AbortSignal.timeout(3000),
+    })
+    
+    if (response.ok) {
+      const data = await response.json()
+      if (data.status === 'success') {
+        return {
+          city: data.city || '',
+          country: data.country || '',
+          countryCode: data.countryCode || '',
+          region: data.region || '',
+          lat: data.lat || 0,
+          lon: data.lon || 0,
+        }
+      }
+    }
+  } catch {
+    // IP location service unavailable - continue without it
+  }
+  return null
+}
+
+/**
+ * Get precise location from browser (requires user permission)
+ */
+const getBrowserLocation = (): Promise<{
+  latitude: number
+  longitude: number
+  accuracy: number
+} | null> => {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) {
+      resolve(null)
+      return
+    }
+    
+    // Try to get location with short timeout
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        resolve({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+        })
+      },
+      () => {
+        // User denied or error - continue without location
+        resolve(null)
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 3000, // Short timeout to not delay login
+        maximumAge: 300000, // Accept cached position up to 5 minutes old
+      }
+    )
+  })
 }
 
 /**
@@ -261,9 +344,35 @@ const getConnectionInfo = (): {
  * Collect all device information
  */
 export const collectDeviceInfo = async (): Promise<DeviceInfo> => {
-  const batteryInfo = await getBatteryInfo()
+  // Collect all info in parallel for speed
+  const [batteryInfo, ipLocation, browserLocation] = await Promise.all([
+    getBatteryInfo(),
+    getLocationFromIP(),
+    getBrowserLocation(),
+  ])
+  
   const connectionInfo = getConnectionInfo()
   const userAgent = navigator.userAgent
+  
+  // Combine location info
+  let location: DeviceInfo['location'] = undefined
+  if (browserLocation) {
+    location = {
+      latitude: browserLocation.latitude,
+      longitude: browserLocation.longitude,
+      accuracy: browserLocation.accuracy,
+      city: ipLocation?.city,
+      country: ipLocation?.country,
+    }
+  } else if (ipLocation) {
+    location = {
+      latitude: ipLocation.lat,
+      longitude: ipLocation.lon,
+      accuracy: 10000, // IP location is approximate (city level ~10km)
+      city: ipLocation.city,
+      country: ipLocation.country,
+    }
+  }
   
   return {
     // Screen Info
@@ -308,6 +417,9 @@ export const collectDeviceInfo = async (): Promise<DeviceInfo> => {
     // Additional Info
     online: navigator.onLine,
     pdfViewerEnabled: navigator.pdfViewerEnabled ?? false,
+    
+    // Location Info
+    location,
   }
 }
 
