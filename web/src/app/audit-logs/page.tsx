@@ -9,9 +9,28 @@ import { format } from 'date-fns'
 import { ar } from 'date-fns/locale'
 import toast from 'react-hot-toast'
 
+interface LoginDetails {
+  deviceType: string
+  browser: string
+  os: string
+  isMobile: boolean
+  screenResolution?: string
+  windowSize?: string
+  timezone?: string
+  language?: string
+  connectionType?: string
+  batteryLevel?: number | null
+  batteryCharging?: boolean | null
+  cpuCores?: number | null
+  deviceMemory?: number | null
+  touchSupport?: boolean
+  online?: boolean
+  platform?: string
+}
+
 interface AuditLog {
   _id: string
-  action: 'create' | 'update' | 'delete'
+  action: 'create' | 'update' | 'delete' | 'login'
   collection: string
   collectionNameAr: string
   documentId: string
@@ -34,6 +53,9 @@ interface AuditLog {
   }
   description: string
   createdAt: string
+  ipAddress?: string
+  userAgent?: string
+  loginDetails?: LoginDetails
 }
 
 interface Pagination {
@@ -43,22 +65,32 @@ interface Pagination {
   limit: number
 }
 
-const actionColors = {
+const actionColors: Record<string, string> = {
   create: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
   update: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
   delete: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+  login: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
 }
 
-const actionNames = {
+const actionNames: Record<string, string> = {
   create: 'إضافة',
   update: 'تعديل',
   delete: 'حذف',
+  login: 'تسجيل دخول',
 }
 
-const actionIcons = {
+const actionIcons: Record<string, string> = {
   create: '➕',
   update: '✏️',
   delete: '🗑️',
+  login: '🔐',
+}
+
+const roleNames: Record<string, string> = {
+  admin: 'مدير النظام',
+  serviceLeader: 'أمين الخدمة',
+  classTeacher: 'مدرس الفصل',
+  servant: 'خادم',
 }
 
 export default function AuditLogsPage() {
@@ -231,6 +263,7 @@ export default function AuditLogsPage() {
                 className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
               >
                 <option value="">الكل</option>
+                <option value="auth">تسجيل الدخول</option>
                 <option value="children">الأطفال</option>
                 <option value="attendance">الحضور</option>
                 <option value="users">المستخدمين</option>
@@ -250,6 +283,7 @@ export default function AuditLogsPage() {
                 className="w-full rounded-md border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white shadow-sm focus:border-blue-500 focus:ring-blue-500"
               >
                 <option value="">الكل</option>
+                <option value="login">تسجيل دخول</option>
                 <option value="create">إضافة</option>
                 <option value="update">تعديل</option>
                 <option value="delete">حذف</option>
@@ -361,10 +395,179 @@ export default function AuditLogsPage() {
 
                 {/* Expanded Details */}
                 {selectedLog?._id === log._id && (
-                  <div className="mt-4 pt-4 border-t dark:border-gray-700">
-                    <h4 className="font-medium text-gray-900 dark:text-white mb-2">التغييرات:</h4>
-                    {renderChanges(log.changes)}
-                    {(!log.changes?.before && !log.changes?.after) && (
+                  <div className="mt-4 pt-4 border-t dark:border-gray-700 space-y-4">
+                    {/* معلومات المستخدم والجهاز */}
+                    <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4">
+                      <h4 className="font-medium text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                        <span>👤</span> معلومات المستخدم والجهاز
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                        {/* اسم المستخدم والدور */}
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-500 dark:text-gray-400">المستخدم:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">{log.userName}</span>
+                          <span className={`px-2 py-0.5 rounded text-xs ${
+                            log.userRole === 'admin' ? 'bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300' :
+                            log.userRole === 'serviceLeader' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300' :
+                            'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+                          }`}>
+                            {roleNames[log.userRole] || log.userRole}
+                          </span>
+                        </div>
+                        
+                        {/* الفصل */}
+                        {log.className && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-500 dark:text-gray-400">الفصل:</span>
+                            <span className="font-medium text-gray-900 dark:text-white">{log.className}</span>
+                          </div>
+                        )}
+                        
+                        {/* IP Address */}
+                        {log.ipAddress && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-gray-500 dark:text-gray-400">🌐 عنوان IP:</span>
+                            <span className="font-mono text-gray-900 dark:text-white bg-gray-200 dark:bg-gray-600 px-2 py-0.5 rounded text-xs">
+                              {log.ipAddress}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* معلومات الجهاز */}
+                        {log.loginDetails && (
+                          <>
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500 dark:text-gray-400">
+                                {log.loginDetails.isMobile ? '📱' : '💻'} نوع الجهاز:
+                              </span>
+                              <span className="font-medium text-gray-900 dark:text-white">
+                                {log.loginDetails.deviceType}
+                              </span>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500 dark:text-gray-400">🌍 المتصفح:</span>
+                              <span className="font-medium text-gray-900 dark:text-white">
+                                {log.loginDetails.browser}
+                              </span>
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-500 dark:text-gray-400">⚙️ نظام التشغيل:</span>
+                              <span className="font-medium text-gray-900 dark:text-white">
+                                {log.loginDetails.os}
+                              </span>
+                            </div>
+
+                            {log.loginDetails.platform && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-500 dark:text-gray-400">🖥️ المنصة:</span>
+                                <span className="font-medium text-gray-900 dark:text-white">
+                                  {log.loginDetails.platform}
+                                </span>
+                              </div>
+                            )}
+
+                            {log.loginDetails.screenResolution && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-500 dark:text-gray-400">📐 دقة الشاشة:</span>
+                                <span className="font-medium text-gray-900 dark:text-white">
+                                  {log.loginDetails.screenResolution}
+                                </span>
+                              </div>
+                            )}
+
+                            {log.loginDetails.windowSize && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-500 dark:text-gray-400">🪟 حجم النافذة:</span>
+                                <span className="font-medium text-gray-900 dark:text-white">
+                                  {log.loginDetails.windowSize}
+                                </span>
+                              </div>
+                            )}
+
+                            {log.loginDetails.timezone && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-500 dark:text-gray-400">🕐 المنطقة الزمنية:</span>
+                                <span className="font-medium text-gray-900 dark:text-white">
+                                  {log.loginDetails.timezone}
+                                </span>
+                              </div>
+                            )}
+
+                            {log.loginDetails.language && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-500 dark:text-gray-400">🔤 اللغة:</span>
+                                <span className="font-medium text-gray-900 dark:text-white">
+                                  {log.loginDetails.language}
+                                </span>
+                              </div>
+                            )}
+
+                            {log.loginDetails.connectionType && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-500 dark:text-gray-400">📶 نوع الاتصال:</span>
+                                <span className="font-medium text-gray-900 dark:text-white">
+                                  {log.loginDetails.connectionType}
+                                </span>
+                              </div>
+                            )}
+
+                            {log.loginDetails.cpuCores && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-500 dark:text-gray-400">🔢 أنوية المعالج:</span>
+                                <span className="font-medium text-gray-900 dark:text-white">
+                                  {log.loginDetails.cpuCores}
+                                </span>
+                              </div>
+                            )}
+
+                            {log.loginDetails.deviceMemory && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-500 dark:text-gray-400">💾 ذاكرة الجهاز:</span>
+                                <span className="font-medium text-gray-900 dark:text-white">
+                                  {log.loginDetails.deviceMemory} GB
+                                </span>
+                              </div>
+                            )}
+
+                            {log.loginDetails.batteryLevel !== null && log.loginDetails.batteryLevel !== undefined && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-500 dark:text-gray-400">🔋 البطارية:</span>
+                                <span className={`font-medium ${
+                                  log.loginDetails.batteryLevel > 50 ? 'text-green-600 dark:text-green-400' :
+                                  log.loginDetails.batteryLevel > 20 ? 'text-yellow-600 dark:text-yellow-400' :
+                                  'text-red-600 dark:text-red-400'
+                                }`}>
+                                  {log.loginDetails.batteryLevel}%
+                                  {log.loginDetails.batteryCharging && ' ⚡ (شحن)'}
+                                </span>
+                              </div>
+                            )}
+
+                            {log.loginDetails.touchSupport !== undefined && (
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-500 dark:text-gray-400">👆 دعم اللمس:</span>
+                                <span className="font-medium text-gray-900 dark:text-white">
+                                  {log.loginDetails.touchSupport ? 'نعم ✓' : 'لا ✗'}
+                                </span>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* التغييرات (لو موجودة) */}
+                    {log.action !== 'login' && (log.changes?.before || log.changes?.after) && (
+                      <div>
+                        <h4 className="font-medium text-gray-900 dark:text-white mb-2">📝 التغييرات:</h4>
+                        {renderChanges(log.changes)}
+                      </div>
+                    )}
+                    
+                    {/* رسالة لو مفيش تفاصيل */}
+                    {log.action !== 'login' && !log.changes?.before && !log.changes?.after && !log.ipAddress && !log.loginDetails && (
                       <p className="text-gray-500 dark:text-gray-400 text-sm">لا توجد تفاصيل إضافية</p>
                     )}
                   </div>

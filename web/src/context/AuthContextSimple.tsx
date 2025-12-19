@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { API_BASE_URL } from '@/services/api'
 import { toast } from 'react-hot-toast'
 import { EnhancedStorage } from '@/utils/storage'
+import { collectDeviceInfo, getDeviceInfoSummary } from '@/utils/deviceInfo'
 
 interface User {
   _id: string
@@ -92,12 +93,43 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const login = async (credentials: { username: string; password: string }) => {
     try {
       setIsLoading(true)
+      
+      // جمع معلومات الجهاز قبل إرسال الـ request
+      let deviceInfo = null
+      try {
+        const rawDeviceInfo = await collectDeviceInfo()
+        const summary = getDeviceInfoSummary(rawDeviceInfo)
+        deviceInfo = {
+          deviceType: summary.deviceType,
+          browser: summary.browser,
+          os: summary.os,
+          isMobile: rawDeviceInfo.maxTouchPoints > 0 || summary.deviceType === 'موبايل',
+          screenResolution: summary.screenResolution,
+          windowSize: `${rawDeviceInfo.windowWidth}×${rawDeviceInfo.windowHeight}`,
+          timezone: summary.timezone,
+          language: summary.language,
+          connectionType: summary.connection,
+          batteryLevel: rawDeviceInfo.batteryLevel,
+          batteryCharging: rawDeviceInfo.batteryCharging,
+          cpuCores: rawDeviceInfo.hardwareConcurrency,
+          deviceMemory: rawDeviceInfo.deviceMemory,
+          touchSupport: rawDeviceInfo.maxTouchPoints > 0,
+          online: rawDeviceInfo.online,
+          platform: rawDeviceInfo.platform,
+        }
+      } catch (e) {
+        console.warn('Could not collect device info:', e)
+      }
+      
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(credentials)
+        body: JSON.stringify({
+          ...credentials,
+          deviceInfo,
+        })
       })
 
       const data = await response.json()

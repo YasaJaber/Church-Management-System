@@ -14,6 +14,9 @@ const { generalLimiter, authLimiter, apiLimiter, speedLimiter } = require('./mid
 
 const app = express();
 
+// Trust proxy for correct IP address behind reverse proxy (Render, Heroku, etc.)
+app.set("trust proxy", true);
+
 // Apply Helmet security headers (must be before other middleware)
 app.use(helmetConfig);
 

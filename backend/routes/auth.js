@@ -10,14 +10,28 @@ const {
   AuthenticationError,
   InternalServerError,
 } = require("../utils/errors");
+const { logAudit } = require("../utils/auditLogger");
 
 const router = express.Router();
+
+/**
+ * الحصول على IP الحقيقي للمستخدم
+ */
+const getClientIP = (req) => {
+  return (
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+    req.headers["x-real-ip"] ||
+    req.ip ||
+    req.connection?.remoteAddress ||
+    "غير معروف"
+  );
+};
 
 // @route   POST /api/auth/login
 // @desc    Login user
 // @access  Public
 router.post("/login", userValidation.login, asyncHandler(async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, deviceInfo } = req.body;
 
   // Find user by username and populate assigned class
   const user = await User.findOne({ username }).populate("assignedClass");
@@ -57,6 +71,25 @@ router.post("/login", userValidation.login, asyncHandler(async (req, res) => {
     assignedClass: user.assignedClass,
     phone: user.phone,
   };
+
+  // تسجيل عملية تسجيل الدخول في سجل المراجعة مع معلومات الجهاز
+  await logAudit({
+    action: "login",
+    collection: "auth",
+    documentId: user._id,
+    documentName: user.name,
+    user: {
+      _id: user._id,
+      name: user.name,
+      username: user.username,
+      role: user.role,
+    },
+    classId: user.assignedClass?._id || null,
+    className: user.assignedClass?.name || "",
+    ipAddress: getClientIP(req),
+    userAgent: req.headers["user-agent"] || "",
+    deviceInfo: deviceInfo || null,
+  });
 
   res.json({
     success: true,

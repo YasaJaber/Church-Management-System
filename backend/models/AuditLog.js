@@ -2,21 +2,21 @@ const mongoose = require("mongoose");
 
 /**
  * نموذج سجل العمليات (Audit Log)
- * يسجل جميع العمليات (إضافة/تعديل/حذف) على البيانات
+ * يسجل جميع العمليات (إضافة/تعديل/حذف/تسجيل دخول) على البيانات
  */
 const auditLogSchema = new mongoose.Schema(
   {
     // نوع العملية
     action: {
       type: String,
-      enum: ["create", "update", "delete"],
+      enum: ["create", "update", "delete", "login"],
       required: true,
     },
     // الجدول/Collection اللي اتعدل
     collection: {
       type: String,
       required: true,
-      enum: ["children", "users", "classes", "attendance", "servantAttendance", "pastoralCare", "giftDelivery"],
+      enum: ["children", "users", "classes", "attendance", "servantAttendance", "pastoralCare", "giftDelivery", "auth"],
     },
     // اسم الجدول بالعربي للعرض
     collectionNameAr: {
@@ -79,6 +79,94 @@ const auditLogSchema = new mongoose.Schema(
     ipAddress: {
       type: String,
       default: "",
+    },
+    // نوع الجهاز/المتصفح (User Agent)
+    userAgent: {
+      type: String,
+      default: "",
+    },
+    // معلومات تسجيل الدخول الإضافية
+    loginDetails: {
+      // نوع الجهاز (mobile/tablet/desktop)
+      deviceType: {
+        type: String,
+        default: "",
+      },
+      // اسم المتصفح
+      browser: {
+        type: String,
+        default: "",
+      },
+      // نظام التشغيل
+      os: {
+        type: String,
+        default: "",
+      },
+      // هل الجهاز موبايل؟
+      isMobile: {
+        type: Boolean,
+        default: false,
+      },
+      // دقة الشاشة
+      screenResolution: {
+        type: String,
+        default: "",
+      },
+      // أبعاد النافذة
+      windowSize: {
+        type: String,
+        default: "",
+      },
+      // المنطقة الزمنية
+      timezone: {
+        type: String,
+        default: "",
+      },
+      // لغة المتصفح
+      language: {
+        type: String,
+        default: "",
+      },
+      // نوع الاتصال (WiFi/4G/etc)
+      connectionType: {
+        type: String,
+        default: "",
+      },
+      // مستوى البطارية
+      batteryLevel: {
+        type: Number,
+        default: null,
+      },
+      // هل البطارية في الشحن؟
+      batteryCharging: {
+        type: Boolean,
+        default: null,
+      },
+      // عدد أنوية المعالج
+      cpuCores: {
+        type: Number,
+        default: null,
+      },
+      // ذاكرة الجهاز (GB)
+      deviceMemory: {
+        type: Number,
+        default: null,
+      },
+      // هل الجهاز يدعم اللمس؟
+      touchSupport: {
+        type: Boolean,
+        default: false,
+      },
+      // هل الجهاز متصل بالإنترنت؟
+      online: {
+        type: Boolean,
+        default: true,
+      },
+      // platform
+      platform: {
+        type: String,
+        default: "",
+      },
     },
   },
   {
