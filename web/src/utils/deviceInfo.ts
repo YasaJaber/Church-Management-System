@@ -227,30 +227,62 @@ const getLocationFromIP = async (): Promise<{
   lat: number
   lon: number
 } | null> => {
-  try {
-    // Using ip-api.com (free, no API key needed, 45 requests/minute)
-    const response = await fetch('http://ip-api.com/json/?fields=status,country,countryCode,region,city,lat,lon', {
-      method: 'GET',
-      // Short timeout to not delay login
-      signal: AbortSignal.timeout(3000),
-    })
-    
-    if (response.ok) {
-      const data = await response.json()
-      if (data.status === 'success') {
-        return {
-          city: data.city || '',
-          country: data.country || '',
-          countryCode: data.countryCode || '',
-          region: data.region || '',
-          lat: data.lat || 0,
-          lon: data.lon || 0,
+  // Try multiple services in case one fails
+  const services = [
+    // ipapi.co - HTTPS, free 1000 requests/day
+    async () => {
+      const response = await fetch('https://ipapi.co/json/', {
+        method: 'GET',
+        signal: AbortSignal.timeout(3000),
+      })
+      if (response.ok) {
+        const data = await response.json()
+        if (data.city) {
+          return {
+            city: data.city || '',
+            country: data.country_name || '',
+            countryCode: data.country_code || '',
+            region: data.region || '',
+            lat: data.latitude || 0,
+            lon: data.longitude || 0,
+          }
         }
       }
+      return null
+    },
+    // ipinfo.io - HTTPS, free 50,000 requests/month
+    async () => {
+      const response = await fetch('https://ipinfo.io/json', {
+        method: 'GET',
+        signal: AbortSignal.timeout(3000),
+      })
+      if (response.ok) {
+        const data = await response.json()
+        if (data.city) {
+          const [lat, lon] = (data.loc || '0,0').split(',').map(Number)
+          return {
+            city: data.city || '',
+            country: data.country || '',
+            countryCode: data.country || '',
+            region: data.region || '',
+            lat: lat || 0,
+            lon: lon || 0,
+          }
+        }
+      }
+      return null
+    },
+  ]
+
+  for (const service of services) {
+    try {
+      const result = await service()
+      if (result) return result
+    } catch {
+      // Try next service
     }
-  } catch {
-    // IP location service unavailable - continue without it
   }
+  
   return null
 }
 
