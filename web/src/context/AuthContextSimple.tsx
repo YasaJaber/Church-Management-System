@@ -101,6 +101,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         const summary = getDeviceInfoSummary(rawDeviceInfo)
         deviceInfo = {
           deviceType: summary.deviceType,
+          deviceModel: summary.deviceModel,
           browser: summary.browser,
           os: summary.os,
           isMobile: rawDeviceInfo.maxTouchPoints > 0 || summary.deviceType === 'موبايل',

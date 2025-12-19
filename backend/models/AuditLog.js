@@ -92,6 +92,11 @@ const auditLogSchema = new mongoose.Schema(
         type: String,
         default: "",
       },
+      // موديل الجهاز (Samsung Galaxy A34, iPhone 15, etc.)
+      deviceModel: {
+        type: String,
+        default: "",
+      },
       // اسم المتصفح
       browser: {
         type: String,

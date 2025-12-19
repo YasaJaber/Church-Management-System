@@ -11,6 +11,7 @@ import toast from 'react-hot-toast'
 
 interface LoginDetails {
   deviceType: string
+  deviceModel?: string
   browser: string
   os: string
   isMobile: boolean
@@ -444,6 +445,15 @@ export default function AuditLogsPage() {
                                 {log.loginDetails.deviceType}
                               </span>
                             </div>
+
+                            {log.loginDetails.deviceModel && log.loginDetails.deviceModel !== 'غير معروف' && (
+                              <div className="flex items-center gap-2 col-span-2">
+                                <span className="text-gray-500 dark:text-gray-400">📲 موديل الجهاز:</span>
+                                <span className="font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded">
+                                  {log.loginDetails.deviceModel}
+                                </span>
+                              </div>
+                            )}
                             
                             <div className="flex items-center gap-2">
                               <span className="text-gray-500 dark:text-gray-400">🌍 المتصفح:</span>

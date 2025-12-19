@@ -26,6 +26,83 @@ const actionNamesAr = {
 };
 
 /**
+ * استخراج موديل الجهاز من User Agent
+ */
+const extractDeviceModelFromUA = (userAgent) => {
+  if (!userAgent) return "غير معروف";
+  
+  const ua = userAgent;
+  
+  // Samsung devices
+  const samsungMatch = ua.match(/SM-([A-Z0-9]+)/i);
+  if (samsungMatch) {
+    const model = samsungMatch[1];
+    const samsungModels = {
+      'A346B': 'Samsung Galaxy A34', 'A346': 'Samsung Galaxy A34',
+      'A536B': 'Samsung Galaxy A53', 'A536': 'Samsung Galaxy A53',
+      'A546B': 'Samsung Galaxy A54', 'A546': 'Samsung Galaxy A54',
+      'S911B': 'Samsung Galaxy S23', 'S916B': 'Samsung Galaxy S23+',
+      'S918B': 'Samsung Galaxy S23 Ultra', 'S921B': 'Samsung Galaxy S24',
+      'S926B': 'Samsung Galaxy S24+', 'S928B': 'Samsung Galaxy S24 Ultra',
+      'A325F': 'Samsung Galaxy A32', 'A525F': 'Samsung Galaxy A52',
+      'A725F': 'Samsung Galaxy A72', 'A135F': 'Samsung Galaxy A13',
+    };
+    return samsungModels[model] || `Samsung ${model}`;
+  }
+  
+  // iPhone
+  if (ua.includes('iPhone')) {
+    if (ua.includes('iPhone15,2')) return 'iPhone 14 Pro';
+    if (ua.includes('iPhone15,3')) return 'iPhone 14 Pro Max';
+    if (ua.includes('iPhone14,7')) return 'iPhone 14';
+    if (ua.includes('iPhone14,2')) return 'iPhone 13 Pro';
+    if (ua.includes('iPhone14,5')) return 'iPhone 13';
+    if (ua.includes('iPhone16,1')) return 'iPhone 15 Pro';
+    if (ua.includes('iPhone16,2')) return 'iPhone 15 Pro Max';
+    return 'iPhone';
+  }
+  
+  // iPad
+  if (ua.includes('iPad')) return 'iPad';
+  
+  // Xiaomi/Redmi
+  const xiaomiMatch = ua.match(/(Redmi[^;\/\)]+|Mi\s*\d+[^;\/\)]*|POCO[^;\/\)]+)/i);
+  if (xiaomiMatch) return `Xiaomi ${xiaomiMatch[1].trim()}`;
+  
+  // Huawei
+  const huaweiMatch = ua.match(/(HUAWEI[^;\/\)]+|Honor[^;\/\)]+)/i);
+  if (huaweiMatch) return huaweiMatch[1].trim();
+  
+  // OPPO
+  const oppoMatch = ua.match(/OPPO\s*([^;\/\)]+)/i);
+  if (oppoMatch) return `OPPO ${oppoMatch[1].trim()}`;
+  
+  // Google Pixel
+  const pixelMatch = ua.match(/Pixel\s*(\d+[^;\/\)]*)/i);
+  if (pixelMatch) return `Google Pixel ${pixelMatch[1].trim()}`;
+  
+  // Generic Android
+  const androidMatch = ua.match(/Android[^;]*;\s*([^;\/\)]+)/i);
+  if (androidMatch) {
+    const model = androidMatch[1].trim();
+    if (!model.match(/^(Linux|U|Mobile|wv|Build)/i) && model.length > 2) {
+      return model;
+    }
+  }
+  
+  // Windows
+  if (ua.includes('Windows')) return 'Windows PC';
+  
+  // Mac
+  if (ua.includes('Macintosh') || ua.includes('Mac OS')) return 'Mac';
+  
+  // Linux
+  if (ua.includes('Linux') && !ua.includes('Android')) return 'Linux PC';
+  
+  return "غير معروف";
+};
+
+/**
  * تحليل User Agent لمعرفة نوع الجهاز والمتصفح
  */
 const parseUserAgent = (userAgent) => {
@@ -153,6 +230,7 @@ const logAudit = async (options) => {
     const loginDetails = {
       // معلومات أساسية من User Agent
       deviceType: deviceInfo?.deviceType || basicDeviceInfo.deviceType,
+      deviceModel: deviceInfo?.deviceModel || extractDeviceModelFromUA(userAgent),
       browser: deviceInfo?.browser || basicDeviceInfo.browser,
       os: deviceInfo?.os || basicDeviceInfo.os,
       isMobile: deviceInfo?.isMobile ?? basicDeviceInfo.isMobile,
