@@ -145,7 +145,7 @@ A comprehensive church management system for Sunday Schools (مدارس الأح
 
 - **Operation Logging**
   - Automatic tracking of all data changes
-  - Records create, update, and delete operations
+  - Records create, update, delete, and **login** operations
   - Timestamps for every action
   - User identification (who made the change)
 - **Tracked Operations**
@@ -153,25 +153,45 @@ A comprehensive church management system for Sunday Schools (مدارس الأح
   - Attendance marking and modifications
   - Class assignments changes
   - User data updates
+  - **Login tracking with full device fingerprint**
 - **Role-based Access**
   - Teachers/Servants: View only their class logs
   - Service Leaders/Admins: View all logs with class filtering
 - **Advanced Filtering**
-  - Filter by operation type (create/update/delete)
-  - Filter by data type (children/attendance/users/classes)
+  - Filter by operation type (create/update/delete/**login**)
+  - Filter by data type (children/attendance/users/classes/**auth**)
   - Date range selection
   - Class-based filtering
 - **Detailed Change Tracking**
   - Before and after values for updates
   - Document names for easy identification
   - Arabic descriptions for all operations
+- **🔐 Login Tracking & Device Fingerprinting**
+  - **IP Address**: Real client IP (supports proxy/load balancer)
+  - **Device Model**: Exact device identification
+    - Samsung (Galaxy A34, S24 Ultra, Z Fold, etc.)
+    - iPhone (13, 14 Pro, 15 Pro Max, etc.)
+    - Xiaomi, Huawei, OPPO, Vivo, OnePlus, Pixel
+    - Windows PC, Mac, Linux
+  - **Browser Detection**: Chrome, Safari, Firefox, Edge, Opera
+  - **Operating System**: Windows, macOS, Android, iOS, Linux
+  - **Screen Info**: Resolution, window size, pixel ratio
+  - **Hardware Info**: CPU cores, device memory (RAM)
+  - **Connection Type**: WiFi, 4G, 3G, Ethernet
+  - **Battery Status**: Level percentage + charging state
+  - **Touch Support**: Detect touch-enabled devices
+  - **Language & Timezone**: Browser language and timezone
+  - **📍 Geolocation**: City and country with Google Maps link
+    - Automatic IP-based location (ipapi.co, ipinfo.io)
+    - Optional precise GPS location (browser permission)
 - **Audit Log Features**
   - Pagination for large datasets
-  - Expandable details view
+  - Expandable details view with full device info
   - Color-coded operation types:
     - 🟢 Green: Create operations
     - 🔵 Blue: Update operations
     - 🔴 Red: Delete operations
+    - 🟣 Purple: Login operations
 
 ### 🎨 Modern UI/UX
 - **Tech Stack**
@@ -397,7 +417,9 @@ web/
 │   ├── utils/                # Utility functions
 │   │   ├── exportToPDF.ts   # PDF generation
 │   │   ├── storage.ts       # LocalStorage helpers
-│   │   └── authHelper.ts    # Auth utilities
+│   │   ├── authHelper.ts    # Auth utilities
+│   │   ├── deviceInfo.ts    # Device fingerprinting & geolocation
+│   │   └── logger.ts        # Frontend secure logger
 │   ├── types/                # TypeScript types
 │   └── hooks/                # Custom React hooks
 └── public/                   # Static assets
