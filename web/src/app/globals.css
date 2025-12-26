@@ -36,12 +36,9 @@ body {
 
 body {
   color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
+  background: linear-gradient(to bottom,
       transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+      rgb(var(--background-end-rgb))) rgb(var(--background-start-rgb));
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
@@ -86,7 +83,7 @@ a {
   body {
     background: white !important;
   }
-  
+
   .no-print {
     display: none !important;
   }
@@ -94,24 +91,25 @@ a {
 
 /* Mobile responsive improvements */
 @media (max-width: 640px) {
+
   /* Header improvements */
   .header-title {
     font-size: 1rem !important;
     line-height: 1.25rem !important;
   }
-  
+
   /* Ensure proper text wrapping on mobile */
   .truncate-mobile {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  
+
   /* Better button spacing on mobile */
   .mobile-btn-group {
     gap: 0.5rem !important;
   }
-  
+
   .mobile-btn-group button {
     padding: 0.5rem 0.75rem !important;
     font-size: 0.875rem !important;
@@ -123,23 +121,23 @@ a {
   .btn-primary {
     @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200;
   }
-  
+
   .btn-secondary {
     @apply bg-gray-200 hover:bg-gray-300 text-gray-800 dark:bg-gray-700 dark:hover:bg-gray-600 dark:text-gray-200 font-medium py-2 px-4 rounded-lg transition-colors duration-200;
   }
-  
+
   .card {
     @apply bg-white dark:bg-gray-800 rounded-lg shadow-md border border-gray-200 dark:border-gray-700 p-6 transition-colors duration-200;
   }
-  
+
   .input-field {
     @apply w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-colors duration-200;
   }
-  
+
   .table-header {
     @apply bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-semibold text-sm uppercase tracking-wider transition-colors duration-200;
   }
-  
+
   .table-cell {
     @apply px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 transition-colors duration-200;
   }
@@ -152,203 +150,230 @@ a {
 
 /* Force dark mode on common Tailwind classes */
 @layer utilities {
+
   /* Background colors */
   .dark .bg-white {
     @apply !bg-gray-800;
   }
-  
+
   .dark .bg-gray-50 {
     @apply !bg-gray-900;
   }
-  
+
   .dark .bg-gray-100 {
     @apply !bg-gray-800;
   }
-  
+
   /* Text colors */
   .dark .text-gray-900 {
     @apply !text-gray-100;
   }
-  
+
   .dark .text-gray-800 {
     @apply !text-gray-200;
   }
-  
+
   .dark .text-gray-700 {
     @apply !text-gray-300;
   }
-  
+
   .dark .text-gray-600 {
     @apply !text-gray-400;
   }
-  
+
   .dark .text-gray-500 {
     @apply !text-gray-400;
   }
-  
+
   /* Border colors */
   .dark .border-gray-200 {
     @apply !border-gray-700;
   }
-  
+
   .dark .border-gray-300 {
     @apply !border-gray-600;
   }
-  
+
   /* Shadow adjustments */
   .dark .shadow {
     --tw-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.3), 0 1px 2px -1px rgb(0 0 0 / 0.3);
     --tw-shadow-colored: 0 1px 3px 0 var(--tw-shadow-color), 0 1px 2px -1px var(--tw-shadow-color);
     box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
   }
-  
+
   .dark .shadow-sm {
     --tw-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.2);
     --tw-shadow-colored: 0 1px 2px 0 var(--tw-shadow-color);
     box-shadow: var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow);
   }
-  
+
   /* Gradient backgrounds */
   .dark .from-blue-50 {
     --tw-gradient-from: #1e3a5f;
   }
-  
+
   .dark .to-indigo-100 {
     --tw-gradient-to: #312e81;
   }
-  
+
   /* Amber/warning colors */
   .dark .bg-amber-50 {
     @apply !bg-amber-900/30;
   }
-  
+
   .dark .border-amber-200 {
     @apply !border-amber-700;
   }
-  
+
   .dark .text-amber-800 {
     @apply !text-amber-300;
   }
-  
+
   .dark .text-amber-700 {
     @apply !text-amber-400;
   }
-  
+
   .dark .text-amber-600 {
     @apply !text-amber-400;
   }
-  
+
   /* Green colors for attendance (present) */
   .dark .bg-green-50 {
     @apply !bg-green-900/30;
   }
-  
+
   .dark .bg-green-100 {
     @apply !bg-green-800/50;
   }
-  
+
   .dark .text-green-600 {
     @apply !text-green-400;
   }
-  
+
   .dark .text-green-700 {
     @apply !text-green-400;
   }
-  
+
   .dark .text-green-800 {
     @apply !text-green-300;
   }
-  
+
   .dark .border-green-500 {
     @apply !border-green-400;
   }
-  
+
   /* Red colors for attendance (absent) */
   .dark .bg-red-50 {
     @apply !bg-red-900/30;
   }
-  
+
   .dark .bg-red-100 {
     @apply !bg-red-800/50;
   }
-  
+
   .dark .text-red-600 {
     @apply !text-red-400;
   }
-  
+
   .dark .text-red-700 {
     @apply !text-red-400;
   }
-  
+
   .dark .text-red-800 {
     @apply !text-red-300;
   }
-  
+
   .dark .border-red-500 {
     @apply !border-red-400;
   }
-  
+
   /* Blue colors */
   .dark .bg-blue-50 {
     @apply !bg-blue-900/30;
   }
-  
+
   .dark .bg-blue-100 {
     @apply !bg-blue-800/50;
   }
-  
+
   .dark .text-blue-600 {
     @apply !text-blue-400;
   }
-  
+
   .dark .text-blue-700 {
     @apply !text-blue-400;
   }
-  
+
   .dark .text-blue-800 {
     @apply !text-blue-300;
   }
-  
+
   .dark .border-blue-200 {
     @apply !border-blue-700;
   }
-  
+
   /* Yellow colors for excused */
   .dark .bg-yellow-50 {
     @apply !bg-yellow-900/30;
   }
-  
+
   .dark .bg-yellow-100 {
     @apply !bg-yellow-800/50;
   }
-  
+
   .dark .text-yellow-600 {
     @apply !text-yellow-400;
   }
-  
+
   .dark .text-yellow-700 {
     @apply !text-yellow-400;
   }
-  
+
   /* Gray hover states */
   .dark .hover\:bg-gray-50:hover {
     @apply !bg-gray-700;
   }
-  
+
   /* Input and form elements */
   .dark input,
   .dark select,
   .dark textarea {
     @apply !bg-gray-700 !text-gray-100 !border-gray-600;
   }
-  
+
   .dark input::placeholder,
   .dark textarea::placeholder {
     @apply !text-gray-400;
   }
-  
+
   /* Divide colors */
-  .dark .divide-gray-200 > * + * {
+  .dark .divide-gray-200>*+* {
     border-color: rgb(55 65 81) !important;
+  }
+
+  /* Gray gradient colors for monthly statistics cards */
+  .dark .from-gray-50 {
+    --tw-gradient-from: #1f2937 var(--tw-gradient-from-position);
+    --tw-gradient-to: rgb(31 41 55 / 0) var(--tw-gradient-to-position);
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+  }
+
+  .dark .to-gray-100 {
+    --tw-gradient-to: #374151 var(--tw-gradient-to-position);
+  }
+
+  .dark .to-gray-50 {
+    --tw-gradient-to: #1f2937 var(--tw-gradient-to-position);
+  }
+
+  /* Green gradient colors for streaks */
+  .dark .from-green-50 {
+    --tw-gradient-from: rgba(22, 101, 52, 0.3) var(--tw-gradient-from-position);
+    --tw-gradient-to: rgb(22 101 52 / 0) var(--tw-gradient-to-position);
+    --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+  }
+
+  .dark .to-blue-50 {
+    --tw-gradient-to: rgba(30, 58, 138, 0.3) var(--tw-gradient-to-position);
   }
 }
