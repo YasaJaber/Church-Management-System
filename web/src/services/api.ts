@@ -220,7 +220,11 @@ export const childrenAPI = {
   create: async (childData: any) => {
     try {
       logger.debug('Creating new child:', childData)
-      const response = await api.post('/children', childData)
+      // Check if it's FormData (with image) or regular object
+      const isFormData = childData instanceof FormData
+      const response = await api.post('/children', childData, {
+        headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+      })
       logger.debug('Child created successfully:', response.data)
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
@@ -239,7 +243,11 @@ export const childrenAPI = {
   update: async (id: string, childData: any) => {
     try {
       logger.debug('Updating child:', id, childData)
-      const response = await api.put(`/children/${id}`, childData)
+      // Check if it's FormData (with image) or regular object
+      const isFormData = childData instanceof FormData
+      const response = await api.put(`/children/${id}`, childData, {
+        headers: isFormData ? { 'Content-Type': 'multipart/form-data' } : {},
+      })
       logger.debug('Child updated successfully:', response.data)
       return { success: true, data: response.data.data || response.data }
     } catch (error: any) {
@@ -253,6 +261,21 @@ export const childrenAPI = {
 
   updateChild: async (id: string, childData: any) => {
     return await childrenAPI.update(id, childData)
+  },
+
+  deleteImage: async (id: string) => {
+    try {
+      logger.debug('Deleting child image:', id)
+      const response = await api.delete(`/children/${id}/image`)
+      logger.debug('Child image deleted successfully')
+      return { success: true, data: response.data.data || response.data }
+    } catch (error: any) {
+      logger.error('Error deleting child image:', error)
+      return {
+        success: false,
+        error: error.response?.data?.error || 'حدث خطأ في حذف الصورة'
+      }
+    }
   },
 
   delete: async (id: string) => {

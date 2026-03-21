@@ -46,6 +46,14 @@ const childSchema = new mongoose.Schema(
       trim: true,
       maxlength: [500, "الملاحظات لا يجب أن تتجاوز 500 حرف"],
     },
+    image: {
+      type: String, // Cloudinary URL
+      default: null,
+    },
+    imagePublicId: {
+      type: String, // Cloudinary public_id for deletion
+      default: null,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -53,8 +61,22 @@ const childSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
+
+// Virtual for thumbnail URL (80x80, cropped)
+childSchema.virtual('thumbnail').get(function() {
+  if (!this.image) return null;
+  return this.image.replace('/upload/', '/upload/c_fill,w_80,h_80,f_auto,q_auto/');
+});
+
+// Virtual for optimized full image URL
+childSchema.virtual('optimizedImage').get(function() {
+  if (!this.image) return null;
+  return this.image.replace('/upload/', '/upload/f_auto,q_auto/');
+});
 
 // Indexes for better query performance
 childSchema.index({ class: 1, isActive: 1 }); // للبحث عن أطفال فصل معين

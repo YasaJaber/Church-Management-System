@@ -9,6 +9,9 @@ const { asyncHandler } = require('../middleware/errorHandler');
 const { childValidation } = require('../middleware/validator');
 const { ValidationError, AuthorizationError, NotFoundError } = require('../utils/errors');
 const { logAudit, getChanges } = require('../utils/auditLogger');
+const { upload, handleMulterError } = require('../middleware/upload');
+const { uploadToCloudinary, deleteFromCloudinary } = require('../config/cloudinary');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -107,9 +110,9 @@ router.get("/:id", authMiddleware, childValidation.getById, asyncHandler(async (
 }));
 
 // @route   POST /api/children
-// @desc    Add new child (with permission check)
+// @desc    Add new child (with permission check and image upload)
 // @access  Protected
-router.post("/", authMiddleware, childValidation.create, async (req, res) => {
+router.post("/", authMiddleware, upload.single('image'), handleMulterError, async (req, res) => {
   try {
     const { name, phone, parentName, classId, notes } = req.body;
 
@@ -164,6 +167,36 @@ router.post("/", authMiddleware, childValidation.create, async (req, res) => {
       }
     }
 
+    // Handle image upload to Cloudinary
+    let imageUrl = null;
+    let imagePublicId = null;
+
+    if (req.file) {
+      try {
+        const sanitizedName = name.trim().replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_');
+        const timestamp = Date.now();
+        const publicId = `child_${sanitizedName}_${timestamp}`;
+
+        logger.info(`Uploading image for child: ${name}`);
+
+        const uploadResult = await uploadToCloudinary(req.file.buffer, {
+          folder: 'children',
+          public_id: publicId,
+        });
+
+        imageUrl = uploadResult.secure_url;
+        imagePublicId = uploadResult.public_id;
+
+        logger.info(`Image uploaded successfully: ${imagePublicId}`);
+      } catch (uploadError) {
+        logger.error("Error uploading image to Cloudinary:", uploadError);
+        return res.status(500).json({
+          success: false,
+          error: "فشل في رفع الصورة. يرجى المحاولة مرة أخرى",
+        });
+      }
+    }
+
     // Create new child with default values
     const newChild = new Child({
       name: name.trim(),
@@ -171,6 +204,8 @@ router.post("/", authMiddleware, childValidation.create, async (req, res) => {
       parentName: parentName ? parentName.trim() : name.trim(), // اسم الطفل كولي أمر افتراضي
       class: targetClassId,
       notes: notes ? notes.trim() : "",
+      image: imageUrl,
+      imagePublicId: imagePublicId,
     });
 
     // Save to database
@@ -192,7 +227,7 @@ router.post("/", authMiddleware, childValidation.create, async (req, res) => {
 
     res.status(201).json({
       success: true,
-      data: savedChild,
+      data: savedChild.toObject({ virtuals: true }),
       message: "تم إضافة الطفل بنجاح",
     });
   } catch (error) {
@@ -218,9 +253,9 @@ router.post("/", authMiddleware, childValidation.create, async (req, res) => {
 });
 
 // @route   PUT /api/children/:id
-// @desc    Update child information (with permission check)
+// @desc    Update child information (with permission check and image upload)
 // @access  Protected
-router.put("/:id", authMiddleware, childValidation.update, async (req, res) => {
+router.put("/:id", authMiddleware, upload.single('image'), handleMulterError, async (req, res) => {
   try {
     console.log("\n" + "=".repeat(50));
     console.log("🔄 PUT /children/:id API CALLED");
@@ -228,6 +263,7 @@ router.put("/:id", authMiddleware, childValidation.update, async (req, res) => {
     console.log("🔐 Role:", req.user?.role || "UNKNOWN");
     console.log("📝 Child ID:", req.params.id);
     console.log("📝 Update data:", req.body);
+    console.log("📷 Has image:", !!req.file);
     console.log("=".repeat(50));
 
     const child = await Child.findById(req.params.id).populate("class");
@@ -292,26 +328,55 @@ router.put("/:id", authMiddleware, childValidation.update, async (req, res) => {
       console.log("✅ Permission granted for class change to:", newClass.name);
     }
 
-    // Update child fields
-    const updateData = {};
-    if (name !== undefined) updateData.name = name;
-    if (phone !== undefined) updateData.phone = phone;
-    if (parentName !== undefined) updateData.parentName = parentName;
-    if (classId !== undefined) updateData.class = classId;
-    if (notes !== undefined) updateData.notes = notes;
-    if (stage !== undefined) updateData.stage = stage;
-    if (grade !== undefined) updateData.grade = grade;
+    // Handle image upload
+    if (req.file) {
+      try {
+        // Delete old image if exists
+        if (child.imagePublicId) {
+          await deleteFromCloudinary(child.imagePublicId);
+          logger.info(`Old image deleted: ${child.imagePublicId}`);
+        }
 
-    console.log("📝 Updating with data:", updateData);
+        // Upload new image
+        const childName = name || child.name;
+        const sanitizedName = childName.trim().replace(/[^a-zA-Z0-9\u0600-\u06FF]/g, '_');
+        const timestamp = Date.now();
+        const publicId = `child_${sanitizedName}_${timestamp}`;
+
+        const uploadResult = await uploadToCloudinary(req.file.buffer, {
+          folder: 'children',
+          public_id: publicId,
+        });
+
+        child.image = uploadResult.secure_url;
+        child.imagePublicId = uploadResult.public_id;
+
+        logger.info(`New image uploaded: ${child.imagePublicId}`);
+      } catch (uploadError) {
+        logger.error("Error updating image:", uploadError);
+        return res.status(500).json({
+          success: false,
+          error: "فشل في تحديث الصورة",
+        });
+      }
+    }
+
+    // Update child fields
+    if (name !== undefined) child.name = name;
+    if (phone !== undefined) child.phone = phone;
+    if (parentName !== undefined) child.parentName = parentName;
+    if (classId !== undefined) child.class = classId;
+    if (notes !== undefined) child.notes = notes;
+    if (stage !== undefined) child.stage = stage;
+    if (grade !== undefined) child.grade = grade;
+
+    console.log("📝 Updating child...");
 
     // حفظ البيانات القديمة للـ audit log
     const oldChildData = child.toObject();
 
-    const updatedChild = await Child.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true }
-    ).populate("class");
+    const updatedChild = await child.save();
+    await updatedChild.populate("class");
 
     console.log("✅ Child updated successfully:", updatedChild.name);
 
@@ -332,7 +397,7 @@ router.put("/:id", authMiddleware, childValidation.update, async (req, res) => {
 
     res.json({
       success: true,
-      data: updatedChild,
+      data: updatedChild.toObject({ virtuals: true }),
       message: "Child updated successfully",
     });
   } catch (error) {
@@ -353,6 +418,60 @@ router.put("/:id", authMiddleware, childValidation.update, async (req, res) => {
     res.status(500).json({
       success: false,
       error: "حدث خطأ في الخادم أثناء تحديث بيانات الطفل",
+    });
+  }
+});
+
+// @route   DELETE /api/children/:id/image
+// @desc    Remove child's image
+// @access  Protected
+router.delete("/:id/image", authMiddleware, async (req, res) => {
+  try {
+    const child = await Child.findById(req.params.id).populate("class");
+
+    if (!child) {
+      return res.status(404).json({
+        success: false,
+        error: "الطفل غير موجود",
+      });
+    }
+
+    // Check permission
+    const canEdit =
+      req.user.role === "admin" ||
+      (req.user.assignedClass &&
+        child.class._id.toString() === req.user.assignedClass._id.toString());
+
+    if (!canEdit) {
+      return res.status(403).json({
+        success: false,
+        error: "ليس لديك صلاحية لتعديل هذا الطفل",
+      });
+    }
+
+    if (child.imagePublicId) {
+      try {
+        await deleteFromCloudinary(child.imagePublicId);
+        logger.info(`Image deleted from Cloudinary: ${child.imagePublicId}`);
+      } catch (deleteError) {
+        logger.error("Error deleting image from Cloudinary:", deleteError);
+      }
+    }
+
+    child.image = null;
+    child.imagePublicId = null;
+    await child.save();
+
+    res.json({
+      success: true,
+      data: child.toObject({ virtuals: true }),
+      message: "تم حذف الصورة بنجاح",
+    });
+  } catch (error) {
+    logger.error("Error removing child image:", error);
+    res.status(500).json({
+      success: false,
+      error: "حدث خطأ في حذف الصورة",
     });
   }
 });
@@ -382,6 +501,17 @@ router.delete("/:id", authMiddleware, async (req, res) => {
           error:
             "Access denied. You can only delete children in your assigned class.",
         });
+      }
+    }
+
+    // Delete image from Cloudinary if exists
+    if (child.imagePublicId) {
+      try {
+        await deleteFromCloudinary(child.imagePublicId);
+        logger.info(`Image deleted from Cloudinary: ${child.imagePublicId}`);
+      } catch (deleteError) {
+        logger.error("Error deleting image from Cloudinary:", deleteError);
+        // Continue with deletion even if image deletion fails
       }
     }
 

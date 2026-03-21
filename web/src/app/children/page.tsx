@@ -5,23 +5,28 @@ export const dynamic = 'force-dynamic'
 
 
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
-import { 
-  PlusIcon, 
-  MagnifyingGlassIcon, 
-  PencilIcon, 
+import {
+  PlusIcon,
+  MagnifyingGlassIcon,
+  PencilIcon,
   TrashIcon,
   EyeIcon,
   UserGroupIcon,
   FunnelIcon,
   ViewColumnsIcon,
   Squares2X2Icon,
-  ListBulletIcon
+  ListBulletIcon,
+  CameraIcon,
+  PhotoIcon,
+  XMarkIcon,
+  UserIcon
 } from '@heroicons/react/24/outline'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import ImageModal from '@/components/ImageModal'
 import { childrenAPI, classesAPI } from '@/services/api'
 
 interface Child {
@@ -31,6 +36,9 @@ interface Child {
   className?: string
   phone?: string
   notes?: string
+  image?: string | null
+  thumbnail?: string | null
+  optimizedImage?: string | null
   class?: {
     _id: string
     name: string
@@ -59,6 +67,18 @@ export default function ChildrenPage() {
   const [showAddModal, setShowAddModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [selectedChild, setSelectedChild] = useState<Child | null>(null)
+
+  // Image modal state
+  const [showImageModal, setShowImageModal] = useState(false)
+  const [modalImageUrl, setModalImageUrl] = useState<string | null>(null)
+  const [modalImageAlt, setModalImageAlt] = useState('')
+
+  // Image upload state
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
 
   // Form state - مبسط حسب المطلوب
   const [formData, setFormData] = useState({
@@ -151,7 +171,7 @@ export default function ChildrenPage() {
         setClassFilter('all')
         console.log('Reset class filter because selected class no longer available')
       }
-      
+
     } catch (error) {
       console.error('Error loading data:', error)
       toast.error('حدث خطأ في تحميل البيانات')
@@ -160,9 +180,58 @@ export default function ChildrenPage() {
     }
   }
 
+  // Handle file selection (from gallery)
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        toast.error('يرجى اختيار ملف صورة صالح')
+        return
+      }
+
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        toast.error('حجم الصورة يجب أن يكون أقل من 10 ميجابايت')
+        return
+      }
+
+      setImageFile(file)
+
+      // Create preview
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string)
+      }
+      reader.readAsDataURL(file)
+    }
+  }, [])
+
+  // Remove selected image
+  const handleRemoveImage = useCallback(() => {
+    setImageFile(null)
+    setImagePreview(null)
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+    if (cameraInputRef.current) {
+      cameraInputRef.current.value = ''
+    }
+  }, [])
+
+  // View full image
+  const handleViewImage = (child: Child) => {
+    const imageUrl = child.optimizedImage || child.image
+    if (imageUrl) {
+      setModalImageUrl(imageUrl)
+      setModalImageAlt(child.name)
+      setShowImageModal(true)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // التحقق من الاسم فقط (مطلوب لجميع المستخدمين)
     if (!formData.name || formData.name.trim() === '') {
       toast.error('يرجى إدخال اسم الطفل')
@@ -187,21 +256,35 @@ export default function ChildrenPage() {
       return
     }
 
+    setIsUploading(true)
+
     try {
-      const childData = {
-        name: formData.name.trim(),
-        classId: finalClassId,
-        phone: formData.phone || '',
-        notes: formData.notes || ''
+      // Use FormData if there's an image, otherwise use regular object
+      let submitData: FormData | any
+
+      if (imageFile) {
+        submitData = new FormData()
+        submitData.append('name', formData.name.trim())
+        submitData.append('classId', finalClassId)
+        submitData.append('phone', formData.phone || '')
+        submitData.append('notes', formData.notes || '')
+        submitData.append('image', imageFile)
+      } else {
+        submitData = {
+          name: formData.name.trim(),
+          classId: finalClassId,
+          phone: formData.phone || '',
+          notes: formData.notes || ''
+        }
       }
 
       let response
       if (selectedChild) {
         // Update existing child
-        response = await childrenAPI.updateChild(selectedChild._id, childData)
+        response = await childrenAPI.updateChild(selectedChild._id, submitData)
       } else {
         // Create new child
-        response = await childrenAPI.createChild(childData)
+        response = await childrenAPI.createChild(submitData)
       }
 
       if (response.success) {
@@ -210,7 +293,7 @@ export default function ChildrenPage() {
         loadData()
       } else {
         // عرض رسالة خطأ مفصلة إذا كانت متوفرة
-        const errorMessage = (response as any).details 
+        const errorMessage = (response as any).details
           ? `${response.error}: ${(response as any).details}`
           : response.error || 'فشل في حفظ بيانات الطفل';
         toast.error(errorMessage)
@@ -218,6 +301,8 @@ export default function ChildrenPage() {
     } catch (error) {
       console.error('Error saving child:', error)
       toast.error('حدث خطأ في حفظ البيانات')
+    } finally {
+      setIsUploading(false)
     }
   }
 
@@ -271,6 +356,11 @@ export default function ChildrenPage() {
     setSelectedChild(null)
     setShowAddModal(false)
     setShowEditModal(false)
+    // Reset image state
+    setImageFile(null)
+    setImagePreview(null)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+    if (cameraInputRef.current) cameraInputRef.current.value = ''
   }
 
   const openEditModal = (child: Child) => {
@@ -281,6 +371,13 @@ export default function ChildrenPage() {
       phone: child.phone || '',
       notes: child.notes || ''
     })
+    // Set existing image as preview
+    if (child.thumbnail || child.image) {
+      setImagePreview(child.thumbnail || child.image || null)
+    } else {
+      setImagePreview(null)
+    }
+    setImageFile(null)
     setShowEditModal(true)
   }
 
@@ -514,9 +611,25 @@ export default function ChildrenPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {group.children.map((child) => (
                           <div key={child._id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                            <div className="flex items-start justify-between mb-3">
-                              <div className="flex-1">
-                                <h4 className="font-medium text-gray-900 mb-1">{child.name}</h4>
+                            <div className="flex items-start gap-3 mb-3">
+                              {/* Thumbnail */}
+                              <div className="flex-shrink-0">
+                                {child.thumbnail || child.image ? (
+                                  <img
+                                    src={child.thumbnail || child.image || ''}
+                                    alt={child.name}
+                                    className="w-12 h-12 rounded-full object-cover border-2 border-gray-100"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-gray-100">
+                                    <UserIcon className="w-6 h-6 text-blue-500" />
+                                  </div>
+                                )}
+                              </div>
+                              {/* Info */}
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-medium text-gray-900 mb-1 truncate">{child.name}</h4>
                                 {child.phone && (
                                   <p className="text-sm text-gray-600 mb-1">📞 {child.phone}</p>
                                 )}
@@ -527,8 +640,18 @@ export default function ChildrenPage() {
                                 )}
                               </div>
                             </div>
-                            
-                            <div className="flex items-center space-x-2 space-x-reverse pt-3 border-t border-gray-100">
+
+                            <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
+                              {/* View Image Button */}
+                              {child.image && (
+                                <button
+                                  onClick={() => handleViewImage(child)}
+                                  className="inline-flex items-center justify-center px-2 py-1 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors text-sm"
+                                  title="عرض الصورة"
+                                >
+                                  <EyeIcon className="w-4 h-4" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => openEditModal(child)}
                                 className="flex-1 inline-flex items-center justify-center px-2 py-1 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors text-sm"
@@ -537,7 +660,7 @@ export default function ChildrenPage() {
                                 <PencilIcon className="w-4 h-4 ml-1" />
                                 تعديل
                               </button>
-                              
+
                               <button
                                 onClick={() => handleDelete(child._id)}
                                 className="flex-1 inline-flex items-center justify-center px-2 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors text-sm"
@@ -581,10 +704,27 @@ export default function ChildrenPage() {
                     ) : (
                       enrichedChildren.map((child) => (
                         <tr key={child._id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{child.name}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                              {/* Thumbnail */}
+                              {child.thumbnail || child.image ? (
+                                <img
+                                  src={child.thumbnail || child.image || ''}
+                                  alt={child.name}
+                                  className="w-10 h-10 rounded-full object-cover border border-gray-200"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+                                  <UserIcon className="w-5 h-5 text-blue-500" />
+                                </div>
+                              )}
+                              <span className="text-sm font-medium text-gray-900">{child.name}</span>
+                            </div>
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                             <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                              child.className === 'غير محدد' 
+                              child.className === 'غير محدد'
                                 ? 'bg-red-100 text-red-800'
                                 : 'bg-blue-100 text-blue-800'
                             }`}>
@@ -594,7 +734,17 @@ export default function ChildrenPage() {
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{child.phone || '-'}</td>
                           <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={child.notes || ''}>{child.notes || '-'}</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <div className="flex items-center space-x-2 space-x-reverse">
+                            <div className="flex items-center gap-2">
+                              {/* View Image Button */}
+                              {child.image && (
+                                <button
+                                  onClick={() => handleViewImage(child)}
+                                  className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                  title="عرض الصورة"
+                                >
+                                  <EyeIcon className="w-4 h-4" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => openEditModal(child)}
                                 className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
@@ -603,7 +753,7 @@ export default function ChildrenPage() {
                                 <PencilIcon className="w-4 h-4 ml-1" />
                                 تعديل
                               </button>
-                              
+
                               <button
                                 onClick={() => handleDelete(child._id)}
                                 className="inline-flex items-center px-2 py-1 bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors"
@@ -647,11 +797,38 @@ export default function ChildrenPage() {
                   ) : (
                     enrichedChildren.map((child) => (
                       <tr key={child._id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{child.name}</td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            {/* Thumbnail */}
+                            {child.thumbnail || child.image ? (
+                              <img
+                                src={child.thumbnail || child.image || ''}
+                                alt={child.name}
+                                className="w-10 h-10 rounded-full object-cover border border-gray-200"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center">
+                                <UserIcon className="w-5 h-5 text-blue-500" />
+                              </div>
+                            )}
+                            <span className="text-sm font-medium text-gray-900">{child.name}</span>
+                          </div>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{child.phone || '-'}</td>
                         <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate" title={child.notes || ''}>{child.notes || '-'}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <div className="flex items-center space-x-3 space-x-reverse">
+                          <div className="flex items-center gap-2">
+                            {/* View Image Button */}
+                            {child.image && (
+                              <button
+                                onClick={() => handleViewImage(child)}
+                                className="p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                title="عرض الصورة"
+                              >
+                                <EyeIcon className="w-4 h-4" />
+                              </button>
+                            )}
                             {(user?.role === 'classTeacher' || user?.role === 'servant') && (
                               <>
                                 <button
@@ -662,7 +839,7 @@ export default function ChildrenPage() {
                                   <PencilIcon className="w-4 h-4 ml-1" />
                                   تعديل
                                 </button>
-                                
+
                                 {user?.role === 'classTeacher' && (
                                   <button
                                     onClick={() => handleDelete(child._id)}
@@ -827,6 +1004,75 @@ export default function ChildrenPage() {
                 </div>
               )}
 
+              {/* Image Upload Section */}
+              <div className="border-t border-gray-200 pt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  صورة الطفل
+                </label>
+
+                {/* Image Preview */}
+                {imagePreview ? (
+                  <div className="relative inline-block mb-3">
+                    <img
+                      src={imagePreview}
+                      alt="معاينة الصورة"
+                      className="w-24 h-24 object-cover rounded-lg border-2 border-gray-200 shadow-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 transition-colors shadow-md"
+                      title="إزالة الصورة"
+                    >
+                      <XMarkIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row gap-2 mb-3">
+                    {/* Camera Capture Button */}
+                    <button
+                      type="button"
+                      onClick={() => cameraInputRef.current?.click()}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors text-sm"
+                    >
+                      <CameraIcon className="w-5 h-5 text-gray-500" />
+                      <span className="text-gray-600">التقاط صورة</span>
+                    </button>
+
+                    {/* Gallery Upload Button */}
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:bg-blue-50 transition-colors text-sm"
+                    >
+                      <PhotoIcon className="w-5 h-5 text-gray-500" />
+                      <span className="text-gray-600">اختيار من المعرض</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* Hidden file inputs */}
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+
+                <p className="text-xs text-gray-500">
+                  الحد الأقصى: 10 ميجابايت. الصيغ: JPEG, PNG, GIF, WebP
+                </p>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   ملاحظات
@@ -843,6 +1089,7 @@ export default function ChildrenPage() {
                   rows={3}
                   placeholder="أي ملاحظات إضافية..."
                   maxLength={500}
+                  disabled={isUploading}
                 />
                 {formData.notes && formData.notes.length > 0 && (
                   <div className="mt-1 text-xs text-gray-500">
@@ -856,14 +1103,23 @@ export default function ChildrenPage() {
                   type="button"
                   onClick={resetForm}
                   className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md hover:bg-gray-300 transition-colors"
+                  disabled={isUploading}
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  disabled={isUploading}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
-                  {selectedChild ? 'تحديث' : 'إضافة'}
+                  {isUploading ? (
+                    <>
+                      <LoadingSpinner size="sm" />
+                      <span>جاري الرفع...</span>
+                    </>
+                  ) : (
+                    selectedChild ? 'تحديث' : 'إضافة'
+                  )}
                 </button>
               </div>
             </form>
@@ -871,6 +1127,14 @@ export default function ChildrenPage() {
           </div>
         </div>
       )}
+
+      {/* Image Modal */}
+      <ImageModal
+        isOpen={showImageModal}
+        imageUrl={modalImageUrl}
+        alt={modalImageAlt}
+        onClose={() => setShowImageModal(false)}
+      />
     </div>
   )
 }
