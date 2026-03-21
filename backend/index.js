@@ -103,6 +103,7 @@ app.use("/api/pastoral-care", require("./routes/pastoral-care"));
 app.use("/api/statistics", require("./routes/statistics-fresh"));
 app.use("/api/advanced-statistics", require("./routes/advanced-statistics"));
 app.use("/api/audit-logs", require("./routes/audit-logs"));
+app.use("/api/kids", require("./routes/kids"));
 
 logger.info("Routes registered successfully");
 
