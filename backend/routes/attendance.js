@@ -1203,7 +1203,7 @@ router.get("/export/teacher", authMiddleware, async (req, res) => {
       .populate({
         path: "person",
         match: { class: user.assignedClass._id }, // فقط أطفال فصل المدرس
-        select: "name class",
+        select: "name class image thumbnail optimizedImage",
         populate: {
           path: "class",
           select: "name",
@@ -1234,6 +1234,7 @@ router.get("/export/teacher", authMiddleware, async (req, res) => {
       studentName: record.person.name,
       status: record.status,
       notes: record.notes || "",
+      studentImage: record.person.thumbnail || record.person.image || null,
     }));
 
     res.json({
@@ -1316,7 +1317,7 @@ router.get("/export/admin", authMiddleware, async (req, res) => {
       .populate({
         path: "person",
         match: { class: classId },
-        select: "name class",
+        select: "name class image thumbnail optimizedImage",
         populate: {
           path: "class",
           select: "name",
@@ -1347,6 +1348,7 @@ router.get("/export/admin", authMiddleware, async (req, res) => {
       studentName: record.person.name,
       status: record.status,
       notes: record.notes || "",
+      studentImage: record.person.thumbnail || record.person.image || null,
     }));
 
     res.json({

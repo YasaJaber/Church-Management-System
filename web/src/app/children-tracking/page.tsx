@@ -15,8 +15,10 @@ import {
   ExclamationTriangleIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ClockIcon
+  ClockIcon,
+  EyeIcon
 } from '@heroicons/react/24/outline'
+import ImageModal from '@/components/ImageModal'
 
 interface Child {
   _id: string
@@ -29,6 +31,10 @@ interface Child {
   attendanceRate: number
   consecutiveAbsences: number
   needsFollowUp: boolean
+  // Image fields
+  image?: string | null
+  thumbnail?: string | null
+  optimizedImage?: string | null
 }
 
 interface ClassStats {
@@ -56,6 +62,10 @@ interface IndividualStats {
       grade: string
     }
     createdAt: string
+    // Image fields
+    image?: string | null
+    thumbnail?: string | null
+    optimizedImage?: string | null
   }
   summary: {
     totalRecords: number
@@ -106,6 +116,17 @@ export default function ChildrenTrackingPage() {
   const [showModal, setShowModal] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [filterNeedsFollowUp, setFilterNeedsFollowUp] = useState(false)
+
+  // Image modal state
+  const [imageModal, setImageModal] = useState<{
+    isOpen: boolean
+    imageUrl: string | null
+    childName: string
+  }>({
+    isOpen: false,
+    imageUrl: null,
+    childName: ''
+  })
 
   console.log('🔐 Current user:', user)
   console.log('🔐 User role:', user?.role)
@@ -181,6 +202,25 @@ export default function ChildrenTrackingPage() {
     if (phone) {
       window.open(`tel:${phone}`, '_self')
     }
+  }
+
+  // Open image modal
+  const openImageModal = (imageUrl: string | null | undefined, childName: string) => {
+    if (!imageUrl) return
+    setImageModal({
+      isOpen: true,
+      imageUrl: imageUrl.replace('/upload/', '/upload/f_auto,q_auto/'),
+      childName
+    })
+  }
+
+  // Close image modal
+  const closeImageModal = () => {
+    setImageModal({
+      isOpen: false,
+      imageUrl: null,
+      childName: ''
+    })
   }
 
   const getAttendanceStatusColor = (rate: number) => {
@@ -406,11 +446,38 @@ export default function ChildrenTrackingPage() {
                     {classItem.children.map((child) => (
                       <div key={child._id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
                         <div className="flex items-start justify-between mb-4">
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-gray-900 mb-1">{child.name}</h4>
-                            {child.parentName && (
-                              <p className="text-sm text-gray-600 mb-1">ولي الأمر: {child.parentName}</p>
-                            )}
+                          <div className="flex items-center gap-3 flex-1">
+                            {/* Child Image */}
+                            <div className="relative flex-shrink-0">
+                              {child.thumbnail || child.image ? (
+                                <img
+                                  src={child.thumbnail || child.image || ''}
+                                  alt={child.name}
+                                  className="w-12 h-12 rounded-full object-cover border-2 border-gray-200"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-gray-200">
+                                  <UserIcon className="w-6 h-6 text-blue-500" />
+                                </div>
+                              )}
+                              {/* Preview button */}
+                              {(child.thumbnail || child.image) && (
+                                <button
+                                  onClick={() => openImageModal(child.optimizedImage || child.image, child.name)}
+                                  className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1 shadow-md hover:bg-blue-700 transition-colors"
+                                  title="عرض الصورة"
+                                >
+                                  <EyeIcon className="w-3 h-3 text-white" />
+                                </button>
+                              )}
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="font-semibold text-gray-900 mb-1">{child.name}</h4>
+                              {child.parentName && (
+                                <p className="text-sm text-gray-600 mb-1">ولي الأمر: {child.parentName}</p>
+                              )}
+                            </div>
                           </div>
                           
                           {child.needsFollowUp && (
@@ -478,12 +545,29 @@ export default function ChildrenTrackingPage() {
             {/* Modal Header */}
             <div className="p-6 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">{selectedChild.child.name}</h2>
-                  <p className="text-gray-600">
-                    {selectedChild.child.class.name} • 
-                    {selectedChild.child.parentName && ` ولي الأمر: ${selectedChild.child.parentName}`}
-                  </p>
+                <div className="flex items-center gap-4">
+                  {/* Child Image in Modal */}
+                  <div className="relative flex-shrink-0">
+                    {selectedChild.child.thumbnail || selectedChild.child.image ? (
+                      <img
+                        src={selectedChild.child.thumbnail || selectedChild.child.image || ''}
+                        alt={selectedChild.child.name}
+                        className="w-16 h-16 rounded-full object-cover border-3 border-blue-200 shadow-md"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-3 border-blue-200 shadow-md">
+                        <UserIcon className="w-8 h-8 text-blue-500" />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold text-gray-900">{selectedChild.child.name}</h2>
+                    <p className="text-gray-600">
+                      {selectedChild.child.class.name} • 
+                      {selectedChild.child.parentName && ` ولي الأمر: ${selectedChild.child.parentName}`}
+                    </p>
+                  </div>
                 </div>
                 <button
                   onClick={() => setShowModal(false)}
@@ -647,6 +731,14 @@ export default function ChildrenTrackingPage() {
           </div>
         </div>
       )}
+
+      {/* Image Modal */}
+      <ImageModal
+        isOpen={imageModal.isOpen}
+        imageUrl={imageModal.imageUrl || ''}
+        childName={imageModal.childName}
+        onClose={closeImageModal}
+      />
     </div>
   )
 }

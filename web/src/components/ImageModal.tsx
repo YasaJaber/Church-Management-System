@@ -7,15 +7,18 @@ interface ImageModalProps {
   isOpen: boolean
   imageUrl: string | null
   alt?: string
+  childName?: string
   onClose: () => void
 }
 
 export default function ImageModal({
   isOpen,
   imageUrl,
-  alt = 'صورة',
+  alt,
+  childName,
   onClose,
 }: ImageModalProps) {
+  const displayName = alt || childName || 'صورة'
   // Handle escape key press
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -65,16 +68,16 @@ export default function ImageModal({
       >
         <img
           src={imageUrl}
-          alt={alt}
+          alt={displayName}
           className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
           loading="lazy"
         />
       </div>
 
       {/* Caption */}
-      {alt && (
+      {displayName && (
         <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-60 text-white px-4 py-2 rounded-lg">
-          {alt}
+          {displayName}
         </div>
       )}
     </div>

@@ -17,9 +17,12 @@ import {
   XMarkIcon,
   CheckCircleIcon,
   XCircleIcon,
-  ClockIcon
+  ClockIcon,
+  UserIcon,
+  EyeIcon
 } from '@heroicons/react/24/outline'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import ImageModal from '@/components/ImageModal'
 import { childrenAPI, statisticsAPI } from '@/services/api'
 import styles from './page.module.css'
 
@@ -30,6 +33,10 @@ interface Child {
   className?: string
   phone?: string
   notes?: string
+  // Image fields
+  image?: string | null
+  thumbnail?: string | null
+  optimizedImage?: string | null
 }
 
 interface ChildStatistics {
@@ -79,6 +86,17 @@ export default function IndividualTrackingPage() {
   const [childStats, setChildStats] = useState<ChildStatistics | null>(null)
   const [statsLoading, setStatsLoading] = useState(false)
   const [showStatsModal, setShowStatsModal] = useState(false)
+
+  // Image modal state
+  const [imageModal, setImageModal] = useState<{
+    isOpen: boolean
+    imageUrl: string | null
+    childName: string
+  }>({
+    isOpen: false,
+    imageUrl: null,
+    childName: ''
+  })
   const [activityFilter, setActivityFilter] = useState<'all' | 'present' | 'absent' | 'late'>('all')
 
   useEffect(() => {
@@ -152,6 +170,25 @@ export default function IndividualTrackingPage() {
     setSelectedChild(null)
     setChildStats(null)
     setActivityFilter('all')
+  }
+
+  // Open image modal
+  const openImageModal = (imageUrl: string | null | undefined, childName: string) => {
+    if (!imageUrl) return
+    setImageModal({
+      isOpen: true,
+      imageUrl: imageUrl.replace('/upload/', '/upload/f_auto,q_auto/'),
+      childName
+    })
+  }
+
+  // Close image modal
+  const closeImageModal = () => {
+    setImageModal({
+      isOpen: false,
+      imageUrl: null,
+      childName: ''
+    })
   }
 
   // Filter activities based on selected filter
@@ -290,11 +327,38 @@ export default function IndividualTrackingPage() {
             filteredChildren.map((child) => (
               <div key={child._id} className={`bg-white rounded-lg shadow hover:shadow-md transition-shadow ${styles.childCard}`}>
                 <div className="p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="font-medium text-gray-900 truncate">{child.name}</h3>
+                  <div className="flex items-center gap-3 mb-3">
+                    {/* Child Image */}
+                    <div className="relative flex-shrink-0">
+                      {child.thumbnail || child.image ? (
+                        <img
+                          src={child.thumbnail || child.image || ''}
+                          alt={child.name}
+                          className="w-12 h-12 rounded-full object-cover border-2 border-gray-200"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-gray-200">
+                          <UserIcon className="w-6 h-6 text-blue-500" />
+                        </div>
+                      )}
+                      {/* Preview button */}
+                      {(child.thumbnail || child.image) && (
+                        <button
+                          onClick={() => openImageModal(child.optimizedImage || child.image, child.name)}
+                          className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1 shadow-md hover:bg-blue-700 transition-colors"
+                          title="عرض الصورة"
+                        >
+                          <EyeIcon className="w-3 h-3 text-white" />
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-gray-900 truncate">{child.name}</h3>
+                    </div>
                     <button
                       onClick={() => loadChildStatistics(child)}
-                      className="flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors text-sm"
+                      className="flex items-center px-3 py-1 bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors text-sm flex-shrink-0"
                       title="عرض الإحصائيات"
                     >
                       <ChartBarIcon className="w-4 h-4 ml-1" />
@@ -327,9 +391,26 @@ export default function IndividualTrackingPage() {
             <div className="p-6">
               {/* Modal Header */}
               <div className="flex justify-between items-center mb-6">
-                <h2 className="text-xl font-semibold text-gray-900">
-                  إحصائيات {selectedChild?.name}
-                </h2>
+                <div className="flex items-center gap-4">
+                  {/* Child Image in Modal */}
+                  <div className="relative flex-shrink-0">
+                    {selectedChild && (selectedChild as any)?.child?.thumbnail || (selectedChild as any)?.child?.image ? (
+                      <img
+                        src={(selectedChild as any)?.child?.thumbnail || (selectedChild as any)?.child?.image || ''}
+                        alt={selectedChild?.name || ''}
+                        className="w-16 h-16 rounded-full object-cover border-3 border-blue-200 shadow-md"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-3 border-blue-200 shadow-md">
+                        <UserIcon className="w-8 h-8 text-blue-500" />
+                      </div>
+                    )}
+                  </div>
+                  <h2 className="text-xl font-semibold text-gray-900">
+                    إحصائيات {selectedChild?.name}
+                  </h2>
+                </div>
                 <button
                   onClick={closeStatsModal}
                   className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
@@ -685,6 +766,14 @@ export default function IndividualTrackingPage() {
           </div>
         </div>
       )}
+
+      {/* Image Modal */}
+      <ImageModal
+        isOpen={imageModal.isOpen}
+        imageUrl={imageModal.imageUrl || ''}
+        alt={imageModal.childName}
+        onClose={closeImageModal}
+      />
     </div>
   )
 }

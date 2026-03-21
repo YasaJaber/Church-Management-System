@@ -3,6 +3,7 @@ export interface AttendanceRecord {
   studentName: string
   status: 'present' | 'absent' | 'late'
   notes?: string
+  studentImage?: string | null
 }
 
 export interface AttendanceReportData {
@@ -343,6 +344,39 @@ export const generateAttendancePDF = async (data: AttendanceReportData) => {
           text-align: center;
           font-size: 13px;
           border-bottom: 1px solid #ecf0f1;
+          vertical-align: middle;
+        }
+        
+        .student-cell {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          justify-content: flex-start;
+          text-align: right;
+        }
+        
+        .student-avatar {
+          width: 35px;
+          height: 35px;
+          border-radius: 50%;
+          object-fit: cover;
+          border: 2px solid #e0e0e0;
+          flex-shrink: 0;
+        }
+        
+        .student-avatar-placeholder {
+          width: 35px;
+          height: 35px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 14px;
+          font-weight: bold;
+          flex-shrink: 0;
+          border: 2px solid #e0e0e0;
         }
         
         .day-table tbody tr:hover {
@@ -587,7 +621,15 @@ export const generateAttendancePDF = async (data: AttendanceReportData) => {
                   ${dayRecords.map((record, idx) => `
                     <tr>
                       <td>${idx + 1}</td>
-                      <td><strong>${record.studentName}</strong></td>
+                      <td>
+                        <div class="student-cell">
+                          ${record.studentImage 
+                            ? `<img src="${record.studentImage}" alt="${record.studentName}" class="student-avatar" crossorigin="anonymous" />` 
+                            : `<div class="student-avatar-placeholder">${record.studentName.charAt(0)}</div>`
+                          }
+                          <strong>${record.studentName}</strong>
+                        </div>
+                      </td>
                       <td>
                         <span class="status-badge ${record.status}">
                           ${record.status === 'absent' ? '🔴 غائب' : record.status === 'late' ? '🟡 متأخر' : '🟢 حاضر'}

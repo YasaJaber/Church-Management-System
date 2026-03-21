@@ -592,7 +592,7 @@ router.get(
             as: "children",
             pipeline: [
               { $match: { isActive: true } },
-              { $project: { name: 1, phone: 1, parentName: 1 } },
+              { $project: { name: 1, phone: 1, parentName: 1, image: 1, thumbnail: 1, optimizedImage: 1 } },
             ],
           },
         },
@@ -733,6 +733,9 @@ router.get(
             name: child.name,
             phone: child.phone,
             parentName: child.parentName,
+            image: child.image || null,
+            thumbnail: child.thumbnail || null,
+            optimizedImage: child.optimizedImage || null,
             totalAttendance: stats.totalAttendance,
             presentCount: stats.presentCount,
             absentCount: stats.absentCount,
@@ -1053,6 +1056,9 @@ router.get("/statistics/individual/:id", authMiddleware, async (req, res) => {
         parentName: child.parentName,
         class: child.class,
         createdAt: child.createdAt,
+        image: child.image || null,
+        thumbnail: child.thumbnail || null,
+        optimizedImage: child.optimizedImage || null,
       },
       summary: {
         totalRecords,
