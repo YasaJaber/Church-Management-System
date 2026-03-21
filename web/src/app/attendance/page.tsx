@@ -17,10 +17,13 @@ import {
   ClockIcon,
   DocumentCheckIcon,
   MagnifyingGlassIcon,
-  XMarkIcon
+  XMarkIcon,
+  EyeIcon,
+  UserIcon
 } from '@heroicons/react/24/outline'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import AttendanceModal from '@/components/AttendanceModal'
+import ImageModal from '@/components/ImageModal'
 import { childrenAPI, classesAPI, attendanceAPI } from '@/services/api'
 
 interface Child {
@@ -35,6 +38,10 @@ interface Child {
   // Add batch editing state
   batchStatus?: "present" | "absent" | null
   batchNotes?: string
+  // Image fields
+  image?: string | null
+  thumbnail?: string | null
+  optimizedImage?: string | null
 }
 
 interface Class {
@@ -71,6 +78,17 @@ export default function AttendancePage() {
   // Search state
   const [searchQuery, setSearchQuery] = useState('')
   const [deletingDay, setDeletingDay] = useState(false)
+
+  // Image modal state
+  const [imageModal, setImageModal] = useState<{
+    isOpen: boolean
+    imageUrl: string | null
+    childName: string
+  }>({
+    isOpen: false,
+    imageUrl: null,
+    childName: ''
+  })
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -155,6 +173,10 @@ export default function AttendancePage() {
           // Reset batch state when loading new data
           batchStatus: null,
           batchNotes: "",
+          // Image fields
+          image: child.image || null,
+          thumbnail: child.thumbnail || null,
+          optimizedImage: child.optimizedImage || null,
         }))
 
         setChildren(childrenWithAttendance)
@@ -505,6 +527,25 @@ export default function AttendancePage() {
     );
   };
 
+  // Open image modal
+  const openImageModal = (imageUrl: string | null | undefined, childName: string) => {
+    if (!imageUrl) return
+    setImageModal({
+      isOpen: true,
+      imageUrl: imageUrl.replace('/upload/', '/upload/f_auto,q_auto/'), // Use optimized version
+      childName
+    })
+  }
+
+  // Close image modal
+  const closeImageModal = () => {
+    setImageModal({
+      isOpen: false,
+      imageUrl: null,
+      childName: ''
+    })
+  }
+
   // Render child row for batch mode
   const renderChildRowBatch = (child: Child) => {
     const currentStatus =
@@ -519,9 +560,36 @@ export default function AttendancePage() {
     return (
       <div key={child._id} className="bg-white border rounded-lg p-4 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="font-medium text-gray-900">{child.name}</h3>
-            <p className="text-sm text-gray-500">{child.className}</p>
+          <div className="flex items-center gap-3">
+            {/* Child Image */}
+            <div className="relative flex-shrink-0">
+              {child.thumbnail || child.image ? (
+                <img
+                  src={child.thumbnail || child.image || ''}
+                  alt={child.name}
+                  className="w-12 h-12 rounded-full object-cover border-2 border-gray-200"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-gray-200">
+                  <UserIcon className="w-6 h-6 text-blue-500" />
+                </div>
+              )}
+              {/* Preview button */}
+              {(child.thumbnail || child.image) && (
+                <button
+                  onClick={() => openImageModal(child.optimizedImage || child.image, child.name)}
+                  className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow-md hover:bg-gray-100 transition-colors"
+                  title="عرض الصورة"
+                >
+                  <EyeIcon className="w-3 h-3 text-blue-600" />
+                </button>
+              )}
+            </div>
+            <div>
+              <h3 className="font-medium text-gray-900">{child.name}</h3>
+              <p className="text-sm text-gray-500">{child.className}</p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -827,20 +895,43 @@ export default function AttendancePage() {
                           : 'bg-gray-50 border-r-4 border-gray-300'
                         }`}
                     >
-                      <div className="flex items-center">
-                        <div className="flex-shrink-0">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${child.hasAttendanceRecord
-                              ? child.isPresent
-                                ? 'bg-green-100 text-green-600'
-                                : 'bg-red-100 text-red-600'
-                              : 'bg-gray-100 text-gray-400'
-                            }`}>
-                            {child.name.charAt(0)}
-                          </div>
+                      <div className="flex items-center gap-3">
+                        {/* Child Image with preview button */}
+                        <div className="relative flex-shrink-0">
+                          {child.thumbnail || child.image ? (
+                            <img
+                              src={child.thumbnail || child.image || ''}
+                              alt={child.name}
+                              className="w-12 h-12 rounded-full object-cover border-2 border-gray-200"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 ${child.hasAttendanceRecord
+                                ? child.isPresent
+                                  ? 'bg-green-100 text-green-600 border-green-200'
+                                  : 'bg-red-100 text-red-600 border-red-200'
+                                : 'bg-gray-100 text-gray-400 border-gray-200'
+                              }`}>
+                              <UserIcon className="w-6 h-6" />
+                            </div>
+                          )}
+                          {/* Preview button */}
+                          {(child.thumbnail || child.image) && (
+                            <button
+                              onClick={() => openImageModal(child.optimizedImage || child.image, child.name)}
+                              className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1 shadow-md hover:bg-blue-700 transition-colors"
+                              title="عرض الصورة"
+                            >
+                              <EyeIcon className="w-3 h-3 text-white" />
+                            </button>
+                          )}
                         </div>
-                        <div className="mr-4">
+                        <div>
                           <div className="text-sm font-medium text-gray-900">
                             {child.name}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {child.className}
                           </div>
                         </div>
                       </div>
@@ -892,6 +983,14 @@ export default function AttendancePage() {
           onDelete={handleAttendanceDelete}
         />
       )}
+
+      {/* Image Modal */}
+      <ImageModal
+        isOpen={imageModal.isOpen}
+        imageUrl={imageModal.imageUrl || ''}
+        childName={imageModal.childName}
+        onClose={closeImageModal}
+      />
 
       {/* Delete Day Confirmation Dialog */}
       {showDeleteDayDialog && (

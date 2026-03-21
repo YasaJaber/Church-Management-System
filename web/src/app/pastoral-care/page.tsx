@@ -10,7 +10,7 @@ import { pastoralCareAPI } from '@/services/api'
 import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
-import { 
+import {
   PhoneIcon,
   CheckCircleIcon,
   XMarkIcon,
@@ -20,9 +20,12 @@ import {
   ExclamationTriangleIcon,
   FunnelIcon,
   MagnifyingGlassIcon,
-  ArrowPathIcon
+  ArrowPathIcon,
+  EyeIcon,
+  UserIcon
 } from '@heroicons/react/24/outline'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import ImageModal from '@/components/ImageModal'
 
 interface AbsentChild {
   _id: string
@@ -43,6 +46,10 @@ interface AbsentChild {
   lastAbsentDate: string
   notes: string
   addedDate: string | null
+  // Image fields
+  image?: string | null
+  thumbnail?: string | null
+  optimizedImage?: string | null
 }
 
 interface ApiResponse {
@@ -66,6 +73,17 @@ export default function PastoralCarePage() {
   const [lastAbsentDate, setLastAbsentDate] = useState('')
   const [totalStats, setTotalStats] = useState({ totalAbsent: 0, totalChildren: 0 })
   const [uniqueClasses, setUniqueClasses] = useState<string[]>([])
+
+  // Image modal state
+  const [imageModal, setImageModal] = useState<{
+    isOpen: boolean
+    imageUrl: string | null
+    childName: string
+  }>({
+    isOpen: false,
+    imageUrl: null,
+    childName: ''
+  })
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -158,6 +176,25 @@ export default function PastoralCarePage() {
       console.error('Error removing child from list:', error)
       toast.error('حدث خطأ في إزالة الطفل من القائمة')
     }
+  }
+
+  // Open image modal
+  const openImageModal = (imageUrl: string | null | undefined, childName: string) => {
+    if (!imageUrl) return
+    setImageModal({
+      isOpen: true,
+      imageUrl: imageUrl.replace('/upload/', '/upload/f_auto,q_auto/'), // Use optimized version
+      childName
+    })
+  }
+
+  // Close image modal
+  const closeImageModal = () => {
+    setImageModal({
+      isOpen: false,
+      imageUrl: null,
+      childName: ''
+    })
   }
 
   // فلترة الأطفال حسب البحث والفلاتر
@@ -372,18 +409,46 @@ export default function PastoralCarePage() {
               {filteredChildren.map((child) => (
                 <div key={child._id} className="p-4 hover:bg-gray-50 transition-colors">
                   <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center mb-2">
-                        <h3 className="text-lg font-medium text-gray-900 ml-3">
-                          {child.name}
-                        </h3>
-                        {child.hasBeenCalled && (
-                          <span className="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
-                            <CheckCircleIcon className="w-3 h-3 ml-1" />
-                            تم الاتصال
-                          </span>
+                    <div className="flex items-center gap-4 flex-1">
+                      {/* Child Image */}
+                      <div className="relative flex-shrink-0">
+                        {child.thumbnail || child.image ? (
+                          <img
+                            src={child.thumbnail || child.image || ''}
+                            alt={child.name}
+                            className="w-14 h-14 rounded-full object-cover border-2 border-gray-200"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-orange-100 to-orange-200 flex items-center justify-center border-2 border-gray-200">
+                            <UserIcon className="w-7 h-7 text-orange-500" />
+                          </div>
+                        )}
+                        {/* Preview button */}
+                        {(child.thumbnail || child.image) && (
+                          <button
+                            onClick={() => openImageModal(child.optimizedImage || child.image, child.name)}
+                            className="absolute -bottom-1 -right-1 bg-orange-600 rounded-full p-1 shadow-md hover:bg-orange-700 transition-colors"
+                            title="عرض الصورة"
+                          >
+                            <EyeIcon className="w-3 h-3 text-white" />
+                          </button>
                         )}
                       </div>
+
+                      {/* Child Info */}
+                      <div className="flex-1">
+                        <div className="flex items-center mb-2">
+                          <h3 className="text-lg font-medium text-gray-900 ml-3">
+                            {child.name}
+                          </h3>
+                          {child.hasBeenCalled && (
+                            <span className="inline-flex items-center px-2 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">
+                              <CheckCircleIcon className="w-3 h-3 ml-1" />
+                              تم الاتصال
+                            </span>
+                          )}
+                        </div>
                       
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-gray-600">
                         <div className="flex items-center">
@@ -470,6 +535,14 @@ export default function PastoralCarePage() {
           </div>
         )}
       </div>
+
+      {/* Image Modal */}
+      <ImageModal
+        isOpen={imageModal.isOpen}
+        imageUrl={imageModal.imageUrl || ''}
+        childName={imageModal.childName}
+        onClose={closeImageModal}
+      />
     </div>
   )
 }

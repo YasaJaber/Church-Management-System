@@ -109,6 +109,10 @@ router.get("/children-with-status", authMiddleware, attendanceValidation.query, 
       className: child.class?.name || "غير محدد",
       notes: child.notes,
       isActive: child.isActive,
+      // Include image fields for display
+      image: child.image || null,
+      thumbnail: child.thumbnail || null,
+      optimizedImage: child.optimizedImage || null,
       // **FIXED**: Attendance status for the specified date - null means NO RECORD
       attendance: attendanceMap[child._id.toString()] || null, // MUST return null, not object
     }));

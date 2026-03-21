@@ -463,6 +463,9 @@ router.get(
             _id: 1,
             name: 1,
             class: 1,
+            image: 1,
+            thumbnail: 1,
+            optimizedImage: 1,
             attendanceRecords: 1,
             lastGift: { $arrayElemAt: ['$lastGift', 0] },
             classInfo: { $arrayElemAt: ['$classInfo', 0] }
@@ -584,6 +587,9 @@ router.get(
           classesMap.get(classId).children.push({
             childId: childData._id,
             name: childData.name,
+            image: childData.image || null,
+            thumbnail: childData.thumbnail || null,
+            optimizedImage: childData.optimizedImage || null,
             consecutiveWeeks: consecutivePresent,  // Number of consecutive Fridays attended
             totalWeeksChecked: fridaysAfterReset.length,  // How many Fridays we checked
             attendanceRate: Math.round((consecutivePresent / fridaysAfterReset.length) * 100), // Percentage

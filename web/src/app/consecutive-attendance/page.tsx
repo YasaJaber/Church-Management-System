@@ -9,11 +9,16 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
 import { classesAPI, API_BASE_URL } from '@/services/api'
+import { EyeIcon, UserIcon } from '@heroicons/react/24/outline'
+import ImageModal from '@/components/ImageModal'
 
 interface ConsecutiveChild {
   name: string
   consecutiveWeeks: number
   childId: string
+  image?: string | null
+  thumbnail?: string | null
+  optimizedImage?: string | null
 }
 
 interface ClassData {
@@ -47,6 +52,17 @@ export default function ConsecutiveAttendancePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [deliveryLoading, setDeliveryLoading] = useState<string | null>(null)
+
+  // Image modal state
+  const [imageModal, setImageModal] = useState<{
+    isOpen: boolean
+    imageUrl: string | null
+    childName: string
+  }>({
+    isOpen: false,
+    imageUrl: null,
+    childName: ''
+  })
 
   const fetchClasses = useCallback(async () => {
     try {
@@ -210,6 +226,25 @@ export default function ConsecutiveAttendancePage() {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
+    })
+  }
+
+  // Open image modal
+  const openImageModal = (imageUrl: string | null | undefined, childName: string) => {
+    if (!imageUrl) return
+    setImageModal({
+      isOpen: true,
+      imageUrl: imageUrl.replace('/upload/', '/upload/f_auto,q_auto/'), // Use optimized version
+      childName
+    })
+  }
+
+  // Close image modal
+  const closeImageModal = () => {
+    setImageModal({
+      isOpen: false,
+      imageUrl: null,
+      childName: ''
     })
   }
 
@@ -567,8 +602,35 @@ export default function ConsecutiveAttendancePage() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right">
-                            <div className="text-sm font-medium text-gray-900">
-                              {child.name}
+                            <div className="flex items-center justify-end gap-3">
+                              {/* Child Image */}
+                              <div className="relative flex-shrink-0">
+                                {child.thumbnail || child.image ? (
+                                  <img
+                                    src={child.thumbnail || child.image || ''}
+                                    alt={child.name}
+                                    className="w-10 h-10 rounded-full object-cover border-2 border-gray-200"
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-gray-200">
+                                    <UserIcon className="w-5 h-5 text-blue-500" />
+                                  </div>
+                                )}
+                                {/* Preview button */}
+                                {(child.thumbnail || child.image) && (
+                                  <button
+                                    onClick={() => openImageModal(child.optimizedImage || child.image, child.name)}
+                                    className="absolute -bottom-0.5 -right-0.5 bg-blue-600 rounded-full p-0.5 shadow-md hover:bg-blue-700 transition-colors"
+                                    title="عرض الصورة"
+                                  >
+                                    <EyeIcon className="w-2.5 h-2.5 text-white" />
+                                  </button>
+                                )}
+                              </div>
+                              <div className="text-sm font-medium text-gray-900">
+                                {child.name}
+                              </div>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -649,6 +711,14 @@ export default function ConsecutiveAttendancePage() {
           </button>
         </div>
       ) : null}
+
+      {/* Image Modal */}
+      <ImageModal
+        isOpen={imageModal.isOpen}
+        imageUrl={imageModal.imageUrl || ''}
+        childName={imageModal.childName}
+        onClose={closeImageModal}
+      />
     </div>
   )
 }

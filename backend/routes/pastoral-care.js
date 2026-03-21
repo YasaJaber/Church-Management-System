@@ -239,7 +239,7 @@ router.get("/absent-children", authMiddleware, async (req, res) => {
       const pastoralRecord = existingPastoralCare.find(
         record => record.child.toString() === child._id.toString()
       );
-      
+
       return {
         _id: child._id,
         name: child.name,
@@ -252,6 +252,10 @@ router.get("/absent-children", authMiddleware, async (req, res) => {
           stage: child.class.stage,
           grade: child.class.grade
         } : null,
+        // Image fields
+        image: child.image || null,
+        thumbnail: child.thumbnail || null,
+        optimizedImage: child.optimizedImage || null,
         pastoralCareId: pastoralRecord ? pastoralRecord._id : null,
         hasBeenCalled: pastoralRecord ? pastoralRecord.hasBeenCalled : false,
         calledBy: pastoralRecord ? pastoralRecord.calledBy : null,

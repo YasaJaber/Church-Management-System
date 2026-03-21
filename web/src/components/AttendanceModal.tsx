@@ -2,7 +2,8 @@
 
 import { useState } from 'react'
 import { toast } from 'react-hot-toast'
-import { CheckCircleIcon, XCircleIcon, XMarkIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { CheckCircleIcon, XCircleIcon, XMarkIcon, TrashIcon, EyeIcon, UserIcon } from '@heroicons/react/24/outline'
+import ImageModal from './ImageModal'
 
 interface AttendanceModalProps {
   isOpen: boolean
@@ -14,6 +15,9 @@ interface AttendanceModalProps {
     hasAttendanceRecord?: boolean
     isPresent?: boolean
     notes?: string
+    image?: string | null
+    thumbnail?: string | null
+    optimizedImage?: string | null
   }
   onSave: (childId: string, status: 'present' | 'absent', notes?: string) => Promise<void>
   onDelete?: (childId: string) => Promise<void>
@@ -24,6 +28,7 @@ export default function AttendanceModal({ isOpen, onClose, child, onSave, onDele
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showImageModal, setShowImageModal] = useState(false)
 
   if (!isOpen) return null
 
@@ -87,16 +92,7 @@ export default function AttendanceModal({ isOpen, onClose, child, onSave, onDele
       <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900">تسجيل الحضور</h3>
-            {child.hasAttendanceRecord && (
-              <p className="text-sm text-gray-600">
-                الحالة الحالية: <span className={`font-medium ${child.isPresent ? 'text-green-600' : 'text-red-600'}`}>
-                  {child.isPresent ? 'حاضر' : 'غائب'}
-                </span>
-              </p>
-            )}
-          </div>
+          <h3 className="text-lg font-semibold text-gray-900">تسجيل الحضور</h3>
           <button
             onClick={handleClose}
             className="text-gray-400 hover:text-gray-600"
@@ -109,9 +105,45 @@ export default function AttendanceModal({ isOpen, onClose, child, onSave, onDele
         </div>
 
         {/* Child Info */}
-        <div className="mb-6 p-3 bg-gray-50 rounded-lg">
-          <div className="text-center">
-            <div className="text-lg font-medium text-gray-900">{child.name}</div>
+        <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+          <div className="flex items-center gap-4">
+            {/* Child Image */}
+            <div className="relative flex-shrink-0">
+              {child.thumbnail || child.image ? (
+                <img
+                  src={child.thumbnail || child.image || ''}
+                  alt={child.name}
+                  className="w-16 h-16 rounded-full object-cover border-2 border-gray-200"
+                  loading="lazy"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center border-2 border-gray-200">
+                  <UserIcon className="w-8 h-8 text-blue-500" />
+                </div>
+              )}
+              {/* Preview button */}
+              {(child.thumbnail || child.image) && (
+                <button
+                  onClick={() => setShowImageModal(true)}
+                  className="absolute -bottom-1 -right-1 bg-blue-600 rounded-full p-1.5 shadow-md hover:bg-blue-700 transition-colors"
+                  title="عرض الصورة"
+                  type="button"
+                >
+                  <EyeIcon className="w-3 h-3 text-white" />
+                </button>
+              )}
+            </div>
+            {/* Child Name */}
+            <div className="flex-1">
+              <div className="text-lg font-medium text-gray-900">{child.name}</div>
+              {child.hasAttendanceRecord && (
+                <p className="text-sm text-gray-600 mt-1">
+                  الحالة: <span className={`font-medium ${child.isPresent ? 'text-green-600' : 'text-red-600'}`}>
+                    {child.isPresent ? 'حاضر' : 'غائب'}
+                  </span>
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
@@ -219,6 +251,16 @@ export default function AttendanceModal({ isOpen, onClose, child, onSave, onDele
           </button>
         </div>
       </div>
+
+      {/* Image Modal */}
+      {showImageModal && (child.optimizedImage || child.image) && (
+        <ImageModal
+          isOpen={showImageModal}
+          imageUrl={(child.optimizedImage || child.image)?.replace('/upload/', '/upload/f_auto,q_auto/') || ''}
+          childName={child.name}
+          onClose={() => setShowImageModal(false)}
+        />
+      )}
     </div>
   )
 }
