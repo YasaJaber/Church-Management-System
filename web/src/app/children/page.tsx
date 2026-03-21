@@ -77,6 +77,7 @@ export default function ChildrenPage() {
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [removeExistingImage, setRemoveExistingImage] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
@@ -209,6 +210,10 @@ export default function ChildrenPage() {
 
   // Remove selected image
   const handleRemoveImage = useCallback(() => {
+    // If editing and there's an existing image from server, mark it for removal
+    if (selectedChild && (selectedChild.image || selectedChild.thumbnail || selectedChild.optimizedImage)) {
+      setRemoveExistingImage(true)
+    }
     setImageFile(null)
     setImagePreview(null)
     if (fileInputRef.current) {
@@ -217,7 +222,7 @@ export default function ChildrenPage() {
     if (cameraInputRef.current) {
       cameraInputRef.current.value = ''
     }
-  }, [])
+  }, [selectedChild])
 
   // View full image
   const handleViewImage = (child: Child) => {
@@ -259,6 +264,16 @@ export default function ChildrenPage() {
     setIsUploading(true)
 
     try {
+      // If editing and user wants to remove existing image (without uploading new one)
+      if (selectedChild && removeExistingImage && !imageFile) {
+        const deleteImageResponse = await childrenAPI.deleteImage(selectedChild._id)
+        if (!deleteImageResponse.success) {
+          toast.error(deleteImageResponse.error || 'فشل في حذف الصورة')
+          setIsUploading(false)
+          return
+        }
+      }
+
       // Use FormData if there's an image, otherwise use regular object
       let submitData: FormData | any
 
@@ -359,6 +374,7 @@ export default function ChildrenPage() {
     // Reset image state
     setImageFile(null)
     setImagePreview(null)
+    setRemoveExistingImage(false)
     if (fileInputRef.current) fileInputRef.current.value = ''
     if (cameraInputRef.current) cameraInputRef.current.value = ''
   }
@@ -378,6 +394,7 @@ export default function ChildrenPage() {
       setImagePreview(null)
     }
     setImageFile(null)
+    setRemoveExistingImage(false)
     setShowEditModal(true)
   }
 
