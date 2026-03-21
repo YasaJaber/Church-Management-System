@@ -1117,6 +1117,105 @@ export const servantsAttendanceAPI = {
   }
 }
 
+// Kids API calls (with image upload)
+export const kidsAPI = {
+  getAll: async () => {
+    try {
+      logger.debug('Fetching all kids')
+      const response = await api.get('/kids')
+      logger.debug('Kids fetched successfully:', response.data)
+      return response.data
+    } catch (error: any) {
+      logger.error('Error fetching kids:', error)
+      return {
+        success: false,
+        error: error.response?.data?.error || 'حدث خطأ في جلب بيانات الأطفال'
+      }
+    }
+  },
+
+  getById: async (id: string) => {
+    try {
+      const response = await api.get(`/kids/${id}`)
+      return response.data
+    } catch (error: any) {
+      logger.error('Error fetching kid:', error)
+      return {
+        success: false,
+        error: error.response?.data?.error || 'حدث خطأ في جلب بيانات الطفل'
+      }
+    }
+  },
+
+  addKid: async (formData: FormData) => {
+    try {
+      logger.debug('Adding new kid with image')
+      const response = await api.post('/kids/add-kid', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      logger.debug('Kid added successfully:', response.data)
+      return response.data
+    } catch (error: any) {
+      logger.error('Error adding kid:', error)
+      return {
+        success: false,
+        error: error.response?.data?.error || 'حدث خطأ في إضافة الطفل'
+      }
+    }
+  },
+
+  update: async (id: string, formData: FormData) => {
+    try {
+      logger.debug('Updating kid:', id)
+      const response = await api.put(`/kids/${id}`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      })
+      logger.debug('Kid updated successfully:', response.data)
+      return response.data
+    } catch (error: any) {
+      logger.error('Error updating kid:', error)
+      return {
+        success: false,
+        error: error.response?.data?.error || 'حدث خطأ في تحديث بيانات الطفل'
+      }
+    }
+  },
+
+  delete: async (id: string) => {
+    try {
+      logger.debug('Deleting kid:', id)
+      const response = await api.delete(`/kids/${id}`)
+      logger.debug('Kid deleted successfully')
+      return response.data
+    } catch (error: any) {
+      logger.error('Error deleting kid:', error)
+      return {
+        success: false,
+        error: error.response?.data?.error || 'حدث خطأ في حذف الطفل'
+      }
+    }
+  },
+
+  deleteImage: async (id: string) => {
+    try {
+      logger.debug('Deleting kid image:', id)
+      const response = await api.delete(`/kids/${id}/image`)
+      logger.debug('Kid image deleted successfully')
+      return response.data
+    } catch (error: any) {
+      logger.error('Error deleting kid image:', error)
+      return {
+        success: false,
+        error: error.response?.data?.error || 'حدث خطأ في حذف الصورة'
+      }
+    }
+  },
+}
+
 // Export the main api instance and all APIs
 export { api }
 export default {
@@ -1128,5 +1227,6 @@ export default {
   servants: servantsAPI,
   servantsAttendance: servantsAttendanceAPI,
   pastoralCare: pastoralCareAPI,
+  kids: kidsAPI,
   clearStatisticsCache
 }
