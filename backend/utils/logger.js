@@ -68,14 +68,18 @@ const transports = [
   }),
 ];
 
-// If we're not in production, also log to console
-if (process.env.NODE_ENV !== 'production') {
-  transports.push(
-    new winston.transports.Console({
-      format: consoleFormat,
-    })
-  );
-}
+// Always log to console (important for Render/cloud platforms that capture stdout)
+transports.push(
+  new winston.transports.Console({
+    format: process.env.NODE_ENV === 'production'
+      ? winston.format.combine(
+          winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+          winston.format.errors({ stack: true }),
+          winston.format.json()
+        )
+      : consoleFormat,
+  })
+);
 
 // Create the logger
 const logger = winston.createLogger({
