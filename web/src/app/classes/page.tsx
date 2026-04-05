@@ -16,7 +16,7 @@ interface Class {
   name: string
   grade: string
   servant?: string
-  active: boolean
+  isActive: boolean
   createdAt: string
 }
 
@@ -40,9 +40,14 @@ export default function ClassesPage() {
     name: '',
     grade: '',
     servant: '',
-    active: true
+    isActive: true
   })
   const [searchTerm, setSearchTerm] = useState('')
+
+  const normalizeClass = (cls: Class & { active?: boolean; isActive?: boolean }) => ({
+    ...cls,
+    isActive: cls.isActive ?? cls.active ?? true,
+  })
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -68,13 +73,15 @@ export default function ClassesPage() {
       const response = await classesAPI.getAll()
       if (response.success && response.data) {
         // Filter out experimental/test classes
-        const filteredClasses = response.data.filter((cls: Class) => {
+        const filteredClasses = response.data
+          .map((cls: Class & { active?: boolean; isActive?: boolean }) => normalizeClass(cls))
+          .filter((cls: Class) => {
           const name = cls.name.toLowerCase()
           return !name.includes('تجريبي') && 
                  !name.includes('اختبار') && 
                  !name.includes('test') && 
                  !name.includes('experimental')
-        })
+          })
         setClasses(filteredClasses)
       }
     } catch (error) {
@@ -104,7 +111,7 @@ export default function ClassesPage() {
           name: '',
           grade: '',
           servant: '',
-          active: true
+          isActive: true
         })
         setShowAddModal(false)
         fetchClasses()
@@ -126,7 +133,7 @@ export default function ClassesPage() {
           name: '',
           grade: '',
           servant: '',
-          active: true
+          isActive: true
         })
         fetchClasses()
       }
@@ -158,7 +165,7 @@ export default function ClassesPage() {
       name: classItem.name,
       grade: classItem.grade,
       servant: classItem.servant || '',
-      active: classItem.active
+      isActive: classItem.isActive
     })
   }
 
@@ -251,11 +258,11 @@ export default function ClassesPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right">
                       <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        classItem.active 
+                        classItem.isActive 
                           ? 'bg-green-100 text-green-800' 
                           : 'bg-red-100 text-red-800'
                       }`}>
-                        {classItem.active ? 'نشط' : 'غير نشط'}
+                        {classItem.isActive ? 'نشط' : 'غير نشط'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -307,7 +314,7 @@ export default function ClassesPage() {
                   <p><strong>اسم الفصل:</strong> {selectedClass.name}</p>
                   <p><strong>المرحلة:</strong> {selectedClass.grade}</p>
                   {selectedClass.servant && <p><strong>الخادم:</strong> {selectedClass.servant}</p>}
-                  <p><strong>الحالة:</strong> {selectedClass.active ? 'نشط' : 'غير نشط'}</p>
+                  <p><strong>الحالة:</strong> {selectedClass.isActive ? 'نشط' : 'غير نشط'}</p>
                 </div>
               </div>
 
@@ -387,8 +394,8 @@ export default function ClassesPage() {
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={formData.active}
-                      onChange={(e) => setFormData({...formData, active: e.target.checked})}
+                      checked={formData.isActive}
+                      onChange={(e) => setFormData({...formData, isActive: e.target.checked})}
                       className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                     />
                     <span className="mr-2 text-sm text-gray-900">فصل نشط</span>
@@ -464,8 +471,8 @@ export default function ClassesPage() {
                   <label className="flex items-center">
                     <input
                       type="checkbox"
-                      checked={formData.active}
-                      onChange={(e) => setFormData({...formData, active: e.target.checked})}
+                      checked={formData.isActive}
+                      onChange={(e) => setFormData({...formData, isActive: e.target.checked})}
                       className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                     />
                     <span className="mr-2 text-sm text-gray-900">فصل نشط</span>
