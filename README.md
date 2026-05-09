@@ -35,10 +35,13 @@ A comprehensive church management system for Sunday Schools (مدارس الأح
   - Name, phone, parent name
   - Stage and grade
   - Class assignment
+  - **Birth date** (YYYY-MM-DD format with validation)
+  - **Profile image** (Cloudinary-hosted with thumbnails)
   - Notes and status
 - Validation for data integrity
 - Phone number format validation
 - Active/inactive child status tracking
+- Image upload with camera capture or gallery selection
 
 ### 📊 Attendance System
 - **Child Attendance Tracking**
@@ -94,6 +97,25 @@ A comprehensive church management system for Sunday Schools (مدارس الأح
   - Absence tracking for servants
   - Contact management
 
+### 🎂 Birthday Tracking System
+- **Weekly Birthday Detection**
+  - Automatic identification of children with birthdays in the current week
+  - Week range: Saturday to Friday (aligned with church service day)
+  - Smart date handling: shows current week on Friday, next week otherwise
+- **Birthday Dashboard** (`/birthdays`)
+  - Gradient banner with total count and week range
+  - Grouped by class with child cards
+  - Shows child photo, age calculation, birthday date, and phone number
+  - Arabic date formatting for user-friendly display
+  - Animated decorations (confetti, balloons)
+- **Role-based Access**
+  - Admin/Service Leader: View all classes' birthdays
+  - Teacher/Servant: View only their assigned class birthdays
+- **Integration**
+  - Birth date field in child creation/edit forms
+  - Indexed database queries for fast birthday lookups
+  - Direct navigation from dashboard
+
 ### 🎁 Gift Delivery System
 - **Attendance Rewards**
   - Track consecutive attendance weeks
@@ -106,6 +128,27 @@ A comprehensive church management system for Sunday Schools (مدارس الأح
   - Gift type customization
   - Notes for special cases
   - Reset markers (0 weeks for streak resets)
+
+### 📸 Image Management (Cloudinary)
+- **Child Profile Images**
+  - Upload via camera capture or gallery selection
+  - Cloudinary cloud storage (no local file storage)
+  - Automatic image optimization (quality & format auto-detection)
+  - Virtual thumbnail generation (80×80 cropped)
+  - Virtual optimized full-size URLs
+  - Image deletion on child removal
+  - Image replacement with old image cleanup
+- **Kids Gallery Module** (`/kids`)
+  - Separate standalone kids management with photos
+  - Grid layout with card-based UI
+  - Full-screen image modal viewer
+  - Camera and gallery upload buttons
+  - CRUD operations with image support
+- **Upload Configuration**
+  - Multer memory storage (no disk I/O)
+  - 10MB maximum file size
+  - Supported formats: JPEG, PNG, GIF, WebP
+  - Unique public IDs with sanitized names and timestamps
 
 ### 📄 Advanced Export Features
 - **PDF Export System**
@@ -332,9 +375,11 @@ A comprehensive church management system for Sunday Schools (مدارس الأح
 ```
 backend/
 ├── config/               # Database & environment configs
+│   └── cloudinary.js    # Cloudinary image storage configuration
 ├── models/              # Mongoose data models
 │   ├── User.js         # User accounts
-│   ├── Child.js        # Children records
+│   ├── Child.js        # Children records (with birthDate & image)
+│   ├── Kid.js          # Kids records (standalone with images)
 │   ├── Class.js        # Class information
 │   ├── Attendance.js   # Attendance records
 │   ├── ServantAttendance.js  # Servant attendance
@@ -343,12 +388,13 @@ backend/
 │   └── AuditLog.js     # Audit trail records
 ├── routes/             # API endpoints
 │   ├── auth.js        # Authentication
-│   ├── children.js    # Children CRUD
+│   ├── children.js    # Children CRUD + birthdays API
 │   ├── classes.js     # Classes CRUD
 │   ├── attendance.js  # Attendance management
 │   ├── servants.js    # Servant management
 │   ├── servants-attendance.js  # Servant attendance
 │   ├── pastoral-care.js        # Pastoral care
+│   ├── kids.js                 # Kids CRUD with image upload
 │   ├── statistics.js           # Statistics API
 │   ├── statistics-fresh.js     # Fresh stats API
 │   ├── advanced-statistics.js  # Advanced analytics
@@ -359,6 +405,7 @@ backend/
 │   ├── helmet.config.js # Security headers configuration
 │   ├── rateLimiter.js  # Rate limiting rules
 │   ├── httpLogger.js   # HTTP request/response logging
+│   ├── upload.js       # Multer file upload (memory storage, 10MB limit)
 │   └── validator.js    # Input validation & sanitization
 ├── utils/               # Utility functions
 │   ├── logger.js        # Winston logger with sanitization
@@ -382,6 +429,8 @@ web/
 │   │   ├── children/          # Children management
 │   │   ├── classes/           # Class management
 │   │   ├── attendance/        # Attendance marking
+│   │   ├── birthdays/         # 🎂 Birthday tracking dashboard
+│   │   ├── kids/              # 📸 Kids management with photos
 │   │   ├── servants/          # Servant management
 │   │   ├── servants-attendance/     # Servant attendance
 │   │   ├── pastoral-care/           # Pastoral care
@@ -401,10 +450,14 @@ web/
 │   │   ├── ServantsAttendanceModal.tsx
 │   │   ├── ExportAttendanceTeacher.tsx
 │   │   ├── ExportAttendanceAdmin.tsx
+│   │   ├── AddKidForm.tsx     # Kid creation form with image upload
+│   │   ├── KidCard.tsx        # Kid display card with thumbnail
+│   │   ├── ImageModal.tsx     # Full-screen image viewer
 │   │   ├── Charts.tsx
 │   │   ├── AdvancedCharts.tsx
 │   │   ├── ErrorBoundary.tsx  # Global error handling component
 │   │   └── ui/               # UI components
+│   │       ├── LoadingSpinner.tsx  # Reusable loading spinner
 │   │       └── ThemeToggle.tsx     # Dark mode toggle button
 │   ├── context/              # React Context
 │   │   ├── AuthContext.tsx
@@ -441,7 +494,10 @@ web/
   - ExcelJS (Excel generation)
   - PDFKit & PDFMake (PDF generation)
   - XLSX (Excel parsing)
-  - Multer (File uploads)
+- **Image Storage**: Cloudinary (cloud-based image management)
+  - Auto-optimization (quality & format)
+  - On-the-fly thumbnail transformations
+  - Multer (File uploads with memory storage)
 - **Date Handling**: date-fns & date-fns-tz
 - **HTTP Client**: Axios
 - **Security**:
@@ -455,6 +511,7 @@ web/
   - winston-daily-rotate-file (Log rotation)
 - **Error Handling**: Custom error classes and middleware
 - **CORS**: cors middleware
+- **Compression**: compression middleware (gzip, 60-80% size reduction)
 
 ### Frontend
 - **Framework**: Next.js 14 (App Router)
@@ -557,6 +614,13 @@ web/
 4. View charts and metrics
 5. Export data if needed
 
+#### 6. Check Birthdays
+1. Go to **Birthdays** page from the dashboard
+2. View children whose birthdays fall in the current week (Saturday–Friday)
+3. See age, photo, phone number, and class for each child
+4. Celebrate on Friday during church service
+5. Ensure birth dates are set in **Children Management**
+
 ---
 
 ## 🎯 Key Features Explained
@@ -597,7 +661,8 @@ web/
 
 ### Collections Overview
 - **users**: System users with roles
-- **children**: Student records
+- **children**: Student records (with birthDate, image, imagePublicId)
+- **kids**: Standalone kids records with photos (Cloudinary)
 - **classes**: Class organization
 - **attendances**: Attendance records (children & servants)
 - **servantattendances**: Dedicated servant attendance
@@ -612,6 +677,9 @@ web/
 - `{ stage: 1, grade: 1 }` - Class uniqueness
 - `{ classId: 1, createdAt: -1 }` - Audit logs by class
 - `{ userId: 1, createdAt: -1 }` - Audit logs by user
+- `{ birthDate: 1, isActive: 1 }` - Birthday lookups
+- `{ class: 1, isActive: 1 }` - Class children queries
+- `{ isActive: 1, name: 1 }` - Active kids sorted by name
 
 ---
 
@@ -634,8 +702,8 @@ MIT License - Open Source
 
 ---
 
-**Version**: 1.0  
-**Last Updated**: December 2025  
+**Version**: 2.0  
+**Last Updated**: May 2026  
 **Status**: Production Ready ✅
 
 ---
