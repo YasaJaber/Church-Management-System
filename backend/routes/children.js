@@ -261,7 +261,7 @@ router.post("/", authMiddleware, upload.single('image'), handleMulterError, asyn
     }
 
     // Check if user has permission to add children to this class
-    if (req.user.role !== "admin") {
+    if (req.user.role !== "admin" && req.user.role !== "serviceLeader") {
       if (
         !req.user.assignedClass ||
         req.user.assignedClass._id.toString() !== targetClassId.toString()
@@ -384,9 +384,10 @@ router.put("/:id", authMiddleware, upload.single('image'), handleMulterError, as
 
     console.log("👶 Found child:", child.name, "in class:", child.class?.name);
 
-    // Simplified permission check: Admin can edit all, others can edit only their class
+    // Simplified permission check: Admin and Service Leader can edit all, others can edit only their class
     const canEdit =
       req.user.role === "admin" ||
+      req.user.role === "serviceLeader" ||
       (req.user.assignedClass &&
         child.class._id.toString() === req.user.assignedClass._id.toString());
 
@@ -421,6 +422,7 @@ router.put("/:id", authMiddleware, upload.single('image'), handleMulterError, as
       // Check if user has permission to move child to new class
       const canMoveToNewClass =
         req.user.role === "admin" ||
+        req.user.role === "serviceLeader" ||
         (req.user.assignedClass &&
           req.user.assignedClass._id.toString() === classId);
 
@@ -547,6 +549,7 @@ router.delete("/:id/image", authMiddleware, async (req, res) => {
     // Check permission
     const canEdit =
       req.user.role === "admin" ||
+      req.user.role === "serviceLeader" ||
       (req.user.assignedClass &&
         child.class._id.toString() === req.user.assignedClass._id.toString());
 
@@ -599,7 +602,7 @@ router.delete("/:id", authMiddleware, async (req, res) => {
     }
 
     // Check if user has permission to delete this child
-    if (req.user.role !== "admin") {
+    if (req.user.role !== "admin" && req.user.role !== "serviceLeader") {
       if (
         !req.user.assignedClass ||
         child.class._id.toString() !== req.user.assignedClass._id.toString()
