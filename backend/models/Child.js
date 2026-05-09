@@ -41,6 +41,18 @@ const childSchema = new mongoose.Schema(
       ref: "Class",
       required: true,
     },
+    birthDate: {
+      type: String, // Format: YYYY-MM-DD
+      default: null,
+      validate: {
+        validator: function (v) {
+          if (!v) return true;
+          // التحقق من صيغة التاريخ YYYY-MM-DD
+          return /^\d{4}-\d{2}-\d{2}$/.test(v);
+        },
+        message: "تاريخ الميلاد يجب أن يكون بصيغة YYYY-MM-DD",
+      },
+    },
     notes: {
       type: String,
       trim: true,
@@ -83,5 +95,6 @@ childSchema.index({ class: 1, isActive: 1 }); // للبحث عن أطفال فص
 childSchema.index({ isActive: 1, name: 1 }); // للبحث والترتيب بالاسم
 childSchema.index({ class: 1, name: 1 }); // للبحث في فصل مع الترتيب
 childSchema.index({ stage: 1, grade: 1 }); // للفلترة حسب المرحلة والصف
+childSchema.index({ birthDate: 1, isActive: 1 }); // للبحث عن أعياد الميلاد
 
 module.exports = mongoose.model("Child", childSchema);

@@ -83,6 +83,112 @@ router.get("/class/:classId", authMiddleware, async (req, res) => {
   }
 });
 
+// @route   GET /api/children/birthdays
+// @desc    Get children whose birthdays fall in the week leading up to the next Friday
+// @access  Protected
+router.get("/birthdays", authMiddleware, asyncHandler(async (req, res) => {
+  const now = new Date();
+  const currentDayOfWeek = now.getDay(); // 0=Sunday, 5=Friday
+  
+  // حساب يوم الجمعة القادم
+  let daysUntilFriday = (5 - currentDayOfWeek + 7) % 7;
+  if (daysUntilFriday === 0) daysUntilFriday = 7; // لو النهارده جمعه، نأخذ الجمعة الجاية
+  
+  // إذا كان اليوم جمعة، نعرض أعياد ميلاد الأسبوع الحالي (السبت الماضي لحد الجمعة دي)
+  if (currentDayOfWeek === 5) {
+    daysUntilFriday = 0;
+  }
+  
+  const nextFriday = new Date(now);
+  nextFriday.setDate(now.getDate() + daysUntilFriday);
+  nextFriday.setHours(23, 59, 59, 999);
+  
+  // السبت اللي قبل الجمعة دي (بداية الأسبوع)
+  const previousSaturday = new Date(nextFriday);
+  previousSaturday.setDate(nextFriday.getDate() - 6);
+  previousSaturday.setHours(0, 0, 0, 0);
+  
+  console.log(`🎂 البحث عن أعياد الميلاد من ${previousSaturday.toISOString().split('T')[0]} إلى ${nextFriday.toISOString().split('T')[0]}`);
+  
+  // بناء query حسب صلاحيات المستخدم
+  let childrenQuery = { isActive: true, birthDate: { $ne: null } };
+  
+  if (req.user.role !== "admin" && req.user.role !== "serviceLeader") {
+    if ((req.user.role === "servant" || req.user.role === "classTeacher") && req.user.assignedClass) {
+      childrenQuery.class = req.user.assignedClass._id;
+    } else {
+      throw new AuthorizationError("ليس لديك صلاحية للوصول إلى بيانات أعياد الميلاد");
+    }
+  }
+  
+  const allChildren = await Child.find(childrenQuery)
+    .populate("class")
+    .sort({ name: 1 });
+  
+  // فلترة الأطفال حسب تاريخ الميلاد في الأسبوع
+  const birthdayChildren = allChildren.filter(child => {
+    if (!child.birthDate) return false;
+    
+    const birthParts = child.birthDate.split('-');
+    const birthMonth = parseInt(birthParts[1]);
+    const birthDay = parseInt(birthParts[2]);
+    
+    // نعمل تاريخ عيد الميلاد للسنة الحالية
+    const currentYear = now.getFullYear();
+    
+    // نشوف لو التاريخ بين السبت والجمعة
+    const satDate = new Date(previousSaturday.getFullYear(), previousSaturday.getMonth(), previousSaturday.getDate());
+    const friDate = new Date(nextFriday.getFullYear(), nextFriday.getMonth(), nextFriday.getDate());
+    const bDate = new Date(currentYear, birthMonth - 1, birthDay);
+    
+    return bDate >= satDate && bDate <= friDate;
+  });
+  
+  // تجميع حسب الفصول
+  const classBirthdays = {};
+  birthdayChildren.forEach(child => {
+    const classId = child.class?._id?.toString() || 'unknown';
+    const className = child.class?.name || 'غير محدد';
+    
+    if (!classBirthdays[classId]) {
+      classBirthdays[classId] = {
+        class: {
+          _id: classId,
+          name: className,
+        },
+        children: []
+      };
+    }
+    
+    // حساب العمر
+    const birthParts = child.birthDate.split('-');
+    const birthYear = parseInt(birthParts[0]);
+    const age = now.getFullYear() - birthYear;
+    
+    classBirthdays[classId].children.push({
+      _id: child._id,
+      name: child.name,
+      birthDate: child.birthDate,
+      age: age,
+      phone: child.phone,
+      image: child.image || null,
+      thumbnail: child.thumbnail || null,
+      className: className,
+    });
+  });
+  
+  res.json({
+    success: true,
+    data: Object.values(classBirthdays),
+    totalBirthdays: birthdayChildren.length,
+    weekRange: {
+      from: previousSaturday.toISOString().split('T')[0],
+      to: nextFriday.toISOString().split('T')[0],
+    },
+    nextFriday: nextFriday.toISOString().split('T')[0],
+  });
+}));
+
 // @route   GET /api/children/:id
 // @desc    Get single child details (with permission check)
 // @access  Protected
@@ -114,7 +220,7 @@ router.get("/:id", authMiddleware, childValidation.getById, asyncHandler(async (
 // @access  Protected
 router.post("/", authMiddleware, upload.single('image'), handleMulterError, async (req, res) => {
   try {
-    const { name, phone, parentName, classId, notes } = req.body;
+    const { name, phone, parentName, classId, notes, birthDate } = req.body;
 
     // فقط الاسم مطلوب
     if (!name || !name.trim()) {
@@ -203,6 +309,7 @@ router.post("/", authMiddleware, upload.single('image'), handleMulterError, asyn
       phone: phone ? phone.trim() : "",
       parentName: parentName ? parentName.trim() : name.trim(), // اسم الطفل كولي أمر افتراضي
       class: targetClassId,
+      birthDate: birthDate || null,
       notes: notes ? notes.trim() : "",
       image: imageUrl,
       imagePublicId: imagePublicId,
@@ -299,7 +406,7 @@ router.put("/:id", authMiddleware, upload.single('image'), handleMulterError, as
 
     console.log("✅ Permission granted for editing");
 
-    const { name, phone, parentName, classId, notes, stage, grade } = req.body;
+    const { name, phone, parentName, classId, notes, stage, grade, birthDate } = req.body;
 
     // Handle class change
     if (classId && classId !== child.class._id.toString()) {
@@ -369,6 +476,7 @@ router.put("/:id", authMiddleware, upload.single('image'), handleMulterError, as
     if (notes !== undefined) child.notes = notes;
     if (stage !== undefined) child.stage = stage;
     if (grade !== undefined) child.grade = grade;
+    if (birthDate !== undefined) child.birthDate = birthDate || null;
 
     console.log("📝 Updating child...");
 

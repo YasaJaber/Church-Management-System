@@ -765,6 +765,25 @@ export default function DashboardPage() {
             </button>
           )}
 
+          {/* أعياد الميلاد - متاح لجميع المستخدمين */}
+          <button
+            key="nav-birthdays"
+            onClick={() => router.push('/birthdays')}
+            className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
+          >
+            <div className="text-center">
+              <div className="w-12 h-12 bg-gradient-to-r from-pink-500 to-purple-500 rounded-lg flex items-center justify-center mx-auto mb-4">
+                <span className="text-white text-xl">🎂</span>
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                أعياد الميلاد
+              </h3>
+              <p className="text-sm text-gray-500">
+                أعياد ميلاد الأطفال هذا الأسبوع للاحتفال يوم الجمعة
+              </p>
+            </div>
+          </button>
+
           {/* تصدير الغياب - متاح لجميع المستخدمين */}
           <button
             key="nav-export-attendance"

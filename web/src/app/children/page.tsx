@@ -35,6 +35,7 @@ interface Child {
   classId?: string
   className?: string
   phone?: string
+  birthDate?: string | null
   notes?: string
   image?: string | null
   thumbnail?: string | null
@@ -86,6 +87,7 @@ export default function ChildrenPage() {
     name: '',
     classId: '',
     phone: '',
+    birthDate: '',
     notes: ''
   })
 
@@ -282,6 +284,7 @@ export default function ChildrenPage() {
         submitData.append('name', formData.name.trim())
         submitData.append('classId', finalClassId)
         submitData.append('phone', formData.phone || '')
+        submitData.append('birthDate', formData.birthDate || '')
         submitData.append('notes', formData.notes || '')
         submitData.append('image', imageFile)
       } else {
@@ -289,6 +292,7 @@ export default function ChildrenPage() {
           name: formData.name.trim(),
           classId: finalClassId,
           phone: formData.phone || '',
+          birthDate: formData.birthDate || '',
           notes: formData.notes || ''
         }
       }
@@ -366,6 +370,7 @@ export default function ChildrenPage() {
       name: '',
       classId: '',
       phone: '',
+      birthDate: '',
       notes: ''
     })
     setSelectedChild(null)
@@ -385,6 +390,7 @@ export default function ChildrenPage() {
       name: child.name,
       classId: child.classId && child.classId !== 'undefined' ? child.classId : '',
       phone: child.phone || '',
+      birthDate: child.birthDate || '',
       notes: child.notes || ''
     })
     // Set existing image as preview
@@ -649,6 +655,9 @@ export default function ChildrenPage() {
                                 <h4 className="font-medium text-gray-900 mb-1 truncate">{child.name}</h4>
                                 {child.phone && (
                                   <p className="text-sm text-gray-600 mb-1">📞 {child.phone}</p>
+                                )}
+                                {child.birthDate && (
+                                  <p className="text-sm text-gray-600 mb-1">🎂 {new Date(child.birthDate + 'T00:00:00').toLocaleDateString('ar-EG', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                                 )}
                                 {child.notes && (
                                   <p className="text-sm text-gray-500 truncate" title={child.notes}>
@@ -961,6 +970,18 @@ export default function ChildrenPage() {
                       </div>
                     )}
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      🎂 تاريخ الميلاد
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.birthDate}
+                      onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
               )}
 
@@ -1005,6 +1026,18 @@ export default function ChildrenPage() {
                         الطول: {formData.phone.length} أحرف
                       </div>
                     )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      🎂 تاريخ الميلاد
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.birthDate}
+                      onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
                   </div>
 
                   {/* عرض الفصل المخصص كنص فقط */}

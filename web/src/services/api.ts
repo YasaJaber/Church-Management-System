@@ -313,6 +313,22 @@ export const childrenAPI = {
     }
   },
 
+  // Get upcoming birthdays for the week
+  getBirthdays: async () => {
+    try {
+      logger.debug('Fetching upcoming birthdays')
+      const response = await api.get('/children/birthdays')
+      logger.debug('Birthdays fetched successfully')
+      return response.data
+    } catch (error: any) {
+      logger.error('Error fetching birthdays:', error)
+      return {
+        success: false,
+        error: error.response?.data?.error || 'حدث خطأ في تحميل أعياد الميلاد'
+      }
+    }
+  },
+
   // Get individual child statistics
   getIndividualStatistics: async (childId: string) => {
     try {
