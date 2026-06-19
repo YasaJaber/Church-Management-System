@@ -1177,10 +1177,11 @@ router.get(
 
 // @route   POST /api/servants
 // @desc    Create new servant
-// @access  Protected (Admin only)
-router.post("/", authMiddleware, adminOnly, async (req, res) => {
+// @access  Protected (Admin or Service Leader)
+router.post("/", authMiddleware, adminOrServiceLeader, async (req, res) => {
   try {
     const { name, phone, role = "servant" } = req.body;
+    const servantRole = req.user.role === "admin" ? role || "servant" : "servant";
 
     if (!name || !name.trim()) {
       return res.status(400).json({
@@ -1219,7 +1220,7 @@ router.post("/", authMiddleware, adminOnly, async (req, res) => {
       username,
       password: temporaryPassword, // Will be hashed by pre-save middleware
       phone: phone ? phone.trim() : "",
-      role: role || "servant",
+      role: servantRole,
       isActive: true, // Always active by default
     });
 

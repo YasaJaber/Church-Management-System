@@ -738,7 +738,7 @@ export const servantsAPI = {
       logger.error('Error creating servant:', error)
       return {
         success: false,
-        error: error.response?.data?.error || 'حدث خطأ في إضافة الخادم'
+        error: error.response?.data?.error || error.response?.data?.message || 'حدث خطأ في إضافة الخادم'
       }
     }
   },
