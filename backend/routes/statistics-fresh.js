@@ -775,7 +775,23 @@ router.post(
       console.log("🔐 Role:", req.user.role);
       console.log("=".repeat(60));
 
-      const { classId, resetAll } = req.body;
+      const { classId, resetAll, resetDate } = req.body;
+
+      const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
+      const resetDateStr =
+        typeof resetDate === "string" && dateOnlyPattern.test(resetDate)
+          ? resetDate
+          : new Date().toISOString().split("T")[0];
+      const resetDateValue = new Date(`${resetDateStr}T12:00:00.000Z`);
+      const resetDayStart = new Date(`${resetDateStr}T00:00:00.000Z`);
+      const resetDayEnd = new Date(`${resetDateStr}T23:59:59.999Z`);
+
+      if (Number.isNaN(resetDateValue.getTime())) {
+        return res.status(400).json({
+          success: false,
+          error: "تاريخ إعادة التعيين غير صحيح",
+        });
+      }
 
       // Determine which class(es) to reset
       let targetClassIds = [];
@@ -832,16 +848,17 @@ router.post(
 
       // Create gift delivery records for all children as reset markers
       // This doesn't affect attendance records at all - just acts as a cutoff point
-      const today = new Date();
       const giftRecords = [];
 
       for (const child of children) {
-        // Check if already has a gift delivery today
+        // Check if already has a reset marker on the selected date
         const existingGift = await GiftDelivery.findOne({
           child: child._id,
+          consecutiveWeeksEarned: 0,
+          isActive: true,
           deliveryDate: {
-            $gte: new Date(today.setHours(0, 0, 0, 0)),
-            $lt: new Date(today.setHours(23, 59, 59, 999)),
+            $gte: resetDayStart,
+            $lt: resetDayEnd,
           },
         });
 
@@ -851,8 +868,8 @@ router.post(
             deliveredBy: req.user.userId || req.user._id,
             consecutiveWeeksEarned: 0, // Reset marker, not actual gift
             giftType: "إعادة تعيين عداد المواظبة",
-            notes: `🔄 إعادة تعيين جماعي بواسطة ${req.user.name}`,
-            deliveryDate: new Date(),
+            notes: `إعادة تعيين جماعي بتاريخ ${resetDateStr} بواسطة ${req.user.name}`,
+            deliveryDate: resetDateValue,
             isActive: true,
           });
         }
@@ -877,7 +894,7 @@ router.post(
           classesCount: targetClassIds.length,
           childrenCount: children.length,
           resetCount: giftRecords.length,
-          date: today,
+          date: resetDateStr,
         };
       } else {
         // Reset single class
@@ -889,7 +906,7 @@ router.post(
           className: classData.name,
           childrenCount: children.length,
           resetCount: giftRecords.length,
-          date: today,
+          date: resetDateStr,
         };
       }
 

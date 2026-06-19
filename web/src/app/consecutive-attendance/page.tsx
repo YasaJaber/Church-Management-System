@@ -41,6 +41,17 @@ interface WeeklyAttendance {
   attendanceRate: number
 }
 
+const getPreviousFridayDate = () => {
+  const current = new Date()
+  current.setDate(current.getDate() - 1)
+
+  while (current.getDay() !== 5) {
+    current.setDate(current.getDate() - 1)
+  }
+
+  return current.toISOString().split('T')[0]
+}
+
 export default function ConsecutiveAttendancePage() {
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
@@ -52,6 +63,7 @@ export default function ConsecutiveAttendancePage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [deliveryLoading, setDeliveryLoading] = useState<string | null>(null)
+  const [resetDate, setResetDate] = useState(getPreviousFridayDate)
 
   // Image modal state
   const [imageModal, setImageModal] = useState<{
@@ -299,10 +311,15 @@ export default function ConsecutiveAttendancePage() {
     // Determine scope
     const isAllClasses = !selectedClass && (user?.role === 'admin' || user?.role === 'serviceLeader')
     const scopeText = isAllClasses ? 'جميع الفصول' : selectedClass ? 'الفصل المحدد' : 'فصلك'
+
+    if (!resetDate) {
+      alert('يرجى اختيار تاريخ الريسيت')
+      return
+    }
     
     // Confirm before reset
     const confirmed = window.confirm(
-      `⚠️ هل أنت متأكد من إعادة تعيين المواظبة لـ ${scopeText}؟\n\n` +
+      `⚠️ هل أنت متأكد من إعادة تعيين المواظبة لـ ${scopeText} بتاريخ ${formatDate(resetDate)}؟\n\n` +
       (isAllClasses 
         ? '⚠️ تحذير: سيتم إعادة تعيين عداد الحضور المتتالي لجميع الأطفال في جميع الفصول!\n\n'
         : 'سيتم إعادة تعيين عداد الحضور المتتالي لجميع الأطفال في الفصل وسيبدأ العد من جديد.\n\n'
@@ -338,14 +355,15 @@ export default function ConsecutiveAttendancePage() {
         },
         body: JSON.stringify({ 
           classId: classIdToReset,
-          resetAll: isAllClasses // Flag to indicate resetting all classes
+          resetAll: isAllClasses, // Flag to indicate resetting all classes
+          resetDate
         })
       })
       
       const data = await response.json()
       
       if (data.success) {
-        alert(`✅ ${data.message}\n\n🎉 تم بدء دورة مواظبة جديدة!`)
+        alert(`✅ ${data.message}\n\nتاريخ الريسيت: ${formatDate(resetDate)}\nتم بدء دورة مواظبة جديدة!`)
         
         // Refresh the data
         const classIdToFetch = (user?.role === 'classTeacher' || user?.role === 'servant') && user?.assignedClass 
@@ -392,7 +410,7 @@ export default function ConsecutiveAttendancePage() {
       {/* تصفية الفصول - فقط للأدمن وأمين الخدمة */}
       {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
         <div className="bg-white p-6 rounded-lg shadow mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2 text-right">
                 اختر الفصل
@@ -410,6 +428,19 @@ export default function ConsecutiveAttendancePage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 text-right">
+                تاريخ الريسيت
+              </label>
+              <input
+                type="date"
+                value={resetDate}
+                onChange={(e) => setResetDate(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-2 text-right w-full"
+                title="اختر تاريخ الريسيت"
+              />
             </div>
             
             <div className="flex items-end">
@@ -439,7 +470,19 @@ export default function ConsecutiveAttendancePage() {
       {/* أزرار التحديث وإعادة التعيين للمدرسين */}
       {(user?.role === 'classTeacher' || user?.role === 'servant') && (
         <div className="bg-white p-6 rounded-lg shadow mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 text-right">
+                تاريخ الريسيت
+              </label>
+              <input
+                type="date"
+                value={resetDate}
+                onChange={(e) => setResetDate(e.target.value)}
+                className="border border-gray-300 rounded-lg px-3 py-3 text-right w-full"
+                title="اختر تاريخ الريسيت"
+              />
+            </div>
             <button
               onClick={() => fetchConsecutiveAttendance(user?.assignedClass?._id)}
               disabled={loading}

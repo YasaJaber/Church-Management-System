@@ -35,6 +35,17 @@ interface DashboardStats {
   consecutiveServants: number
 }
 
+const getPreviousFridayDate = () => {
+  const current = new Date()
+  current.setDate(current.getDate() - 1)
+
+  while (current.getDay() !== 5) {
+    current.setDate(current.getDate() - 1)
+  }
+
+  return current.toISOString().split('T')[0]
+}
+
 export default function ServiceLeaderDashboard() {
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
@@ -48,6 +59,8 @@ export default function ServiceLeaderDashboard() {
   })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [resetDate, setResetDate] = useState(getPreviousFridayDate)
+  const [resetLoading, setResetLoading] = useState(false)
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -139,6 +152,66 @@ export default function ServiceLeaderDashboard() {
       setError(error.message || 'حدث خطأ في جلب البيانات')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('ar-EG', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    })
+  }
+
+  const handleResetAllClasses = async () => {
+    if (!resetDate) {
+      setError('يرجى اختيار تاريخ الريسيت')
+      return
+    }
+
+    const confirmed = window.confirm(
+      `هل تريد إعادة تعيين مواظبة الأطفال لكل الفصول بتاريخ ${formatDate(resetDate)}؟\n\n` +
+      'سيبدأ العد من أول جمعة بعد تاريخ الريسيت، ولن يتم حذف أي سجلات حضور.'
+    )
+
+    if (!confirmed) return
+
+    try {
+      setResetLoading(true)
+      setError('')
+
+      const token = localStorage.getItem('token') || localStorage.getItem('auth_token')
+
+      if (!token) {
+        setError('يرجى تسجيل الدخول أولاً')
+        return
+      }
+
+      const response = await fetch(`${API_BASE_URL}/statistics/reset-consecutive-attendance`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          resetAll: true,
+          resetDate
+        })
+      })
+
+      const data = await response.json()
+
+      if (!data.success) {
+        throw new Error(data.error || 'حدث خطأ في إعادة التعيين')
+      }
+
+      alert(`${data.message}\nتاريخ الريسيت: ${formatDate(resetDate)}`)
+      await fetchDashboardData()
+    } catch (error: any) {
+      console.error('Error resetting all classes:', error)
+      setError(error.message || 'حدث خطأ في إعادة التعيين')
+    } finally {
+      setResetLoading(false)
     }
   }
 
@@ -275,6 +348,37 @@ export default function ServiceLeaderDashboard() {
             </div>
           </div>
         </Link>
+      </div>
+
+      {/* إعادة تعيين مواظبة الأطفال */}
+      <div className="bg-white p-6 rounded-lg shadow mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-end">
+          <div className="lg:col-span-2">
+            <h2 className="text-lg font-bold text-gray-900 text-right mb-2">إعادة تعيين مواظبة الأطفال</h2>
+            <p className="text-sm text-gray-600 text-right">
+              اختار تاريخ الريسيت لكل الفصول. لو اخترت 12/06/2026، تصبح جمعة 19/06/2026 أول جمعة في دورة المواظبة الجديدة.
+            </p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2 text-right">
+              تاريخ الريسيت
+            </label>
+            <input
+              type="date"
+              value={resetDate}
+              onChange={(event) => setResetDate(event.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-2 text-right w-full"
+              title="تاريخ الريسيت"
+            />
+          </div>
+          <button
+            onClick={handleResetAllClasses}
+            disabled={resetLoading}
+            className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors lg:col-start-3"
+          >
+            {resetLoading ? 'جاري إعادة التعيين...' : 'إعادة تعيين كل الفصول'}
+          </button>
+        </div>
       </div>
 
       {/* تحديث البيانات */}
