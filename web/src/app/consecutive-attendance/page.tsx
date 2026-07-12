@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation'
 import { classesAPI, API_BASE_URL } from '@/services/api'
 import { EyeIcon, UserIcon } from '@heroicons/react/24/outline'
 import ImageModal from '@/components/ImageModal'
+import PageBackButton from '@/components/ui/PageBackButton'
 
 interface ConsecutiveChild {
   name: string
@@ -393,6 +394,7 @@ export default function ConsecutiveAttendancePage() {
   return (
     <div className="p-6" dir="rtl">
       <div className="mb-6">
+        <PageBackButton className="mb-3" />
         <h1 className="text-3xl font-bold text-gray-900 text-right">
           {user?.role === 'classTeacher' || user?.role === 'servant' ? 
             `المواظبون في فصلي (4 مرات متتالية)` : 

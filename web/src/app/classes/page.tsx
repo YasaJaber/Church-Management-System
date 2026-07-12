@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 import { classesAPI, childrenAPI } from '@/services/api'
+import PageBackButton from '@/components/ui/PageBackButton'
 
 interface Class {
   _id: string
@@ -191,6 +192,7 @@ export default function ClassesPage() {
   return (
     <div className="p-6" dir="rtl">
       <div className="mb-6">
+        <PageBackButton className="mb-3" />
         <h1 className="text-3xl font-bold text-gray-900 text-right">إدارة الفصول</h1>
         <p className="text-gray-600 text-right mt-2">تنظيم الفصول وإدارة توزيع الأطفال</p>
       </div>

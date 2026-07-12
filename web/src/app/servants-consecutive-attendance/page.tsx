@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
 import { API_BASE_URL } from '@/services/api'
+import PageBackButton from '@/components/ui/PageBackButton'
 
 interface ConsecutiveServant {
   servantId: string
@@ -263,12 +264,7 @@ export default function ServantsConsecutiveAttendancePage() {
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => router.push('/service-leader-dashboard')}
-              className="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition"
-            >
-              ← العودة
-            </button>
+            <PageBackButton href="/service-leader-dashboard" />
           </div>
 
           {/* Summary Stats */}

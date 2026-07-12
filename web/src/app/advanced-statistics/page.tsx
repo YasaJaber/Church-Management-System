@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
 import { FORCE_PRODUCTION_API as API_BASE_URL } from '@/config/api'
+import PageBackButton from '@/components/ui/PageBackButton'
 import {
   AttendanceTrendLineChart,
   DailyAttendanceRateChart,
@@ -186,6 +187,7 @@ export default function AdvancedStatisticsPage() {
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+          <PageBackButton className="mb-3" />
           <h1 className="text-3xl font-bold text-gray-800 mb-2">
             📊 الإحصائيات المتقدمة والتحليلات البيانية
           </h1>

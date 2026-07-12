@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
 import { attendanceAPI } from '@/services/api'
 import { FORCE_PRODUCTION_API } from '@/config/api'
+import PageBackButton from '@/components/ui/PageBackButton'
 
 // FORCE production API URL - no localhost allowed
 const API_BASE_URL = FORCE_PRODUCTION_API
@@ -295,6 +296,7 @@ export default function StatisticsPage() {
   return (
     <div className="p-6" dir="rtl">
       <div className="mb-6">
+        <PageBackButton className="mb-3" />
         <h1 className="text-3xl font-bold text-gray-900 text-right">الإحصائيات</h1>
         <p className="text-gray-600 text-right mt-2">تقارير الحضور والإحصائيات العامة</p>
       </div>

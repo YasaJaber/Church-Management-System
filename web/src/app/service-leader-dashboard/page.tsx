@@ -10,6 +10,7 @@ import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { API_BASE_URL } from '@/services/api'
+import PageBackButton from '@/components/ui/PageBackButton'
 
 interface DashboardStats {
   children: {
@@ -226,6 +227,7 @@ export default function ServiceLeaderDashboard() {
   return (
     <div className="p-6" dir="rtl">
       <div className="mb-6">
+        <PageBackButton className="mb-3" />
         <h1 className="text-3xl font-bold text-gray-900 text-right">لوحة تحكم أمين الخدمة</h1>
         <p className="text-gray-600 text-right mt-2">نظرة شاملة على إحصائيات الخدمة والحضور</p>
       </div>

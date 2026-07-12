@@ -19,6 +19,7 @@ import {
   EyeIcon
 } from '@heroicons/react/24/outline'
 import ImageModal from '@/components/ImageModal'
+import PageBackButton from '@/components/ui/PageBackButton'
 
 interface Child {
   _id: string
@@ -277,6 +278,7 @@ export default function ChildrenTrackingPage() {
     <div className="p-6 bg-gray-50 min-h-screen" dir="rtl">
       {/* Header */}
       <div className="mb-8">
+        <PageBackButton className="mb-3" />
         <h1 className="text-3xl font-bold text-gray-900 text-right mb-2">
           المتابعة الفردية للأطفال
         </h1>

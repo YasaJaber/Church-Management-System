@@ -8,6 +8,7 @@ import { api } from '@/services/api'
 import { format } from 'date-fns'
 import { ar } from 'date-fns/locale'
 import toast from 'react-hot-toast'
+import PageBackButton from '@/components/ui/PageBackButton'
 
 interface LoginDetails {
   deviceType: string
@@ -234,12 +235,7 @@ export default function AuditLogsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white ml-4"
-              >
-                ← الرجوع
-              </button>
+              <PageBackButton className="ml-4" />
               <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
                 📋 سجل العمليات
                 {!isServiceLeaderOrAdmin && user.assignedClass && (

@@ -12,6 +12,7 @@ import {
   UserGroupIcon,
 } from '@heroicons/react/24/outline'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
+import PageBackButton from '@/components/ui/PageBackButton'
 import AddKidForm from '@/components/AddKidForm'
 import KidCard from '@/components/KidCard'
 import { kidsAPI } from '@/services/api'
@@ -118,12 +119,7 @@ export default function KidsPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 ml-4"
-              >
-                ← العودة
-              </button>
+              <PageBackButton className="ml-4" />
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white">
                 إدارة الأطفال (مع الصور)
               </h1>

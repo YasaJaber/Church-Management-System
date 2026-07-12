@@ -10,6 +10,7 @@ import { ExportAttendanceAdmin } from '@/components/ExportAttendanceAdmin'
 import { useRouter } from 'next/navigation'
 import LoadingSpinner from '@/components/ui/LoadingSpinner'
 import Image from 'next/image'
+import PageBackButton from '@/components/ui/PageBackButton'
 
 export default function ExportAttendancePage() {
   const { user, isAuthenticated, isLoading } = useAuth()
@@ -54,12 +55,7 @@ export default function ExportAttendancePage() {
                 تصدير سجلات الغياب
               </h1>
             </div>
-            <button
-              onClick={() => router.push('/dashboard')}
-              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-md transition-colors"
-            >
-              العودة للوحة التحكم
-            </button>
+            <PageBackButton />
           </div>
         </div>
       </header>

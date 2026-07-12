@@ -9,6 +9,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '@/context/AuthContextSimple'
 import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
+import PageBackButton from '@/components/ui/PageBackButton'
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -479,12 +480,7 @@ export default function ChildrenPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center min-w-0 flex-1">
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="text-gray-500 hover:text-gray-700 ml-4 flex-shrink-0"
-              >
-                ← العودة
-              </button>
+              <PageBackButton className="ml-4" />
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate">
                 إدارة الأطفال
                 {user?.assignedClass && (
