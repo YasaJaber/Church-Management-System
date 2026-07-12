@@ -605,7 +605,14 @@ export default function ConsecutiveAttendancePage() {
               
               <div className="p-6">
                 <div className="overflow-x-auto">
-                  <table className="min-w-full">
+                  <table className="w-full min-w-[64rem] table-fixed">
+                    <colgroup>
+                      <col className="w-28" />
+                      <col className="w-72" />
+                      <col className="w-64" />
+                      <col className="w-52" />
+                      <col className="w-56" />
+                    </colgroup>
                     <thead className="bg-gray-50">
                       <tr>
                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -645,7 +652,7 @@ export default function ConsecutiveAttendancePage() {
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right">
-                            <div className="flex items-center justify-end gap-3">
+                            <div className="flex w-full items-center justify-start gap-3">
                               {/* Child Image */}
                               <div className="relative flex-shrink-0">
                                 {child.thumbnail || child.image ? (
@@ -671,7 +678,7 @@ export default function ConsecutiveAttendancePage() {
                                   </button>
                                 )}
                               </div>
-                              <div className="text-sm font-medium text-gray-900">
+                              <div className="min-w-0 truncate text-sm font-medium text-gray-900">
                                 {child.name}
                               </div>
                             </div>
