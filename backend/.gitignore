@@ -96,3 +96,6 @@ login_response.json
 
 # Documentation files
 *.md
+
+# Local setup scripts containing environment-specific provisioning logic
+/scripts/setup-baby-class.js
