@@ -156,12 +156,37 @@ export default function PointsPage() {
     loadDashboard()
   }, [loadDashboard])
 
-  const pendingScoreByChild = useMemo(() => {
-    return pendingEntries.reduce<Record<string, number>>((scores, entry) => {
-      scores[entry.childId] = (scores[entry.childId] || 0) + entry.points
-      return scores
+  const savedStatusByKey = useMemo(() => {
+    const statuses: Record<string, number> = {}
+    dashboard?.recentEntries.forEach((entry) => {
+      const childId = entry.child?._id
+      const categoryId = entry.category?._id
+      if (!childId || !categoryId) return
+      const key = `${childId}:${categoryId}`
+      // The API returns newest entries first. Keep the newest status if old
+      // duplicate records exist from the previous multi-point behavior.
+      if (statuses[key] === undefined) statuses[key] = entry.points > 0 ? 1 : -1
+    })
+    return statuses
+  }, [dashboard?.recentEntries])
+
+  const pendingStatusByKey = useMemo(() => {
+    return pendingEntries.reduce<Record<string, number>>((statuses, entry) => {
+      statuses[`${entry.childId}:${entry.categoryId}`] = entry.points
+      return statuses
     }, {})
   }, [pendingEntries])
+
+  const getPointStatus = (childId: string, categoryId: string) =>
+    pendingStatusByKey[`${childId}:${categoryId}`] ?? savedStatusByKey[`${childId}:${categoryId}`] ?? 0
+
+  const pendingScoreByChild = useMemo(() => {
+    return pendingEntries.reduce<Record<string, number>>((scores, entry) => {
+      const key = `${entry.childId}:${entry.categoryId}`
+      scores[entry.childId] = (scores[entry.childId] || 0) + entry.points - (savedStatusByKey[key] || 0)
+      return scores
+    }, {})
+  }, [pendingEntries, savedStatusByKey])
 
   const displayLeaderboard = useMemo(() => {
     if (!dashboard) return []
@@ -191,11 +216,16 @@ export default function PointsPage() {
   }, [dashboard, pendingEntries])
 
   const queueEntry = (child: LeaderboardChild, category: Category, points: number) => {
-    setPendingEntries((current) => [...current, {
-      childId: child._id,
-      categoryId: category._id,
-      points,
-    }])
+    const key = `${child._id}:${category._id}`
+    const savedStatus = savedStatusByKey[key] || 0
+    setPendingEntries((current) => {
+      // Pressing the same state twice does not add another point.
+      if (points === savedStatus) return current.filter((entry) => `${entry.childId}:${entry.categoryId}` !== key)
+      const nextEntry = { childId: child._id, categoryId: category._id, points }
+      const existingIndex = current.findIndex((entry) => `${entry.childId}:${entry.categoryId}` === key)
+      if (existingIndex === -1) return [...current, nextEntry]
+      return current.map((entry, index) => index === existingIndex ? nextEntry : entry)
+    })
   }
 
   const removePendingEntry = (index: number) => {
@@ -385,6 +415,11 @@ export default function PointsPage() {
                   <div className="inline-flex items-center gap-2 self-start rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
                     <TrophyIcon className="h-4 w-4" /> أعلى نقاط يفوز بالجائزة
                   </div>
+                  <div className="flex flex-wrap items-center gap-2 self-start text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">أخضر +1</span>
+                    <span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">أحمر -1</span>
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 dark:bg-slate-800">لم يسجل</span>
+                  </div>
                 </div>
 
                 {displayLeaderboard.length === 0 ? (
@@ -420,23 +455,27 @@ export default function PointsPage() {
                           </div>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2 pr-12 sm:pr-12">
-                          {dashboard.categories.map((category) => (
-                            <div key={category._id} className="inline-flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
+                          {dashboard.categories.map((category) => {
+                            const status = getPointStatus(child._id, category._id)
+                            const isPending = pendingStatusByKey[`${child._id}:${category._id}`] !== undefined
+                            return (
+                            <div key={category._id} className={`inline-flex items-center overflow-hidden rounded-xl border shadow-sm ${status > 0 ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-900/30' : status < 0 ? 'border-rose-300 bg-rose-50 dark:border-rose-700 dark:bg-rose-900/30' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800'} ${isPending ? 'ring-2 ring-amber-300/70 dark:ring-amber-600/60' : ''}`}>
                               <button
                                 onClick={() => queueEntry(child, category, -1)}
                                 disabled={saving}
                                 title={`خصم نقطة: ${category.name}`}
-                                className="flex h-8 w-8 items-center justify-center text-rose-500 transition hover:bg-rose-50 dark:hover:bg-rose-900/30 disabled:opacity-50"
+                                className={`flex h-8 w-8 items-center justify-center transition disabled:opacity-50 ${status < 0 ? 'bg-rose-500 text-white' : 'text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/40'}`}
                               ><ArrowDownIcon className="h-4 w-4" /></button>
-                              <span className="max-w-[110px] truncate border-x border-slate-100 px-2 text-xs font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">{category.name}</span>
+                              <span className={`max-w-[110px] truncate border-x px-2 text-xs font-bold ${status > 0 ? 'border-emerald-200 text-emerald-800 dark:border-emerald-700 dark:text-emerald-200' : status < 0 ? 'border-rose-200 text-rose-800 dark:border-rose-700 dark:text-rose-200' : 'border-slate-100 text-slate-600 dark:border-slate-700 dark:text-slate-300'}`}>{category.name}</span>
                               <button
                                 onClick={() => queueEntry(child, category, 1)}
                                 disabled={saving}
                                 title={`إضافة نقطة: ${category.name}`}
-                                className="flex h-8 w-8 items-center justify-center text-emerald-600 transition hover:bg-emerald-50 dark:hover:bg-emerald-900/30 disabled:opacity-50"
+                                className={`flex h-8 w-8 items-center justify-center transition disabled:opacity-50 ${status > 0 ? 'bg-emerald-500 text-white' : 'text-emerald-600 hover:bg-emerald-100 dark:hover:bg-emerald-900/40'}`}
                               ><ArrowUpIcon className="h-4 w-4" /></button>
                             </div>
-                          ))}
+                            )
+                          })}
                           {dashboard.categories.length === 0 && <span className="text-xs text-slate-400 dark:text-slate-500">أضف بنودًا من لوحة البنود لبدء التسجيل.</span>}
                         </div>
                       </div>

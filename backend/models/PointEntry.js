@@ -35,8 +35,8 @@ const pointEntrySchema = new mongoose.Schema(
       type: Number,
       required: true,
       validate: {
-        validator: (value) => Number.isInteger(value) && value !== 0,
-        message: "قيمة النقاط يجب أن تكون رقمًا صحيحًا غير صفري",
+        validator: (value) => value === 1 || value === -1,
+        message: "كل بند يسمح بنقطة واحدة فقط: إضافة أو خصم",
       },
     },
     note: {
@@ -55,5 +55,6 @@ const pointEntrySchema = new mongoose.Schema(
 
 pointEntrySchema.index({ cycle: 1, child: 1, createdAt: -1 });
 pointEntrySchema.index({ cycle: 1, date: 1, createdAt: -1 });
+pointEntrySchema.index({ cycle: 1, date: 1, child: 1, category: 1 });
 
 module.exports = mongoose.model("PointEntry", pointEntrySchema);

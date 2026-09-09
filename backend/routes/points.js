@@ -98,14 +98,21 @@ router.get("/", authMiddleware, asyncHandler(async (req, res) => {
     cycle
       ? PointEntry.aggregate([
           { $match: { class: new mongoose.Types.ObjectId(classId), cycle: cycle._id } },
-          { $group: { _id: "$child", score: { $sum: "$points" } } },
+          { $sort: { updatedAt: -1, createdAt: -1 } },
+          {
+            $group: {
+              _id: { child: "$child", category: "$category", date: "$date" },
+              points: { $first: { $cond: [{ $gt: ["$points", 0] }, 1, -1] } },
+            },
+          },
+          { $group: { _id: "$_id.child", score: { $sum: "$points" } } },
         ])
       : Promise.resolve([]),
     cycle
       ? PointEntry.find({ class: classId, cycle: cycle._id, ...dateFilter })
           .populate("category", "name")
           .populate("child", "name")
-          .sort({ createdAt: -1 })
+          .sort({ updatedAt: -1, createdAt: -1 })
           .limit(200)
       : Promise.resolve([]),
   ]);
@@ -197,8 +204,7 @@ router.post("/entries/batch", authMiddleware, asyncHandler(async (req, res) => {
       !mongoose.Types.ObjectId.isValid(entry.childId) ||
       !mongoose.Types.ObjectId.isValid(entry.categoryId) ||
       !Number.isInteger(numericPoints) ||
-      numericPoints === 0 ||
-      Math.abs(numericPoints) > 100
+      (numericPoints !== 1 && numericPoints !== -1)
     );
   });
   if (invalidEntry) {
@@ -207,6 +213,10 @@ router.post("/entries/batch", authMiddleware, asyncHandler(async (req, res) => {
 
   const childIds = [...new Set(entries.map((entry) => String(entry.childId)))];
   const categoryIds = [...new Set(entries.map((entry) => String(entry.categoryId)))];
+  const entryKeys = entries.map((entry) => `${entry.childId}:${entry.categoryId}`);
+  if (new Set(entryKeys).size !== entryKeys.length) {
+    return res.status(400).json({ success: false, error: "كل طفل يسمح له بنقطة واحدة فقط لكل بند في الجمعة" });
+  }
   const [children, categories] = await Promise.all([
     Child.find({ _id: { $in: childIds }, class: classId, isActive: true }).select("_id"),
     PointCategory.find({ _id: { $in: categoryIds }, class: classId, isActive: true }).select("_id"),
@@ -230,11 +240,31 @@ router.post("/entries/batch", authMiddleware, asyncHandler(async (req, res) => {
     note: entry.note ? String(entry.note).trim() : undefined,
     createdBy: req.user.userId || req.user._id,
   }));
-  const createdEntries = await PointEntry.insertMany(documents);
+  const operations = documents.map((document) => ({
+    updateOne: {
+      filter: {
+        cycle: document.cycle,
+        date: document.date,
+        child: document.child,
+        category: document.category,
+      },
+      update: {
+        $set: {
+          class: document.class,
+          points: document.points,
+          note: document.note,
+          createdBy: document.createdBy,
+          updatedAt: new Date(),
+        },
+      },
+      upsert: true,
+    },
+  }));
+  const batchResult = await PointEntry.bulkWrite(operations);
   res.status(201).json({
     success: true,
-    data: { count: createdEntries.length },
-    message: `تم حفظ ${createdEntries.length} حركة نقاط مرة واحدة`,
+    data: { count: operations.length, modified: batchResult.modifiedCount, upserted: batchResult.upsertedCount },
+    message: `تم حفظ ${operations.length} حالة نقاط مرة واحدة`,
   });
 }));
 
@@ -249,8 +279,8 @@ router.post("/entries", authMiddleware, asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, error: "يمكن تسجيل النقاط ليوم الجمعة فقط" });
   }
   const numericPoints = Number(points);
-  if (!Number.isInteger(numericPoints) || numericPoints === 0 || Math.abs(numericPoints) > 100) {
-    return res.status(400).json({ success: false, error: "قيمة النقاط يجب أن تكون رقمًا صحيحًا بين -100 و100" });
+  if (numericPoints !== 1 && numericPoints !== -1) {
+    return res.status(400).json({ success: false, error: "كل بند يسمح بنقطة واحدة فقط: إضافة أو خصم" });
   }
 
   const [child, category] = await Promise.all([
@@ -264,16 +294,19 @@ router.post("/entries", authMiddleware, asyncHandler(async (req, res) => {
   // or creating a category must not start the competition.
   const cycle = await getActiveCycle(classId, req.user.userId || req.user._id);
 
-  const entry = await PointEntry.create({
-    cycle: cycle._id,
-    class: classId,
-    child: child._id,
-    category: category._id,
-    date: entryDate,
-    points: numericPoints,
-    note: note ? String(note).trim() : undefined,
-    createdBy: req.user.userId || req.user._id,
-  });
+  const entry = await PointEntry.findOneAndUpdate(
+    { cycle: cycle._id, date: entryDate, child: child._id, category: category._id },
+    {
+      $set: {
+        class: classId,
+        points: numericPoints,
+        note: note ? String(note).trim() : undefined,
+        createdBy: req.user.userId || req.user._id,
+      },
+      $setOnInsert: { cycle: cycle._id, date: entryDate, child: child._id, category: category._id },
+    },
+    { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
+  );
   await entry.populate("category", "name");
   await entry.populate("child", "name");
   res.status(201).json({ success: true, data: entry });
