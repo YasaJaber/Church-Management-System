@@ -613,6 +613,64 @@ export const classesAPI = {
     }
   }
 }
+
+// Points / motivation system API calls
+export const pointsAPI = {
+  getDashboard: async (classId: string) => {
+    try {
+      const response = await api.get(`/points?classId=${encodeURIComponent(classId)}`)
+      return { success: true, data: response.data.data }
+    } catch (error: any) {
+      logger.error('Error fetching points dashboard:', error)
+      return { success: false, error: error.response?.data?.error || 'حدث خطأ في تحميل نظام النقاط' }
+    }
+  },
+
+  addCategory: async (classId: string, name: string) => {
+    try {
+      const response = await api.post('/points/categories', { classId, name })
+      return { success: true, data: response.data.data }
+    } catch (error: any) {
+      return { success: false, error: error.response?.data?.error || 'حدث خطأ في إضافة بند النقاط' }
+    }
+  },
+
+  renameCategory: async (categoryId: string, name: string) => {
+    try {
+      const response = await api.patch(`/points/categories/${categoryId}`, { name })
+      return { success: true, data: response.data.data }
+    } catch (error: any) {
+      return { success: false, error: error.response?.data?.error || 'حدث خطأ في تعديل بند النقاط' }
+    }
+  },
+
+  archiveCategory: async (categoryId: string) => {
+    try {
+      const response = await api.delete(`/points/categories/${categoryId}`)
+      return { success: true, data: response.data }
+    } catch (error: any) {
+      return { success: false, error: error.response?.data?.error || 'حدث خطأ في حذف بند النقاط' }
+    }
+  },
+
+  addEntry: async (entry: { classId: string; childId: string; categoryId: string; points: number; note?: string }) => {
+    try {
+      const response = await api.post('/points/entries', entry)
+      return { success: true, data: response.data.data }
+    } catch (error: any) {
+      return { success: false, error: error.response?.data?.error || 'حدث خطأ في تسجيل النقاط' }
+    }
+  },
+
+  resetCycle: async (classId: string) => {
+    try {
+      const response = await api.post('/points/reset', { classId })
+      return { success: true, data: response.data.data, message: response.data.message }
+    } catch (error: any) {
+      return { success: false, error: error.response?.data?.error || 'حدث خطأ في إعادة ضبط النقاط' }
+    }
+  },
+}
 // Note: classesAPI is already defined elsewhere in the file, we just need to ensure it has getAllClasses method
 
 // Statistics API calls
@@ -1263,6 +1321,7 @@ export default {
   attendance: attendanceAPI,
   classes: classesAPI,
   statistics: statisticsAPI,
+  points: pointsAPI,
   servants: servantsAPI,
   servantsAttendance: servantsAttendanceAPI,
   pastoralCare: pastoralCareAPI,

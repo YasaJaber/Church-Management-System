@@ -483,6 +483,22 @@ export default function DashboardPage() {
             </div>
           </button>
 
+          {/* نظام النقاط - لكل خادم فصل وأمين الخدمة */}
+          {(user?.role === 'admin' || user?.role === 'serviceLeader' || user?.role === 'classTeacher' || user?.role === 'servant') && (
+            <button
+              key="nav-points"
+              onClick={() => router.push('/points')}
+              className="group relative overflow-hidden rounded-lg bg-gradient-to-br from-teal-700 to-cyan-600 p-6 text-right text-white shadow transition hover:-translate-y-0.5 hover:shadow-lg"
+            >
+              <div className="absolute -left-5 -top-8 h-24 w-24 rounded-full bg-amber-300/20 blur-2xl" />
+              <div className="relative text-center">
+                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-amber-300 text-2xl shadow-sm">🏆</div>
+                <h3 className="mb-2 text-lg font-bold">نظام النقاط</h3>
+                <p className="text-sm text-teal-50/90">تحفيز الأطفال ومتابعة صاحب أعلى نقاط كل ٤ أسابيع</p>
+              </div>
+            </button>
+          )}
+
           {/* حضور الخدام - لأمين الخدمة والأدمن فقط */}
           {(user?.role === 'admin' || user?.role === 'serviceLeader') && (
             <button
