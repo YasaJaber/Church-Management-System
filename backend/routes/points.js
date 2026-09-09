@@ -104,6 +104,15 @@ router.get("/", authMiddleware, asyncHandler(async (req, res) => {
             },
           },
           {
+            $lookup: {
+              from: PointCategory.collection.name,
+              localField: "category",
+              foreignField: "_id",
+              as: "categoryData",
+            },
+          },
+          { $match: { "categoryData.isActive": true } },
+          {
             $facet: {
               legacy: [
                 { $match: { entryType: { $exists: false } } },
@@ -142,6 +151,15 @@ router.get("/", authMiddleware, asyncHandler(async (req, res) => {
               ...dateFilter,
             },
           },
+          {
+            $lookup: {
+              from: PointCategory.collection.name,
+              localField: "category",
+              foreignField: "_id",
+              as: "categoryData",
+            },
+          },
+          { $match: { "categoryData.isActive": true } },
           {
             $facet: {
               legacy: [
