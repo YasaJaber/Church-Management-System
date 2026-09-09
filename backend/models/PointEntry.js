@@ -44,10 +44,9 @@ const pointEntrySchema = new mongoose.Schema(
       required: true,
       validate: {
         validator: function (value) {
-          if (this.entryType === "bonus") return Number.isInteger(value) && value !== 0;
-          return value === 1 || value === -1;
+          return Number.isInteger(value) && value !== 0;
         },
-        message: "بنود التقييم تسمح بنقطة واحدة، أما البونص فيقبل أكثر من نقطة",
+        message: "قيمة حركة النقاط يجب أن تكون عددًا صحيحًا غير صفر",
       },
     },
     note: {

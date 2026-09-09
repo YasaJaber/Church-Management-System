@@ -92,7 +92,7 @@ router.get("/", authMiddleware, asyncHandler(async (req, res) => {
   }
   const cycle = await findActiveCycle(classId);
   const dateFilter = selectedDate ? { date: selectedDate } : {};
-  const [children, categories, categoryScoreRows, bonusScoreRows, entries] = await Promise.all([
+  const [children, categories, categoryScoreRows, bonusScoreRows, categoryCountRows, entries] = await Promise.all([
     Child.find({ class: classId, isActive: true }).select("name class image thumbnail").sort({ name: 1 }),
     PointCategory.find({ class: classId, isActive: true }).sort({ order: 1, createdAt: 1 }),
     cycle
@@ -101,23 +101,69 @@ router.get("/", authMiddleware, asyncHandler(async (req, res) => {
             $match: {
               class: new mongoose.Types.ObjectId(classId),
               cycle: cycle._id,
-              $or: [{ entryType: "category" }, { entryType: { $exists: false } }],
             },
           },
-          { $sort: { updatedAt: -1, createdAt: -1 } },
           {
-            $group: {
-              _id: { child: "$child", category: "$category", date: "$date" },
-              points: { $first: { $cond: [{ $gt: ["$points", 0] }, 1, -1] } },
+            $facet: {
+              legacy: [
+                { $match: { entryType: { $exists: false } } },
+                { $sort: { updatedAt: -1, createdAt: -1 } },
+                {
+                  $group: {
+                    _id: { child: "$child", category: "$category", date: "$date" },
+                    points: { $first: { $cond: [{ $gt: ["$points", 0] }, 1, -1] } },
+                  },
+                },
+                { $group: { _id: "$_id.child", score: { $sum: "$points" } } },
+              ],
+              events: [
+                { $match: { entryType: "category" } },
+                { $group: { _id: "$child", score: { $sum: "$points" } } },
+              ],
             },
           },
-          { $group: { _id: "$_id.child", score: { $sum: "$points" } } },
+          { $project: { scores: { $concatArrays: ["$legacy", "$events"] } } },
+          { $unwind: "$scores" },
+          { $group: { _id: "$scores._id", score: { $sum: "$scores.score" } } },
         ])
       : Promise.resolve([]),
     cycle
       ? PointEntry.aggregate([
           { $match: { class: new mongoose.Types.ObjectId(classId), cycle: cycle._id, entryType: "bonus" } },
           { $group: { _id: "$child", score: { $sum: "$points" } } },
+        ])
+      : Promise.resolve([]),
+    cycle
+      ? PointEntry.aggregate([
+          {
+            $match: {
+              class: new mongoose.Types.ObjectId(classId),
+              cycle: cycle._id,
+              ...dateFilter,
+            },
+          },
+          {
+            $facet: {
+              legacy: [
+                { $match: { entryType: { $exists: false } } },
+                { $sort: { updatedAt: -1, createdAt: -1 } },
+                {
+                  $group: {
+                    _id: { child: "$child", category: "$category", date: "$date" },
+                    points: { $first: { $cond: [{ $gt: ["$points", 0] }, 1, -1] } },
+                  },
+                },
+                { $project: { _id: { child: "$_id.child", category: "$_id.category" }, points: 1 } },
+              ],
+              events: [
+                { $match: { entryType: "category" } },
+                { $group: { _id: { child: "$child", category: "$category" }, points: { $sum: "$points" } } },
+              ],
+            },
+          },
+          { $project: { counts: { $concatArrays: ["$legacy", "$events"] } } },
+          { $unwind: "$counts" },
+          { $group: { _id: "$counts._id", points: { $sum: "$counts.points" } } },
         ])
       : Promise.resolve([]),
     cycle
@@ -131,6 +177,9 @@ router.get("/", authMiddleware, asyncHandler(async (req, res) => {
 
   const categoryScores = new Map(categoryScoreRows.map((row) => [row._id.toString(), row.score]));
   const bonusByChild = Object.fromEntries(bonusScoreRows.map((row) => [row._id.toString(), row.score]));
+  const categoryScoresByKey = Object.fromEntries(
+    categoryCountRows.map((row) => [`${row._id.child.toString()}:${row._id.category.toString()}`, row.points])
+  );
 
   const leaderboard = children
     .map((child) => ({
@@ -150,6 +199,7 @@ router.get("/", authMiddleware, asyncHandler(async (req, res) => {
       categories,
       leaderboard,
       bonusByChild,
+      categoryScoresByKey,
       recentEntries: entries,
     },
   });
@@ -164,6 +214,20 @@ router.post("/categories", authMiddleware, asyncHandler(async (req, res) => {
   }
 
   try {
+    const existingCategory = await PointCategory.findOne({ class: classId, name: cleanName });
+    if (existingCategory) {
+      if (!existingCategory.isActive) {
+        existingCategory.isActive = true;
+        await existingCategory.save();
+        return res.status(200).json({
+          success: true,
+          data: existingCategory,
+          message: "تمت إعادة تفعيل بند النقاط الموجود",
+        });
+      }
+      return res.status(409).json({ success: false, error: "هذا البند موجود بالفعل في الفصل" });
+    }
+
     const category = await PointCategory.create({
       class: classId,
       name: cleanName,
@@ -222,9 +286,8 @@ router.post("/entries/batch", authMiddleware, asyncHandler(async (req, res) => {
     return (
       !mongoose.Types.ObjectId.isValid(entry.childId) ||
       !Number.isInteger(numericPoints) ||
-      (isBonus
-        ? numericPoints === 0
-        : !mongoose.Types.ObjectId.isValid(entry.categoryId) || (numericPoints !== 1 && numericPoints !== -1)) ||
+      numericPoints === 0 ||
+      (!isBonus && !mongoose.Types.ObjectId.isValid(entry.categoryId)) ||
       !["category", "bonus"].includes(entry.entryType)
     );
   });
@@ -234,11 +297,6 @@ router.post("/entries/batch", authMiddleware, asyncHandler(async (req, res) => {
 
   const childIds = [...new Set(normalizedEntries.map((entry) => String(entry.childId)))];
   const categoryIds = [...new Set(normalizedEntries.filter((entry) => entry.entryType === "category").map((entry) => String(entry.categoryId)))];
-  const categoryEntries = normalizedEntries.filter((entry) => entry.entryType === "category");
-  const entryKeys = categoryEntries.map((entry) => `${entry.childId}:${entry.categoryId}`);
-  if (new Set(entryKeys).size !== entryKeys.length) {
-    return res.status(400).json({ success: false, error: "كل طفل يسمح له بنقطة واحدة فقط لكل بند في الجمعة" });
-  }
   const [children, categories] = await Promise.all([
     Child.find({ _id: { $in: childIds }, class: classId, isActive: true }).select("_id"),
     PointCategory.find({ _id: { $in: categoryIds }, class: classId, isActive: true }).select("_id"),
@@ -253,68 +311,30 @@ router.post("/entries/batch", authMiddleware, asyncHandler(async (req, res) => {
   // A batch starts the cycle only after all entries have been validated.
   const cycle = await getActiveCycle(classId, req.user.userId || req.user._id);
   const operations = normalizedEntries.map((entry) => {
-    const document = {
-      cycle: cycle._id,
-      class: classId,
-      child: entry.childId,
-      category: entry.categoryId,
-      date: entryDate,
-      points: Number(entry.points),
-      note: entry.note ? String(entry.note).trim() : undefined,
-      createdBy: req.user.userId || req.user._id,
-    };
-
-    if (entry.entryType === "bonus") {
-      return {
-        insertOne: {
-          document: {
-            cycle: document.cycle,
-            class: document.class,
-            child: document.child,
-            entryType: "bonus",
-            date: document.date,
-            points: document.points,
-            note: document.note,
-            createdBy: document.createdBy,
-          },
-        },
-      };
-    }
-
+    const timestamp = new Date();
     return {
-      updateOne: {
-        filter: {
-          cycle: document.cycle,
-          date: document.date,
-          child: document.child,
-          category: document.category,
-          $or: [{ entryType: "category" }, { entryType: { $exists: false } }],
+      insertOne: {
+        document: {
+          cycle: cycle._id,
+          class: classId,
+          child: entry.childId,
+          entryType: entry.entryType,
+          ...(entry.entryType === "category" ? { category: entry.categoryId } : {}),
+          date: entryDate,
+          points: Number(entry.points),
+          note: entry.note ? String(entry.note).trim() : undefined,
+          createdBy: req.user.userId || req.user._id,
+          createdAt: timestamp,
+          updatedAt: timestamp,
         },
-        update: {
-          $set: {
-            class: document.class,
-            entryType: "category",
-            points: document.points,
-            note: document.note,
-            createdBy: document.createdBy,
-            updatedAt: new Date(),
-          },
-          $setOnInsert: {
-            cycle: document.cycle,
-            date: document.date,
-            child: document.child,
-            category: document.category,
-          },
-        },
-        upsert: true,
       },
     };
   });
   const batchResult = await PointEntry.bulkWrite(operations);
   res.status(201).json({
     success: true,
-    data: { count: operations.length, modified: batchResult.modifiedCount, upserted: batchResult.upsertedCount },
-    message: `تم حفظ ${operations.length} حالة نقاط مرة واحدة`,
+    data: { count: operations.length, inserted: batchResult.insertedCount },
+    message: `تم حفظ ${operations.length} حركة نقاط مرة واحدة`,
   });
 }));
 
@@ -333,11 +353,8 @@ router.post("/entries", authMiddleware, asyncHandler(async (req, res) => {
   if (!["category", "bonus"].includes(entryType)) {
     return res.status(400).json({ success: false, error: "نوع تسجيل النقاط غير صحيح" });
   }
-  if (entryType === "category" && numericPoints !== 1 && numericPoints !== -1) {
-    return res.status(400).json({ success: false, error: "كل بند يسمح بنقطة واحدة فقط: إضافة أو خصم" });
-  }
-  if (entryType === "bonus" && (!Number.isInteger(numericPoints) || numericPoints === 0)) {
-    return res.status(400).json({ success: false, error: "قيمة البونص يجب أن تكون عددًا صحيحًا غير صفر" });
+  if (!Number.isInteger(numericPoints) || numericPoints === 0) {
+    return res.status(400).json({ success: false, error: "قيمة الحركة يجب أن تكون عددًا صحيحًا غير صفر" });
   }
 
   const [child, category] = await Promise.all([
@@ -351,37 +368,17 @@ router.post("/entries", authMiddleware, asyncHandler(async (req, res) => {
   // or creating a category must not start the competition.
   const cycle = await getActiveCycle(classId, req.user.userId || req.user._id);
 
-  const entry = entryType === "bonus"
-    ? await PointEntry.create({
-        cycle: cycle._id,
-        class: classId,
-        child: child._id,
-        entryType,
-        date: entryDate,
-        points: numericPoints,
-        note: note ? String(note).trim() : undefined,
-        createdBy: req.user.userId || req.user._id,
-      })
-    : await PointEntry.findOneAndUpdate(
-        {
-          cycle: cycle._id,
-          date: entryDate,
-          child: child._id,
-          category: category._id,
-          $or: [{ entryType: "category" }, { entryType: { $exists: false } }],
-        },
-        {
-          $set: {
-            class: classId,
-            entryType: "category",
-            points: numericPoints,
-            note: note ? String(note).trim() : undefined,
-            createdBy: req.user.userId || req.user._id,
-          },
-          $setOnInsert: { cycle: cycle._id, date: entryDate, child: child._id, category: category._id },
-        },
-        { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
-      );
+  const entry = await PointEntry.create({
+    cycle: cycle._id,
+    class: classId,
+    child: child._id,
+    entryType,
+    ...(entryType === "category" ? { category: category._id } : {}),
+    date: entryDate,
+    points: numericPoints,
+    note: note ? String(note).trim() : undefined,
+    createdBy: req.user.userId || req.user._id,
+  });
   await entry.populate("category", "name");
   await entry.populate("child", "name");
   res.status(201).json({ success: true, data: entry });

@@ -69,6 +69,7 @@ interface PointsDashboard {
   categories: Category[]
   leaderboard: LeaderboardChild[]
   bonusByChild?: Record<string, number>
+  categoryScoresByKey?: Record<string, number>
   recentEntries: PointEntry[]
 }
 
@@ -160,23 +161,24 @@ export default function PointsPage() {
   }, [loadDashboard])
 
   const savedStatusByKey = useMemo(() => {
-    const statuses: Record<string, number> = {}
+    const statuses: Record<string, number> = { ...(dashboard?.categoryScoresByKey || {}) }
     dashboard?.recentEntries.forEach((entry) => {
       const childId = entry.child?._id
       const categoryId = entry.category?._id
       if (!childId || !categoryId) return
       const key = `${childId}:${categoryId}`
-      // The API returns newest entries first. Keep the newest status if old
-      // duplicate records exist from the previous multi-point behavior.
-      if (statuses[key] === undefined) statuses[key] = entry.points > 0 ? 1 : -1
+      // Fallback for older API responses that do not include the aggregated
+      // count map. New responses already contain the exact selected-date sum.
+      if (!dashboard?.categoryScoresByKey) statuses[key] = (statuses[key] || 0) + entry.points
     })
     return statuses
-  }, [dashboard?.recentEntries])
+  }, [dashboard?.categoryScoresByKey, dashboard?.recentEntries])
 
   const pendingStatusByKey = useMemo(() => {
     return pendingEntries.reduce<Record<string, number>>((statuses, entry) => {
       if (entry.entryType !== 'category' || !entry.categoryId) return statuses
-      statuses[`${entry.childId}:${entry.categoryId}`] = entry.points
+      const key = `${entry.childId}:${entry.categoryId}`
+      statuses[key] = (statuses[key] || 0) + entry.points
       return statuses
     }, {})
   }, [pendingEntries])
@@ -190,7 +192,7 @@ export default function PointsPage() {
   }, [pendingEntries])
 
   const getPointStatus = (childId: string, categoryId: string) =>
-    pendingStatusByKey[`${childId}:${categoryId}`] ?? savedStatusByKey[`${childId}:${categoryId}`] ?? 0
+    (savedStatusByKey[`${childId}:${categoryId}`] || 0) + (pendingStatusByKey[`${childId}:${categoryId}`] || 0)
 
   const pendingScoreByChild = useMemo(() => {
     return pendingEntries.reduce<Record<string, number>>((scores, entry) => {
@@ -199,8 +201,7 @@ export default function PointsPage() {
         return scores
       }
       if (!entry.categoryId) return scores
-      const key = `${entry.childId}:${entry.categoryId}`
-      scores[entry.childId] = (scores[entry.childId] || 0) + entry.points - (savedStatusByKey[key] || 0)
+      scores[entry.childId] = (scores[entry.childId] || 0) + entry.points
       return scores
     }, {})
   }, [pendingEntries, savedStatusByKey])
@@ -229,7 +230,7 @@ export default function PointsPage() {
         ...entry,
         index,
         savedStatus,
-        delta: entry.entryType === 'bonus' ? entry.points : entry.points - savedStatus,
+        delta: entry.points,
         childName: childNames.get(entry.childId) || 'طفل غير معروف',
         categoryName: entry.entryType === 'bonus' ? 'بونص' : (categoryNames.get(entry.categoryId || '') || 'بند غير معروف'),
       }
@@ -244,12 +245,12 @@ export default function PointsPage() {
 
   const queueEntry = (child: LeaderboardChild, category: Category, points: number) => {
     const key = `${child._id}:${category._id}`
-    const savedStatus = savedStatusByKey[key] || 0
     setPendingEntries((current) => {
-      // Pressing the same state twice does not add another point.
-      if (points === savedStatus) return current.filter((entry) => `${entry.childId}:${entry.categoryId}` !== key)
-      const nextEntry: PendingPointEntry = { childId: child._id, categoryId: category._id, entryType: 'category', points }
       const existingIndex = current.findIndex((entry) => entry.entryType === 'category' && `${entry.childId}:${entry.categoryId}` === key)
+      const existingPoints = existingIndex === -1 ? 0 : current[existingIndex].points
+      const nextPoints = existingPoints + points
+      if (nextPoints === 0) return current.filter((_, index) => index !== existingIndex)
+      const nextEntry: PendingPointEntry = { childId: child._id, categoryId: category._id, entryType: 'category', points: nextPoints }
       if (existingIndex === -1) return [...current, nextEntry]
       return current.map((entry, index) => index === existingIndex ? nextEntry : entry)
     })
@@ -455,8 +456,8 @@ export default function PointsPage() {
                     <TrophyIcon className="h-4 w-4" /> أعلى نقاط يفوز بالجائزة
                   </div>
                   <div className="flex flex-wrap items-center gap-2 self-start text-[11px] font-bold text-slate-500 dark:text-slate-400">
-                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">أخضر +1</span>
-                    <span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">أحمر -1</span>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">أخضر رصيد موجب</span>
+                    <span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">أحمر رصيد سالب</span>
                     <span className="rounded-full bg-violet-50 px-2.5 py-1 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">بونص متجمع</span>
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 dark:bg-slate-800">لم يسجل</span>
                   </div>
@@ -506,7 +507,7 @@ export default function PointsPage() {
                                 title={`خصم نقطة: ${category.name}`}
                                 className={`flex h-8 w-8 items-center justify-center transition disabled:opacity-50 ${status < 0 ? 'bg-rose-500 text-white' : 'text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/40'}`}
                               ><ArrowDownIcon className="h-4 w-4" /></button>
-                              <span className={`max-w-[110px] truncate border-x px-2 text-xs font-bold ${status > 0 ? 'border-emerald-200 text-emerald-800 dark:border-emerald-700 dark:text-emerald-200' : status < 0 ? 'border-rose-200 text-rose-800 dark:border-rose-700 dark:text-rose-200' : 'border-slate-100 text-slate-600 dark:border-slate-700 dark:text-slate-300'}`}>{category.name}</span>
+                              <span className={`flex max-w-[130px] items-center gap-1 border-x px-2 text-xs font-bold ${status > 0 ? 'border-emerald-200 text-emerald-800 dark:border-emerald-700 dark:text-emerald-200' : status < 0 ? 'border-rose-200 text-rose-800 dark:border-rose-700 dark:text-rose-200' : 'border-slate-100 text-slate-600 dark:border-slate-700 dark:text-slate-300'}`} title={`${category.name}: ${status > 0 ? '+' : ''}${status}`}><span className="truncate">{category.name}</span><span className="shrink-0 font-black">{status > 0 ? '+' : ''}{status}</span></span>
                               <button
                                 onClick={() => queueEntry(child, category, 1)}
                                 disabled={saving}
@@ -566,7 +567,7 @@ export default function PointsPage() {
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-xs font-black text-slate-800 dark:text-slate-100">{item.childName}</p>
-                            <p className="truncate text-[11px] font-bold text-slate-500 dark:text-slate-400">{item.entryType === 'bonus' ? `${item.categoryName} • ${item.points > 0 ? '+' : ''}${item.points}` : `${item.categoryName} • الحالة ${item.points > 0 ? '+1' : '-1'}`}</p>
+                            <p className="truncate text-[11px] font-bold text-slate-500 dark:text-slate-400">{item.entryType === 'bonus' ? `${item.categoryName} • ${item.points > 0 ? '+' : ''}${item.points}` : `${item.categoryName} • حركة ${item.points > 0 ? '+' : ''}${item.points}`}</p>
                           </div>
                           <span className={`text-sm font-black ${item.delta > 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`} title="التغيير الفعلي في الإجمالي">{item.delta > 0 ? '+' : ''}{item.delta}</span>
                           <button type="button" onClick={() => removePendingEntry(item.index)} className="text-slate-400 transition hover:text-rose-600 dark:text-slate-500 dark:hover:text-rose-300" title="تراجع عن الحركة" aria-label={`التراجع عن حركة ${item.childName}`}><XMarkIcon className="h-4 w-4" /></button>
@@ -602,7 +603,7 @@ export default function PointsPage() {
                       </div>
                     ))}
                   </div>
-                  <p className="mt-4 text-xs leading-5 text-slate-400 dark:text-slate-500">كل بند له زر إضافة وزر خصم بجوار كل طفل، ويمكنك إضافة أي سلوك يناسب الفصل.</p>
+                  <p className="mt-4 text-xs leading-5 text-slate-400 dark:text-slate-500">كل ضغطة على زر الإضافة أو الخصم تغيّر عداد البند بنقطة واحدة، ويمكنك تكرار الضغط على نفس البند.</p>
                 </section>
 
                 <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-700/80 dark:bg-slate-900">
