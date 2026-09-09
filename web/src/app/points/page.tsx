@@ -51,13 +51,15 @@ interface PointEntry {
   _id: string
   points: number
   createdAt: string
+  entryType?: 'category' | 'bonus'
   child?: { _id: string; name: string }
   category?: { _id: string; name: string }
 }
 
 interface PendingPointEntry {
   childId: string
-  categoryId: string
+  categoryId?: string
+  entryType: 'category' | 'bonus'
   points: number
 }
 
@@ -66,6 +68,7 @@ interface PointsDashboard {
   cycle: PointCycle | null
   categories: Category[]
   leaderboard: LeaderboardChild[]
+  bonusByChild?: Record<string, number>
   recentEntries: PointEntry[]
 }
 
@@ -172,8 +175,17 @@ export default function PointsPage() {
 
   const pendingStatusByKey = useMemo(() => {
     return pendingEntries.reduce<Record<string, number>>((statuses, entry) => {
+      if (entry.entryType !== 'category' || !entry.categoryId) return statuses
       statuses[`${entry.childId}:${entry.categoryId}`] = entry.points
       return statuses
+    }, {})
+  }, [pendingEntries])
+
+  const pendingBonusByChild = useMemo(() => {
+    return pendingEntries.reduce<Record<string, number>>((bonuses, entry) => {
+      if (entry.entryType !== 'bonus') return bonuses
+      bonuses[entry.childId] = (bonuses[entry.childId] || 0) + entry.points
+      return bonuses
     }, {})
   }, [pendingEntries])
 
@@ -182,11 +194,19 @@ export default function PointsPage() {
 
   const pendingScoreByChild = useMemo(() => {
     return pendingEntries.reduce<Record<string, number>>((scores, entry) => {
+      if (entry.entryType === 'bonus') {
+        scores[entry.childId] = (scores[entry.childId] || 0) + entry.points
+        return scores
+      }
+      if (!entry.categoryId) return scores
       const key = `${entry.childId}:${entry.categoryId}`
       scores[entry.childId] = (scores[entry.childId] || 0) + entry.points - (savedStatusByKey[key] || 0)
       return scores
     }, {})
   }, [pendingEntries, savedStatusByKey])
+
+  const getBonusScore = (childId: string) =>
+    (dashboard?.bonusByChild?.[childId] || 0) + (pendingBonusByChild[childId] || 0)
 
   const displayLeaderboard = useMemo(() => {
     if (!dashboard) return []
@@ -203,15 +223,15 @@ export default function PointsPage() {
     const childNames = new Map((dashboard?.leaderboard || []).map((child) => [child._id, child.name]))
     const categoryNames = new Map((dashboard?.categories || []).map((category) => [category._id, category.name]))
     const items = pendingEntries.map((entry, index) => {
-      const key = `${entry.childId}:${entry.categoryId}`
-      const savedStatus = savedStatusByKey[key] || 0
+      const key = entry.categoryId ? `${entry.childId}:${entry.categoryId}` : ''
+      const savedStatus = entry.entryType === 'bonus' ? 0 : (savedStatusByKey[key] || 0)
       return {
         ...entry,
         index,
         savedStatus,
-        delta: entry.points - savedStatus,
+        delta: entry.entryType === 'bonus' ? entry.points : entry.points - savedStatus,
         childName: childNames.get(entry.childId) || 'طفل غير معروف',
-        categoryName: categoryNames.get(entry.categoryId) || 'بند غير معروف',
+        categoryName: entry.entryType === 'bonus' ? 'بونص' : (categoryNames.get(entry.categoryId || '') || 'بند غير معروف'),
       }
     })
     return {
@@ -228,8 +248,20 @@ export default function PointsPage() {
     setPendingEntries((current) => {
       // Pressing the same state twice does not add another point.
       if (points === savedStatus) return current.filter((entry) => `${entry.childId}:${entry.categoryId}` !== key)
-      const nextEntry = { childId: child._id, categoryId: category._id, points }
-      const existingIndex = current.findIndex((entry) => `${entry.childId}:${entry.categoryId}` === key)
+      const nextEntry: PendingPointEntry = { childId: child._id, categoryId: category._id, entryType: 'category', points }
+      const existingIndex = current.findIndex((entry) => entry.entryType === 'category' && `${entry.childId}:${entry.categoryId}` === key)
+      if (existingIndex === -1) return [...current, nextEntry]
+      return current.map((entry, index) => index === existingIndex ? nextEntry : entry)
+    })
+  }
+
+  const queueBonus = (child: LeaderboardChild, points: number) => {
+    setPendingEntries((current) => {
+      const existingIndex = current.findIndex((entry) => entry.entryType === 'bonus' && entry.childId === child._id)
+      const existing = existingIndex === -1 ? 0 : current[existingIndex].points
+      const nextPoints = existing + points
+      if (nextPoints === 0) return current.filter((_, index) => index !== existingIndex)
+      const nextEntry: PendingPointEntry = { childId: child._id, entryType: 'bonus', points: nextPoints }
       if (existingIndex === -1) return [...current, nextEntry]
       return current.map((entry, index) => index === existingIndex ? nextEntry : entry)
     })
@@ -417,7 +449,7 @@ export default function PointsPage() {
                 <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-5 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between sm:px-7">
                   <div>
                     <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">ترتيب الأطفال</h2>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">اضغط + أو − لكل الأطفال، ثم احفظ كل الحركات مرة واحدة.</p>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">اضغط + أو − لكل الأطفال، ثم احفظ كل الحركات مرة واحدة. البونص يتجمع مع كل ضغطة.</p>
                   </div>
                   <div className="inline-flex items-center gap-2 self-start rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
                     <TrophyIcon className="h-4 w-4" /> أعلى نقاط يفوز بالجائزة
@@ -425,6 +457,7 @@ export default function PointsPage() {
                   <div className="flex flex-wrap items-center gap-2 self-start text-[11px] font-bold text-slate-500 dark:text-slate-400">
                     <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">أخضر +1</span>
                     <span className="rounded-full bg-rose-50 px-2.5 py-1 text-rose-700 dark:bg-rose-900/30 dark:text-rose-300">أحمر -1</span>
+                    <span className="rounded-full bg-violet-50 px-2.5 py-1 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">بونص متجمع</span>
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 dark:bg-slate-800">لم يسجل</span>
                   </div>
                 </div>
@@ -483,6 +516,21 @@ export default function PointsPage() {
                             </div>
                             )
                           })}
+                          <div className={`inline-flex items-center overflow-hidden rounded-xl border shadow-sm ${getBonusScore(child._id) > 0 ? 'border-violet-300 bg-violet-50 dark:border-violet-700 dark:bg-violet-900/30' : getBonusScore(child._id) < 0 ? 'border-rose-300 bg-rose-50 dark:border-rose-700 dark:bg-rose-900/30' : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800'} ${pendingBonusByChild[child._id] !== undefined ? 'ring-2 ring-amber-300/70 dark:ring-amber-600/60' : ''}`}>
+                            <button
+                              onClick={() => queueBonus(child, -1)}
+                              disabled={saving}
+                              title="خصم نقطة بونص"
+                              className={`flex h-8 w-8 items-center justify-center transition disabled:opacity-50 ${getBonusScore(child._id) < 0 ? 'bg-rose-500 text-white' : 'text-rose-500 hover:bg-rose-100 dark:hover:bg-rose-900/40'}`}
+                            ><ArrowDownIcon className="h-4 w-4" /></button>
+                            <span className={`border-x px-2 text-xs font-black ${getBonusScore(child._id) !== 0 ? 'border-violet-200 text-violet-800 dark:border-violet-700 dark:text-violet-200' : 'border-slate-100 text-slate-600 dark:border-slate-700 dark:text-slate-300'}`}>بونص {getBonusScore(child._id) > 0 ? '+' : ''}{getBonusScore(child._id)}</span>
+                            <button
+                              onClick={() => queueBonus(child, 1)}
+                              disabled={saving}
+                              title="إضافة نقطة بونص"
+                              className={`flex h-8 w-8 items-center justify-center transition disabled:opacity-50 ${getBonusScore(child._id) > 0 ? 'bg-violet-500 text-white' : 'text-violet-600 hover:bg-violet-100 dark:hover:bg-violet-900/40'}`}
+                            ><ArrowUpIcon className="h-4 w-4" /></button>
+                          </div>
                           {dashboard.categories.length === 0 && <span className="text-xs text-slate-400 dark:text-slate-500">أضف بنودًا من لوحة البنود لبدء التسجيل.</span>}
                         </div>
                       </div>
@@ -518,7 +566,7 @@ export default function PointsPage() {
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-xs font-black text-slate-800 dark:text-slate-100">{item.childName}</p>
-                            <p className="truncate text-[11px] font-bold text-slate-500 dark:text-slate-400">{item.categoryName} • الحالة {item.points > 0 ? '+1' : '-1'}</p>
+                            <p className="truncate text-[11px] font-bold text-slate-500 dark:text-slate-400">{item.entryType === 'bonus' ? `${item.categoryName} • ${item.points > 0 ? '+' : ''}${item.points}` : `${item.categoryName} • الحالة ${item.points > 0 ? '+1' : '-1'}`}</p>
                           </div>
                           <span className={`text-sm font-black ${item.delta > 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`} title="التغيير الفعلي في الإجمالي">{item.delta > 0 ? '+' : ''}{item.delta}</span>
                           <button type="button" onClick={() => removePendingEntry(item.index)} className="text-slate-400 transition hover:text-rose-600 dark:text-slate-500 dark:hover:text-rose-300" title="تراجع عن الحركة" aria-label={`التراجع عن حركة ${item.childName}`}><XMarkIcon className="h-4 w-4" /></button>
@@ -565,7 +613,7 @@ export default function PointsPage() {
                         <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${entry.points > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
                           {entry.points > 0 ? <ArrowUpIcon className="h-4 w-4" /> : <ArrowDownIcon className="h-4 w-4" />}
                         </div>
-                        <div className="min-w-0 flex-1"><p className="truncate text-xs font-extrabold text-slate-700 dark:text-slate-200">{entry.child?.name || 'طفل'} • {entry.category?.name || 'بند'}</p><p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">{formatDate(entry.createdAt)}</p></div>
+                        <div className="min-w-0 flex-1"><p className="truncate text-xs font-extrabold text-slate-700 dark:text-slate-200">{entry.child?.name || 'طفل'} • {entry.entryType === 'bonus' ? 'بونص' : (entry.category?.name || 'بند')}</p><p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">{formatDate(entry.createdAt)}</p></div>
                         <span className={`text-sm font-black ${entry.points > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{entry.points > 0 ? '+' : ''}{entry.points}</span>
                       </div>
                     ))}

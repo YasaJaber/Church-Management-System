@@ -20,10 +20,18 @@ const pointEntrySchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    entryType: {
+      type: String,
+      enum: ["category", "bonus"],
+      default: "category",
+      index: true,
+    },
     category: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "PointCategory",
-      required: true,
+      required: function () {
+        return this.entryType === "category";
+      },
     },
     date: {
       type: String,
@@ -35,8 +43,11 @@ const pointEntrySchema = new mongoose.Schema(
       type: Number,
       required: true,
       validate: {
-        validator: (value) => value === 1 || value === -1,
-        message: "كل بند يسمح بنقطة واحدة فقط: إضافة أو خصم",
+        validator: function (value) {
+          if (this.entryType === "bonus") return Number.isInteger(value) && value !== 0;
+          return value === 1 || value === -1;
+        },
+        message: "بنود التقييم تسمح بنقطة واحدة، أما البونص فيقبل أكثر من نقطة",
       },
     },
     note: {
@@ -55,6 +66,6 @@ const pointEntrySchema = new mongoose.Schema(
 
 pointEntrySchema.index({ cycle: 1, child: 1, createdAt: -1 });
 pointEntrySchema.index({ cycle: 1, date: 1, createdAt: -1 });
-pointEntrySchema.index({ cycle: 1, date: 1, child: 1, category: 1 });
+pointEntrySchema.index({ cycle: 1, date: 1, child: 1, category: 1, entryType: 1 });
 
 module.exports = mongoose.model("PointEntry", pointEntrySchema);

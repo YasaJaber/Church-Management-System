@@ -654,7 +654,7 @@ export const pointsAPI = {
     }
   },
 
-  addEntry: async (entry: { classId: string; childId: string; categoryId: string; points: number; date: string; note?: string }) => {
+  addEntry: async (entry: { classId: string; childId: string; categoryId?: string; entryType?: 'category' | 'bonus'; points: number; date: string; note?: string }) => {
     try {
       const response = await api.post('/points/entries', entry)
       return { success: true, data: response.data.data }
@@ -663,7 +663,7 @@ export const pointsAPI = {
     }
   },
 
-  addEntriesBatch: async (payload: { classId: string; date: string; entries: Array<{ childId: string; categoryId: string; points: number; note?: string }> }) => {
+  addEntriesBatch: async (payload: { classId: string; date: string; entries: Array<{ childId: string; categoryId?: string; entryType?: 'category' | 'bonus'; points: number; note?: string }> }) => {
     try {
       const response = await api.post('/points/entries/batch', payload)
       return { success: true, data: response.data.data, message: response.data.message }
