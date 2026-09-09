@@ -14,7 +14,9 @@ const pointCycleSchema = new mongoose.Schema(
     },
     endsAt: {
       type: Date,
-      required: true,
+      default: null,
+      // Kept for backward compatibility with cycles created before the
+      // points system became session-based (four Fridays per cycle).
     },
     endedAt: {
       type: Date,

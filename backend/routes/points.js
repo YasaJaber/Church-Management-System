@@ -9,8 +9,6 @@ const { authMiddleware } = require("../middleware/auth");
 const { asyncHandler } = require("../middleware/errorHandler");
 
 const router = express.Router();
-const CYCLE_DAYS = 28;
-
 const isManager = (user) => user.role === "admin" || user.role === "serviceLeader";
 
 const canAccessClass = (user, classId) => {
@@ -48,13 +46,11 @@ const ensureClassAccess = async (req, classId) => {
 };
 
 const getActiveCycle = async (classId, userId) => {
-  let cycle = await PointCycle.findOne({ class: classId, status: "active" }).sort({ startedAt: -1 });
+  let cycle = await findActiveCycle(classId);
   if (!cycle) {
     const startedAt = new Date();
-    const endsAt = new Date(startedAt);
-    endsAt.setDate(endsAt.getDate() + CYCLE_DAYS);
     try {
-      cycle = await PointCycle.create({ class: classId, startedAt, endsAt, createdBy: userId });
+      cycle = await PointCycle.create({ class: classId, startedAt, createdBy: userId });
     } catch (error) {
       if (error.code !== 11000) throw error;
       cycle = await PointCycle.findOne({ class: classId, status: "active" }).sort({ startedAt: -1 });
@@ -63,7 +59,21 @@ const getActiveCycle = async (classId, userId) => {
   return cycle;
 };
 
+const findActiveCycle = (classId) =>
+  PointCycle.findOne({ class: classId, status: "active" }).sort({ startedAt: -1 });
+
 const getClassIdFromRequest = (req) => req.query.classId || req.body.classId;
+
+const getDateOnly = (value) => {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const parsed = new Date(`${value}T12:00:00Z`);
+  return Number.isNaN(parsed.getTime()) ? null : value;
+};
+
+const isFridayDate = (value) => {
+  const parsed = new Date(`${value}T12:00:00Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.getUTCDay() === 5;
+};
 
 // Current leaderboard for one class.
 router.get("/", authMiddleware, asyncHandler(async (req, res) => {
@@ -73,19 +83,31 @@ router.get("/", authMiddleware, asyncHandler(async (req, res) => {
   }
 
   const classData = await ensureClassAccess(req, classId);
-  const cycle = await getActiveCycle(classId, req.user.userId || req.user._id);
+  const selectedDate = req.query.date ? getDateOnly(req.query.date) : null;
+  if (req.query.date && !selectedDate) {
+    return res.status(400).json({ success: false, error: "تاريخ التسجيل غير صحيح" });
+  }
+  if (selectedDate && !isFridayDate(selectedDate)) {
+    return res.status(400).json({ success: false, error: "نظام النقاط مخصص ليوم الجمعة فقط" });
+  }
+  const cycle = await findActiveCycle(classId);
+  const dateFilter = selectedDate ? { date: selectedDate } : {};
   const [children, categories, scoreRows, entries] = await Promise.all([
     Child.find({ class: classId, isActive: true }).select("name class image thumbnail").sort({ name: 1 }),
     PointCategory.find({ class: classId, isActive: true }).sort({ order: 1, createdAt: 1 }),
-    PointEntry.aggregate([
-      { $match: { class: new mongoose.Types.ObjectId(classId), cycle: cycle._id } },
-      { $group: { _id: "$child", score: { $sum: "$points" } } },
-    ]),
-    PointEntry.find({ class: classId, cycle: cycle._id })
-      .populate("category", "name")
-      .populate("child", "name")
-      .sort({ createdAt: -1 })
-      .limit(200),
+    cycle
+      ? PointEntry.aggregate([
+          { $match: { class: new mongoose.Types.ObjectId(classId), cycle: cycle._id } },
+          { $group: { _id: "$child", score: { $sum: "$points" } } },
+        ])
+      : Promise.resolve([]),
+    cycle
+      ? PointEntry.find({ class: classId, cycle: cycle._id, ...dateFilter })
+          .populate("category", "name")
+          .populate("child", "name")
+          .sort({ createdAt: -1 })
+          .limit(200)
+      : Promise.resolve([]),
   ]);
 
   const scores = new Map(scoreRows.map((row) => [row._id.toString(), row.score]));
@@ -104,6 +126,7 @@ router.get("/", authMiddleware, asyncHandler(async (req, res) => {
     data: {
       class: classData,
       cycle,
+      selectedDate,
       categories,
       leaderboard,
       recentEntries: entries,
@@ -134,7 +157,7 @@ router.post("/categories", authMiddleware, asyncHandler(async (req, res) => {
   }
 }));
 
-router.patch("/categories/:id", authMiddleware, asyncHandler(async (req, res) => {
+const updateCategory = asyncHandler(async (req, res) => {
   const category = await PointCategory.findById(req.params.id);
   if (!category) return res.status(404).json({ success: false, error: "بند النقاط غير موجود" });
   await ensureClassAccess(req, category.class);
@@ -143,7 +166,10 @@ router.patch("/categories/:id", authMiddleware, asyncHandler(async (req, res) =>
   category.name = name;
   await category.save();
   res.json({ success: true, data: category });
-}));
+});
+
+router.put("/categories/:id", authMiddleware, updateCategory);
+router.patch("/categories/:id", authMiddleware, updateCategory);
 
 router.delete("/categories/:id", authMiddleware, asyncHandler(async (req, res) => {
   const category = await PointCategory.findById(req.params.id);
@@ -154,27 +180,96 @@ router.delete("/categories/:id", authMiddleware, asyncHandler(async (req, res) =
   res.json({ success: true, message: "تم إخفاء بند النقاط" });
 }));
 
-router.post("/entries", authMiddleware, asyncHandler(async (req, res) => {
-  const { classId, childId, categoryId, points, note } = req.body;
+router.post("/entries/batch", authMiddleware, asyncHandler(async (req, res) => {
+  const { classId, date, entries } = req.body;
   await ensureClassAccess(req, classId);
+  const entryDate = getDateOnly(date);
+  if (!entryDate || !isFridayDate(entryDate)) {
+    return res.status(400).json({ success: false, error: "يمكن تسجيل النقاط ليوم الجمعة فقط" });
+  }
+  if (!Array.isArray(entries) || entries.length === 0 || entries.length > 500) {
+    return res.status(400).json({ success: false, error: "لا توجد حركات نقاط صالحة للحفظ" });
+  }
+
+  const invalidEntry = entries.find((entry) => {
+    const numericPoints = Number(entry.points);
+    return (
+      !mongoose.Types.ObjectId.isValid(entry.childId) ||
+      !mongoose.Types.ObjectId.isValid(entry.categoryId) ||
+      !Number.isInteger(numericPoints) ||
+      numericPoints === 0 ||
+      Math.abs(numericPoints) > 100
+    );
+  });
+  if (invalidEntry) {
+    return res.status(400).json({ success: false, error: "يوجد تسجيل نقاط غير صحيح" });
+  }
+
+  const childIds = [...new Set(entries.map((entry) => String(entry.childId)))];
+  const categoryIds = [...new Set(entries.map((entry) => String(entry.categoryId)))];
+  const [children, categories] = await Promise.all([
+    Child.find({ _id: { $in: childIds }, class: classId, isActive: true }).select("_id"),
+    PointCategory.find({ _id: { $in: categoryIds }, class: classId, isActive: true }).select("_id"),
+  ]);
+  if (children.length !== childIds.length) {
+    return res.status(404).json({ success: false, error: "يوجد طفل غير موجود في هذا الفصل" });
+  }
+  if (categories.length !== categoryIds.length) {
+    return res.status(404).json({ success: false, error: "يوجد بند نقاط غير موجود في هذا الفصل" });
+  }
+
+  // A batch starts the cycle only after all entries have been validated.
+  const cycle = await getActiveCycle(classId, req.user.userId || req.user._id);
+  const documents = entries.map((entry) => ({
+    cycle: cycle._id,
+    class: classId,
+    child: entry.childId,
+    category: entry.categoryId,
+    date: entryDate,
+    points: Number(entry.points),
+    note: entry.note ? String(entry.note).trim() : undefined,
+    createdBy: req.user.userId || req.user._id,
+  }));
+  const createdEntries = await PointEntry.insertMany(documents);
+  res.status(201).json({
+    success: true,
+    data: { count: createdEntries.length },
+    message: `تم حفظ ${createdEntries.length} حركة نقاط مرة واحدة`,
+  });
+}));
+
+router.post("/entries", authMiddleware, asyncHandler(async (req, res) => {
+  const { classId, childId, categoryId, points, note, date } = req.body;
+  await ensureClassAccess(req, classId);
+  const entryDate = getDateOnly(date);
+  if (!entryDate) {
+    return res.status(400).json({ success: false, error: "يجب اختيار تاريخ الجمعة قبل تسجيل النقاط" });
+  }
+  if (!isFridayDate(entryDate)) {
+    return res.status(400).json({ success: false, error: "يمكن تسجيل النقاط ليوم الجمعة فقط" });
+  }
   const numericPoints = Number(points);
   if (!Number.isInteger(numericPoints) || numericPoints === 0 || Math.abs(numericPoints) > 100) {
     return res.status(400).json({ success: false, error: "قيمة النقاط يجب أن تكون رقمًا صحيحًا بين -100 و100" });
   }
 
-  const [child, category, cycle] = await Promise.all([
+  const [child, category] = await Promise.all([
     Child.findOne({ _id: childId, class: classId, isActive: true }).select("_id name"),
     PointCategory.findOne({ _id: categoryId, class: classId, isActive: true }),
-    getActiveCycle(classId, req.user.userId || req.user._id),
   ]);
   if (!child) return res.status(404).json({ success: false, error: "الطفل غير موجود في هذا الفصل" });
   if (!category) return res.status(404).json({ success: false, error: "بند النقاط غير موجود في هذا الفصل" });
+
+  // The first valid point entry starts the class cycle. Merely opening the page
+  // or creating a category must not start the competition.
+  const cycle = await getActiveCycle(classId, req.user.userId || req.user._id);
 
   const entry = await PointEntry.create({
     cycle: cycle._id,
     class: classId,
     child: child._id,
     category: category._id,
+    date: entryDate,
     points: numericPoints,
     note: note ? String(note).trim() : undefined,
     createdBy: req.user.userId || req.user._id,
@@ -188,22 +283,19 @@ router.post("/reset", authMiddleware, asyncHandler(async (req, res) => {
   const { classId } = req.body;
   await ensureClassAccess(req, classId);
   const currentCycle = await PointCycle.findOne({ class: classId, status: "active" }).sort({ startedAt: -1 });
-  const now = new Date();
-  if (currentCycle) {
-    currentCycle.status = "completed";
-    currentCycle.endedAt = now;
-    currentCycle.resetBy = req.user.userId || req.user._id;
-    await currentCycle.save();
+  if (!currentCycle) {
+    return res.status(400).json({ success: false, error: "لا توجد دورة نشطة لإعادة ضبطها" });
   }
-  const endsAt = new Date(now);
-  endsAt.setDate(endsAt.getDate() + CYCLE_DAYS);
-  const cycle = await PointCycle.create({
-    class: classId,
-    startedAt: now,
-    endsAt,
-    createdBy: req.user.userId || req.user._id,
+  const now = new Date();
+  currentCycle.status = "completed";
+  currentCycle.endedAt = now;
+  currentCycle.resetBy = req.user.userId || req.user._id;
+  await currentCycle.save();
+  res.json({
+    success: true,
+    data: null,
+    message: "تم إنهاء الدورة الحالية، وستبدأ الدورة الجديدة عند أول نقطة مسجلة",
   });
-  res.json({ success: true, data: cycle, message: "تم بدء دورة نقاط جديدة للفصل" });
 }));
 
 module.exports = router;

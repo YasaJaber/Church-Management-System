@@ -45,7 +45,6 @@ interface LeaderboardChild {
 interface PointCycle {
   _id: string
   startedAt: string
-  endsAt: string
 }
 
 interface PointEntry {
@@ -56,9 +55,15 @@ interface PointEntry {
   category?: { _id: string; name: string }
 }
 
+interface PendingPointEntry {
+  childId: string
+  categoryId: string
+  points: number
+}
+
 interface PointsDashboard {
   class: ClassItem
-  cycle: PointCycle
+  cycle: PointCycle | null
   categories: Category[]
   leaderboard: LeaderboardChild[]
   recentEntries: PointEntry[]
@@ -72,23 +77,44 @@ const formatDate = (date?: string) => {
   return new Intl.DateTimeFormat('ar-EG', { day: 'numeric', month: 'short' }).format(new Date(date))
 }
 
+const getLastFridayInput = () => {
+  const date = new Date()
+  const daysSinceFriday = (date.getDay() + 2) % 7
+  date.setDate(date.getDate() - daysSinceFriday)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const isFridayInput = (value: string) => {
+  const date = new Date(`${value}T12:00:00`)
+  return !Number.isNaN(date.getTime()) && date.getDay() === 5
+}
+
 export default function PointsPage() {
   const { user, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
   const [classes, setClasses] = useState<ClassItem[]>([])
   const [selectedClassId, setSelectedClassId] = useState('')
+  const [selectedDate, setSelectedDate] = useState('')
   const [dashboard, setDashboard] = useState<PointsDashboard | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [newCategory, setNewCategory] = useState('')
   const [editingCategory, setEditingCategory] = useState<Category | null>(null)
   const [editingName, setEditingName] = useState('')
+  const [pendingEntries, setPendingEntries] = useState<PendingPointEntry[]>([])
 
   const isSupervisor = user?.role === 'admin' || user?.role === 'serviceLeader'
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) router.push('/login')
   }, [isAuthenticated, isLoading, router])
+
+  useEffect(() => {
+    setSelectedDate(getLastFridayInput())
+  }, [])
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && !roleCanUsePoints(user?.role)) {
@@ -114,13 +140,13 @@ export default function PointsPage() {
   }, [isSupervisor, user?.assignedClass?._id])
 
   const loadDashboard = useCallback(async () => {
-    if (!selectedClassId) return
+    if (!selectedClassId || !selectedDate) return
     setLoading(true)
-    const response = await pointsAPI.getDashboard(selectedClassId)
+    const response = await pointsAPI.getDashboard(selectedClassId, selectedDate)
     if (response.success) setDashboard(response.data)
     else toast.error(response.error)
     setLoading(false)
-  }, [selectedClassId])
+  }, [selectedClassId, selectedDate])
 
   useEffect(() => {
     if (isAuthenticated && user && roleCanUsePoints(user.role)) loadClasses()
@@ -130,23 +156,67 @@ export default function PointsPage() {
     loadDashboard()
   }, [loadDashboard])
 
-  const daysLeft = useMemo(() => {
-    if (!dashboard?.cycle?.endsAt) return 0
-    return Math.max(0, Math.ceil((new Date(dashboard.cycle.endsAt).getTime() - Date.now()) / 86400000))
-  }, [dashboard?.cycle?.endsAt])
+  const pendingScoreByChild = useMemo(() => {
+    return pendingEntries.reduce<Record<string, number>>((scores, entry) => {
+      scores[entry.childId] = (scores[entry.childId] || 0) + entry.points
+      return scores
+    }, {})
+  }, [pendingEntries])
 
-  const addEntry = async (child: LeaderboardChild, category: Category, points: number) => {
-    setSaving(true)
-    const response = await pointsAPI.addEntry({
-      classId: selectedClassId,
+  const displayLeaderboard = useMemo(() => {
+    if (!dashboard) return []
+    return dashboard.leaderboard
+      .map((child) => ({
+        ...child,
+        pending: pendingScoreByChild[child._id] || 0,
+        score: child.score + (pendingScoreByChild[child._id] || 0),
+      }))
+      .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'ar'))
+  }, [dashboard, pendingScoreByChild])
+
+  const pendingSummary = useMemo(() => {
+    const childNames = new Map((dashboard?.leaderboard || []).map((child) => [child._id, child.name]))
+    const categoryNames = new Map((dashboard?.categories || []).map((category) => [category._id, category.name]))
+    return {
+      additions: pendingEntries.reduce((total, entry) => total + (entry.points > 0 ? Math.abs(entry.points) : 0), 0),
+      deductions: pendingEntries.reduce((total, entry) => total + (entry.points < 0 ? Math.abs(entry.points) : 0), 0),
+      net: pendingEntries.reduce((total, entry) => total + entry.points, 0),
+      items: pendingEntries.map((entry, index) => ({
+        ...entry,
+        index,
+        childName: childNames.get(entry.childId) || 'طفل غير معروف',
+        categoryName: categoryNames.get(entry.categoryId) || 'بند غير معروف',
+      })),
+    }
+  }, [dashboard, pendingEntries])
+
+  const queueEntry = (child: LeaderboardChild, category: Category, points: number) => {
+    setPendingEntries((current) => [...current, {
       childId: child._id,
       categoryId: category._id,
       points,
+    }])
+  }
+
+  const removePendingEntry = (index: number) => {
+    setPendingEntries((current) => current.filter((_, entryIndex) => entryIndex !== index))
+  }
+
+  const savePendingEntries = async () => {
+    if (!pendingEntries.length || !selectedClassId || !selectedDate) return
+    setSaving(true)
+    const response = await pointsAPI.addEntriesBatch({
+      classId: selectedClassId,
+      date: selectedDate,
+      entries: pendingEntries,
     })
     if (response.success) {
-      toast.success(`${points > 0 ? 'تمت إضافة' : 'تم خصم'} ${Math.abs(points)} نقطة لـ ${child.name}`)
+      setPendingEntries([])
+      toast.success(response.message || 'تم حفظ كل النقاط بنجاح')
       await loadDashboard()
-    } else toast.error(response.error)
+    } else {
+      toast.error(response.error)
+    }
     setSaving(false)
   }
 
@@ -191,10 +261,26 @@ export default function PointsPage() {
     setSaving(true)
     const response = await pointsAPI.resetCycle(selectedClassId)
     if (response.success) {
-      toast.success('بدأت دورة نقاط جديدة')
+      toast.success(response.message || 'تم تصفير الدورة، وستبدأ الجديدة مع أول نقطة')
       await loadDashboard()
     } else toast.error(response.error)
     setSaving(false)
+  }
+
+  const handleDateChange = (value: string) => {
+    if (value && !isFridayInput(value)) {
+      toast.error('نظام النقاط مخصص ليوم الجمعة فقط')
+      return
+    }
+    if (pendingEntries.length && !window.confirm('هناك نقاط لم يتم حفظها. تغيير التاريخ سيحذف التعديلات المعلقة. هل تريد المتابعة؟')) return
+    setPendingEntries([])
+    setSelectedDate(value)
+  }
+
+  const handleClassChange = (value: string) => {
+    if (pendingEntries.length && !window.confirm('هناك نقاط لم يتم حفظها. تغيير الفصل سيحذف التعديلات المعلقة. هل تريد المتابعة؟')) return
+    setPendingEntries([])
+    setSelectedClassId(value)
   }
 
   if (isLoading || (!isAuthenticated && loading)) {
@@ -213,7 +299,7 @@ export default function PointsPage() {
             <div>
               <div className="mb-3 flex items-center gap-2 text-amber-200">
                 <TrophyIcon className="h-5 w-5" />
-                <span className="text-sm font-bold tracking-wide">تحفيز الأطفال • دورة ٤ أسابيع</span>
+                <span className="text-sm font-bold tracking-wide">تحفيز الأطفال • دورة ٤ جمعات</span>
               </div>
               <h1 className="text-3xl font-black tracking-tight sm:text-4xl">نظام النقاط</h1>
               <p className="mt-2 max-w-xl text-sm leading-7 text-teal-50/80">
@@ -226,7 +312,7 @@ export default function PointsPage() {
                   <span className="text-teal-50/80">الفصل</span>
                   <select
                     value={selectedClassId}
-                    onChange={(event) => setSelectedClassId(event.target.value)}
+                    onChange={(event) => handleClassChange(event.target.value)}
                     className="max-w-[180px] border-0 bg-transparent font-bold text-white outline-none [color-scheme:dark]"
                     aria-label="اختيار الفصل"
                   >
@@ -235,9 +321,35 @@ export default function PointsPage() {
                   <ChevronDownIcon className="h-4 w-4" />
                 </label>
               )}
+              <label className="flex items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm backdrop-blur">
+                <span className="text-teal-50/80">التاريخ</span>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(event) => handleDateChange(event.target.value)}
+                  className="w-[142px] border-0 bg-transparent font-bold text-white outline-none [color-scheme:dark]"
+                  aria-label="اختيار تاريخ تسجيل النقاط"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => handleDateChange(getLastFridayInput())}
+                className="rounded-2xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-bold text-white transition hover:bg-white/20"
+              >
+                آخر جمعة
+              </button>
+              <button
+                type="button"
+                onClick={savePendingEntries}
+                disabled={saving || !pendingEntries.length}
+                className="inline-flex items-center gap-2 rounded-2xl bg-emerald-400 px-4 py-2.5 text-sm font-extrabold text-[#103d38] transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <CheckBadgeIcon className="h-5 w-5" />
+                حفظ الكل{pendingEntries.length ? ` (${pendingEntries.length})` : ''}
+              </button>
               <button
                 onClick={resetCycle}
-                disabled={saving || !dashboard}
+                disabled={saving || !dashboard?.cycle}
                 className="inline-flex items-center gap-2 rounded-2xl bg-amber-300 px-4 py-2.5 text-sm font-extrabold text-[#163747] transition hover:bg-amber-200 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <ArrowPathIcon className="h-5 w-5" />
@@ -247,8 +359,8 @@ export default function PointsPage() {
           </div>
           <div className="relative mt-7 flex flex-wrap gap-3 text-xs font-bold text-teal-50/80">
             <span className="rounded-full bg-white/10 px-3 py-1.5">{dashboard?.class?.name || 'جاري تحميل الفصل'}</span>
-            <span className="rounded-full bg-white/10 px-3 py-1.5">تبدأ {formatDate(dashboard?.cycle?.startedAt)}</span>
-            <span className="rounded-full bg-amber-300/20 px-3 py-1.5 text-amber-100">متبقي {daysLeft} يوم</span>
+            <span className="rounded-full bg-white/10 px-3 py-1.5">{dashboard?.cycle ? `بدأت الدورة ${formatDate(dashboard.cycle.startedAt)}` : 'لم تبدأ الدورة بعد'}</span>
+            <span className="rounded-full bg-amber-300/20 px-3 py-1.5 text-amber-100">التسجيل ليوم {formatDate(selectedDate)}</span>
           </div>
         </section>
 
@@ -258,9 +370,9 @@ export default function PointsPage() {
           <>
             <section className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
               <StatCard icon={<UserGroupIcon />} label="أطفال الفصل" value={dashboard.leaderboard.length} tone="blue" />
-              <StatCard icon={<FireIcon />} label="إجمالي النقاط" value={dashboard.leaderboard.reduce((sum, child) => sum + child.score, 0)} tone="orange" />
+              <StatCard icon={<FireIcon />} label="إجمالي النقاط" value={displayLeaderboard.reduce((sum, child) => sum + child.score, 0)} tone="orange" />
               <StatCard icon={<CheckBadgeIcon />} label="بنود التقييم" value={dashboard.categories.length} tone="green" />
-              <StatCard icon={<GiftIcon />} label="المتصدر" value={dashboard.leaderboard[0]?.score || 0} detail={dashboard.leaderboard[0]?.name || 'لم يبدأ التسجيل'} tone="purple" />
+              <StatCard icon={<GiftIcon />} label="المتصدر" value={displayLeaderboard[0]?.score || 0} detail={displayLeaderboard[0]?.name || 'لم يبدأ التسجيل'} tone="purple" />
             </section>
 
             <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -268,18 +380,25 @@ export default function PointsPage() {
                 <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-5 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between sm:px-7">
                   <div>
                     <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">ترتيب الأطفال</h2>
-                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">اضغط + أو − بجوار البند لتسجيل الحركة فورًا.</p>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">اضغط + أو − لكل الأطفال، ثم احفظ كل الحركات مرة واحدة.</p>
                   </div>
                   <div className="inline-flex items-center gap-2 self-start rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
                     <TrophyIcon className="h-4 w-4" /> أعلى نقاط يفوز بالجائزة
                   </div>
                 </div>
 
-                {dashboard.leaderboard.length === 0 ? (
+                {displayLeaderboard.length === 0 ? (
                   <div className="px-6 py-20 text-center text-slate-500 dark:text-slate-400">لا يوجد أطفال نشطون في هذا الفصل.</div>
                 ) : (
+                  <>
+                  {pendingEntries.length > 0 && (
+                    <div className="mx-5 mt-4 flex items-center justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs font-bold text-amber-800 dark:border-amber-800/60 dark:bg-amber-900/20 dark:text-amber-200 sm:mx-7">
+                      <span>هناك {pendingEntries.length} حركة معلقة لم تُحفظ بعد.</span>
+                      <button type="button" onClick={() => setPendingEntries([])} className="shrink-0 text-amber-700 underline hover:text-amber-900 dark:text-amber-300 dark:hover:text-amber-100">مسح التعديلات</button>
+                    </div>
+                  )}
                   <div className="divide-y divide-slate-100 dark:divide-slate-700">
-                    {dashboard.leaderboard.map((child, index) => (
+                    {displayLeaderboard.map((child, index) => (
                       <div key={child._id} className="group px-4 py-4 transition hover:bg-slate-50/80 dark:hover:bg-slate-800/70 sm:px-7">
                         <div className="flex items-center gap-3">
                           <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-black ${index === 0 && child.score > 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
@@ -291,11 +410,12 @@ export default function PointsPage() {
                               {index === 0 && child.score > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">المتصدر</span>}
                             </div>
                             <div className="mt-1 h-1.5 max-w-[260px] overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
-                              <div className="h-full rounded-full bg-gradient-to-l from-teal-500 to-cyan-400 transition-all" style={{ width: `${Math.min(100, Math.max(0, child.score) / Math.max(1, (dashboard.leaderboard[0]?.score || 1)) * 100)}%` }} />
+                              <div className="h-full rounded-full bg-gradient-to-l from-teal-500 to-cyan-400 transition-all" style={{ width: `${Math.min(100, Math.max(0, child.score) / Math.max(1, (displayLeaderboard[0]?.score || 1)) * 100)}%` }} />
                             </div>
                           </div>
                           <div className="min-w-[58px] text-center">
                             <span className="block text-xl font-black text-slate-900 dark:text-slate-100">{child.score}</span>
+                            {child.pending !== 0 && <span className="block text-[10px] font-bold text-amber-600 dark:text-amber-300">{child.pending > 0 ? '+' : ''}{child.pending} غير محفوظ</span>}
                             <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">نقطة</span>
                           </div>
                         </div>
@@ -303,14 +423,14 @@ export default function PointsPage() {
                           {dashboard.categories.map((category) => (
                             <div key={category._id} className="inline-flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                               <button
-                                onClick={() => addEntry(child, category, -1)}
+                                onClick={() => queueEntry(child, category, -1)}
                                 disabled={saving}
                                 title={`خصم نقطة: ${category.name}`}
                                 className="flex h-8 w-8 items-center justify-center text-rose-500 transition hover:bg-rose-50 dark:hover:bg-rose-900/30 disabled:opacity-50"
                               ><ArrowDownIcon className="h-4 w-4" /></button>
                               <span className="max-w-[110px] truncate border-x border-slate-100 px-2 text-xs font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">{category.name}</span>
                               <button
-                                onClick={() => addEntry(child, category, 1)}
+                                onClick={() => queueEntry(child, category, 1)}
                                 disabled={saving}
                                 title={`إضافة نقطة: ${category.name}`}
                                 className="flex h-8 w-8 items-center justify-center text-emerald-600 transition hover:bg-emerald-50 dark:hover:bg-emerald-900/30 disabled:opacity-50"
@@ -322,10 +442,45 @@ export default function PointsPage() {
                       </div>
                     ))}
                   </div>
+                  </>
                 )}
               </section>
 
               <aside className="space-y-6">
+                {pendingEntries.length > 0 && (
+                  <section className="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 p-5 shadow-sm dark:border-amber-800/60 dark:from-amber-950/40 dark:to-slate-900">
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <CheckBadgeIcon className="h-5 w-5 text-amber-600 dark:text-amber-300" />
+                          <h2 className="font-black text-amber-950 dark:text-amber-100">عداد التعديلات</h2>
+                        </div>
+                        <p className="mt-1 text-xs font-bold text-amber-700/80 dark:text-amber-300/80">التغييرات التي ستُحفظ معًا</p>
+                      </div>
+                      <span className="rounded-full bg-amber-200 px-3 py-1 text-sm font-black text-amber-900 dark:bg-amber-900/60 dark:text-amber-100">{pendingEntries.length}</span>
+                    </div>
+                    <div className="mb-4 grid grid-cols-3 gap-2 text-center">
+                      <div className="rounded-2xl bg-white/80 px-2 py-2 dark:bg-slate-900/70"><span className="block text-lg font-black text-emerald-600 dark:text-emerald-300">+{pendingSummary.additions}</span><span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">إضافة</span></div>
+                      <div className="rounded-2xl bg-white/80 px-2 py-2 dark:bg-slate-900/70"><span className="block text-lg font-black text-rose-600 dark:text-rose-300">-{pendingSummary.deductions}</span><span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">خصم</span></div>
+                      <div className="rounded-2xl bg-white/80 px-2 py-2 dark:bg-slate-900/70"><span className="block text-lg font-black text-slate-800 dark:text-slate-100">{pendingSummary.net > 0 ? '+' : ''}{pendingSummary.net}</span><span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">الصافي</span></div>
+                    </div>
+                    <div className="max-h-64 space-y-2 overflow-y-auto pl-1">
+                      {pendingSummary.items.slice().reverse().map((item) => (
+                        <div key={`${item.index}-${item.childId}-${item.categoryId}`} className="flex items-center gap-2 rounded-2xl bg-white/80 px-3 py-2.5 dark:bg-slate-900/70">
+                          <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${item.points > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300'}`}>
+                            {item.points > 0 ? <ArrowUpIcon className="h-4 w-4" /> : <ArrowDownIcon className="h-4 w-4" />}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-black text-slate-800 dark:text-slate-100">{item.childName}</p>
+                            <p className="truncate text-[11px] font-bold text-slate-500 dark:text-slate-400">{item.categoryName}</p>
+                          </div>
+                          <span className={`text-sm font-black ${item.points > 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`}>{item.points > 0 ? '+' : ''}{item.points}</span>
+                          <button type="button" onClick={() => removePendingEntry(item.index)} className="text-slate-400 transition hover:text-rose-600 dark:text-slate-500 dark:hover:text-rose-300" title="تراجع عن الحركة" aria-label={`التراجع عن حركة ${item.childName}`}><XMarkIcon className="h-4 w-4" /></button>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
                 <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-700/80 dark:bg-slate-900">
                   <div className="mb-4 flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -357,7 +512,7 @@ export default function PointsPage() {
                 </section>
 
                 <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-700/80 dark:bg-slate-900">
-                  <div className="mb-4 flex items-center gap-2"><CalendarDaysIcon className="h-5 w-5 text-indigo-500" /><h2 className="font-black text-slate-900 dark:text-slate-100">آخر الحركات</h2></div>
+                  <div className="mb-4 flex items-center gap-2"><CalendarDaysIcon className="h-5 w-5 text-indigo-500" /><h2 className="font-black text-slate-900 dark:text-slate-100">حركات {formatDate(selectedDate)}</h2></div>
                   <div className="space-y-3">
                     {dashboard.recentEntries.slice(0, 6).map((entry) => (
                       <div key={entry._id} className="flex items-start gap-3">

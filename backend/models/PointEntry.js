@@ -25,6 +25,12 @@ const pointEntrySchema = new mongoose.Schema(
       ref: "PointCategory",
       required: true,
     },
+    date: {
+      type: String,
+      required: true,
+      match: [/^\d{4}-\d{2}-\d{2}$/, "تاريخ تسجيل النقاط غير صحيح"],
+      index: true,
+    },
     points: {
       type: Number,
       required: true,
@@ -48,5 +54,6 @@ const pointEntrySchema = new mongoose.Schema(
 );
 
 pointEntrySchema.index({ cycle: 1, child: 1, createdAt: -1 });
+pointEntrySchema.index({ cycle: 1, date: 1, createdAt: -1 });
 
 module.exports = mongoose.model("PointEntry", pointEntrySchema);

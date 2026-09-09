@@ -62,7 +62,7 @@ app.use(
       "http://127.0.0.1:3000",
       "http://127.0.0.1:3001",
     ],
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "x-auth-token"],
     credentials: true,
   })

@@ -616,9 +616,10 @@ export const classesAPI = {
 
 // Points / motivation system API calls
 export const pointsAPI = {
-  getDashboard: async (classId: string) => {
+  getDashboard: async (classId: string, date?: string) => {
     try {
-      const response = await api.get(`/points?classId=${encodeURIComponent(classId)}`)
+      const dateQuery = date ? `&date=${encodeURIComponent(date)}` : ''
+      const response = await api.get(`/points?classId=${encodeURIComponent(classId)}${dateQuery}`)
       return { success: true, data: response.data.data }
     } catch (error: any) {
       logger.error('Error fetching points dashboard:', error)
@@ -637,7 +638,7 @@ export const pointsAPI = {
 
   renameCategory: async (categoryId: string, name: string) => {
     try {
-      const response = await api.patch(`/points/categories/${categoryId}`, { name })
+      const response = await api.put(`/points/categories/${categoryId}`, { name })
       return { success: true, data: response.data.data }
     } catch (error: any) {
       return { success: false, error: error.response?.data?.error || 'حدث خطأ في تعديل بند النقاط' }
@@ -653,12 +654,21 @@ export const pointsAPI = {
     }
   },
 
-  addEntry: async (entry: { classId: string; childId: string; categoryId: string; points: number; note?: string }) => {
+  addEntry: async (entry: { classId: string; childId: string; categoryId: string; points: number; date: string; note?: string }) => {
     try {
       const response = await api.post('/points/entries', entry)
       return { success: true, data: response.data.data }
     } catch (error: any) {
       return { success: false, error: error.response?.data?.error || 'حدث خطأ في تسجيل النقاط' }
+    }
+  },
+
+  addEntriesBatch: async (payload: { classId: string; date: string; entries: Array<{ childId: string; categoryId: string; points: number; note?: string }> }) => {
+    try {
+      const response = await api.post('/points/entries/batch', payload)
+      return { success: true, data: response.data.data, message: response.data.message }
+    } catch (error: any) {
+      return { success: false, error: error.response?.data?.error || 'حدث خطأ في حفظ النقاط المجمعة' }
     }
   },
 
