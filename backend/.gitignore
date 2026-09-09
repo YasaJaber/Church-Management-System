@@ -29,6 +29,9 @@ pids
 logs
 *.log
 
+# Local database backups
+backups/
+
 # Coverage directory used by tools like istanbul
 coverage/
 
