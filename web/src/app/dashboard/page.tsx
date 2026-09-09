@@ -488,13 +488,18 @@ export default function DashboardPage() {
             <button
               key="nav-points"
               onClick={() => router.push('/points')}
-              className="group relative overflow-hidden rounded-lg bg-gradient-to-br from-teal-700 to-cyan-600 p-6 text-right text-white shadow transition hover:-translate-y-0.5 hover:shadow-lg"
+              className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow cursor-pointer text-right"
             >
-              <div className="absolute -left-5 -top-8 h-24 w-24 rounded-full bg-amber-300/20 blur-2xl" />
-              <div className="relative text-center">
-                <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-amber-300 text-2xl shadow-sm">🏆</div>
-                <h3 className="mb-2 text-lg font-bold">نظام النقاط</h3>
-                <p className="text-sm text-teal-50/90">تحفيز الأطفال ومتابعة صاحب أعلى نقاط كل ٤ أسابيع</p>
+              <div className="text-center">
+                <div className="w-12 h-12 bg-amber-500 rounded-lg flex items-center justify-center mx-auto mb-4">
+                  <span className="text-white text-xl">🏆</span>
+                </div>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                  نظام النقاط
+                </h3>
+                <p className="text-sm text-gray-500">
+                  تحفيز الأطفال ومتابعة صاحب أعلى نقاط كل ٤ جمعات
+                </p>
               </div>
             </button>
           )}
