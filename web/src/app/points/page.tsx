@@ -202,18 +202,25 @@ export default function PointsPage() {
   const pendingSummary = useMemo(() => {
     const childNames = new Map((dashboard?.leaderboard || []).map((child) => [child._id, child.name]))
     const categoryNames = new Map((dashboard?.categories || []).map((category) => [category._id, category.name]))
-    return {
-      additions: pendingEntries.reduce((total, entry) => total + (entry.points > 0 ? Math.abs(entry.points) : 0), 0),
-      deductions: pendingEntries.reduce((total, entry) => total + (entry.points < 0 ? Math.abs(entry.points) : 0), 0),
-      net: pendingEntries.reduce((total, entry) => total + entry.points, 0),
-      items: pendingEntries.map((entry, index) => ({
+    const items = pendingEntries.map((entry, index) => {
+      const key = `${entry.childId}:${entry.categoryId}`
+      const savedStatus = savedStatusByKey[key] || 0
+      return {
         ...entry,
         index,
+        savedStatus,
+        delta: entry.points - savedStatus,
         childName: childNames.get(entry.childId) || 'طفل غير معروف',
         categoryName: categoryNames.get(entry.categoryId) || 'بند غير معروف',
-      })),
+      }
+    })
+    return {
+      additions: items.reduce((total, item) => total + (item.delta > 0 ? item.delta : 0), 0),
+      deductions: items.reduce((total, item) => total + (item.delta < 0 ? Math.abs(item.delta) : 0), 0),
+      net: items.reduce((total, item) => total + item.delta, 0),
+      items,
     }
-  }, [dashboard, pendingEntries])
+  }, [dashboard, pendingEntries, savedStatusByKey])
 
   const queueEntry = (child: LeaderboardChild, category: Category, points: number) => {
     const key = `${child._id}:${category._id}`
@@ -506,14 +513,14 @@ export default function PointsPage() {
                     <div className="max-h-64 space-y-2 overflow-y-auto pl-1">
                       {pendingSummary.items.slice().reverse().map((item) => (
                         <div key={`${item.index}-${item.childId}-${item.categoryId}`} className="flex items-center gap-2 rounded-2xl bg-white/80 px-3 py-2.5 dark:bg-slate-900/70">
-                          <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${item.points > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300'}`}>
-                            {item.points > 0 ? <ArrowUpIcon className="h-4 w-4" /> : <ArrowDownIcon className="h-4 w-4" />}
+                          <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${item.delta > 0 ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300' : 'bg-rose-100 text-rose-700 dark:bg-rose-900/50 dark:text-rose-300'}`}>
+                            {item.delta > 0 ? <ArrowUpIcon className="h-4 w-4" /> : <ArrowDownIcon className="h-4 w-4" />}
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="truncate text-xs font-black text-slate-800 dark:text-slate-100">{item.childName}</p>
-                            <p className="truncate text-[11px] font-bold text-slate-500 dark:text-slate-400">{item.categoryName}</p>
+                            <p className="truncate text-[11px] font-bold text-slate-500 dark:text-slate-400">{item.categoryName} • الحالة {item.points > 0 ? '+1' : '-1'}</p>
                           </div>
-                          <span className={`text-sm font-black ${item.points > 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`}>{item.points > 0 ? '+' : ''}{item.points}</span>
+                          <span className={`text-sm font-black ${item.delta > 0 ? 'text-emerald-600 dark:text-emerald-300' : 'text-rose-600 dark:text-rose-300'}`} title="التغيير الفعلي في الإجمالي">{item.delta > 0 ? '+' : ''}{item.delta}</span>
                           <button type="button" onClick={() => removePendingEntry(item.index)} className="text-slate-400 transition hover:text-rose-600 dark:text-slate-500 dark:hover:text-rose-300" title="تراجع عن الحركة" aria-label={`التراجع عن حركة ${item.childName}`}><XMarkIcon className="h-4 w-4" /></button>
                         </div>
                       ))}
