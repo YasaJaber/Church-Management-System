@@ -202,7 +202,7 @@ export default function PointsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f6f8fb] px-4 py-6 text-right sm:px-6 lg:px-10" dir="rtl">
+    <main className="min-h-screen bg-[#f6f8fb] px-4 py-6 text-right transition-colors duration-300 dark:bg-[#0b1420] sm:px-6 lg:px-10" dir="rtl">
       <div className="mx-auto max-w-7xl">
         <PageBackButton className="mb-5" />
 
@@ -264,60 +264,60 @@ export default function PointsPage() {
             </section>
 
             <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_340px]">
-              <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm">
-                <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-7">
+              <section className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-700/80 dark:bg-slate-900">
+                <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-5 dark:border-slate-700 sm:flex-row sm:items-center sm:justify-between sm:px-7">
                   <div>
-                    <h2 className="text-xl font-black text-slate-900">ترتيب الأطفال</h2>
-                    <p className="mt-1 text-sm text-slate-500">اضغط + أو − بجوار البند لتسجيل الحركة فورًا.</p>
+                    <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">ترتيب الأطفال</h2>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">اضغط + أو − بجوار البند لتسجيل الحركة فورًا.</p>
                   </div>
-                  <div className="inline-flex items-center gap-2 self-start rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700">
+                  <div className="inline-flex items-center gap-2 self-start rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
                     <TrophyIcon className="h-4 w-4" /> أعلى نقاط يفوز بالجائزة
                   </div>
                 </div>
 
                 {dashboard.leaderboard.length === 0 ? (
-                  <div className="px-6 py-20 text-center text-slate-500">لا يوجد أطفال نشطون في هذا الفصل.</div>
+                  <div className="px-6 py-20 text-center text-slate-500 dark:text-slate-400">لا يوجد أطفال نشطون في هذا الفصل.</div>
                 ) : (
-                  <div className="divide-y divide-slate-100">
+                  <div className="divide-y divide-slate-100 dark:divide-slate-700">
                     {dashboard.leaderboard.map((child, index) => (
-                      <div key={child._id} className="group px-4 py-4 transition hover:bg-slate-50/80 sm:px-7">
+                      <div key={child._id} className="group px-4 py-4 transition hover:bg-slate-50/80 dark:hover:bg-slate-800/70 sm:px-7">
                         <div className="flex items-center gap-3">
-                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-black ${index === 0 && child.score > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-500'}`}>
+                          <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-black ${index === 0 && child.score > 0 ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'}`}>
                             {index < 3 && child.score > 0 ? <TrophyIcon className="h-5 w-5" /> : index + 1}
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">
-                              <p className="truncate font-extrabold text-slate-900">{child.name}</p>
-                              {index === 0 && child.score > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-700">المتصدر</span>}
+                              <p className="truncate font-extrabold text-slate-900 dark:text-slate-100">{child.name}</p>
+                              {index === 0 && child.score > 0 && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-black text-amber-700 dark:bg-amber-900/40 dark:text-amber-300">المتصدر</span>}
                             </div>
-                            <div className="mt-1 h-1.5 max-w-[260px] overflow-hidden rounded-full bg-slate-100">
+                            <div className="mt-1 h-1.5 max-w-[260px] overflow-hidden rounded-full bg-slate-100 dark:bg-slate-700">
                               <div className="h-full rounded-full bg-gradient-to-l from-teal-500 to-cyan-400 transition-all" style={{ width: `${Math.min(100, Math.max(0, child.score) / Math.max(1, (dashboard.leaderboard[0]?.score || 1)) * 100)}%` }} />
                             </div>
                           </div>
                           <div className="min-w-[58px] text-center">
-                            <span className="block text-xl font-black text-slate-900">{child.score}</span>
-                            <span className="text-[10px] font-bold text-slate-400">نقطة</span>
+                            <span className="block text-xl font-black text-slate-900 dark:text-slate-100">{child.score}</span>
+                            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500">نقطة</span>
                           </div>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-2 pr-12 sm:pr-12">
                           {dashboard.categories.map((category) => (
-                            <div key={category._id} className="inline-flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                            <div key={category._id} className="inline-flex items-center overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-800">
                               <button
                                 onClick={() => addEntry(child, category, -1)}
                                 disabled={saving}
                                 title={`خصم نقطة: ${category.name}`}
-                                className="flex h-8 w-8 items-center justify-center text-rose-500 transition hover:bg-rose-50 disabled:opacity-50"
+                                className="flex h-8 w-8 items-center justify-center text-rose-500 transition hover:bg-rose-50 dark:hover:bg-rose-900/30 disabled:opacity-50"
                               ><ArrowDownIcon className="h-4 w-4" /></button>
-                              <span className="max-w-[110px] truncate border-x border-slate-100 px-2 text-xs font-bold text-slate-600">{category.name}</span>
+                              <span className="max-w-[110px] truncate border-x border-slate-100 px-2 text-xs font-bold text-slate-600 dark:border-slate-700 dark:text-slate-300">{category.name}</span>
                               <button
                                 onClick={() => addEntry(child, category, 1)}
                                 disabled={saving}
                                 title={`إضافة نقطة: ${category.name}`}
-                                className="flex h-8 w-8 items-center justify-center text-emerald-600 transition hover:bg-emerald-50 disabled:opacity-50"
+                                className="flex h-8 w-8 items-center justify-center text-emerald-600 transition hover:bg-emerald-50 dark:hover:bg-emerald-900/30 disabled:opacity-50"
                               ><ArrowUpIcon className="h-4 w-4" /></button>
                             </div>
                           ))}
-                          {dashboard.categories.length === 0 && <span className="text-xs text-slate-400">أضف بنودًا من لوحة البنود لبدء التسجيل.</span>}
+                          {dashboard.categories.length === 0 && <span className="text-xs text-slate-400 dark:text-slate-500">أضف بنودًا من لوحة البنود لبدء التسجيل.</span>}
                         </div>
                       </div>
                     ))}
@@ -326,25 +326,25 @@ export default function PointsPage() {
               </section>
 
               <aside className="space-y-6">
-                <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm">
+                <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-700/80 dark:bg-slate-900">
                   <div className="mb-4 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Cog6ToothIcon className="h-5 w-5 text-teal-600" />
-                      <h2 className="font-black text-slate-900">بنود النقاط</h2>
+                      <h2 className="font-black text-slate-900 dark:text-slate-100">بنود النقاط</h2>
                     </div>
-                    <span className="rounded-full bg-teal-50 px-2 py-1 text-xs font-bold text-teal-700">{dashboard.categories.length} بنود</span>
+                    <span className="rounded-full bg-teal-50 px-2 py-1 text-xs font-bold text-teal-700 dark:bg-teal-900/30 dark:text-teal-300">{dashboard.categories.length} بنود</span>
                   </div>
                   <form onSubmit={addCategory} className="mb-4 flex gap-2">
-                    <input value={newCategory} onChange={(event) => setNewCategory(event.target.value)} placeholder="مثال: حضور القداس" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none transition focus:border-teal-400 focus:ring-2 focus:ring-teal-100" aria-label="اسم بند نقاط جديد" />
+                    <input value={newCategory} onChange={(event) => setNewCategory(event.target.value)} placeholder="مثال: حضور القداس" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-teal-400 focus:ring-2 focus:ring-teal-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:ring-teal-900/40" aria-label="اسم بند نقاط جديد" />
                     <button disabled={saving || !newCategory.trim()} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-white transition hover:bg-teal-700 disabled:opacity-50" title="إضافة بند"><PlusIcon className="h-5 w-5" /></button>
                   </form>
                   <div className="space-y-2">
                     {dashboard.categories.map((category) => (
-                      <div key={category._id} className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
+                      <div key={category._id} className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2.5 dark:bg-slate-800">
                         <span className="h-2 w-2 rounded-full bg-teal-500" />
                         {editingCategory?._id === category._id ? (
-                          <input autoFocus value={editingName} onChange={(event) => setEditingName(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && saveCategoryName()} className="min-w-0 flex-1 rounded-lg border border-teal-300 bg-white px-2 py-1 text-sm" />
-                        ) : <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-700">{category.name}</span>}
+                          <input autoFocus value={editingName} onChange={(event) => setEditingName(event.target.value)} onKeyDown={(event) => event.key === 'Enter' && saveCategoryName()} className="min-w-0 flex-1 rounded-lg border border-teal-300 bg-white px-2 py-1 text-sm text-slate-900 dark:bg-slate-900 dark:text-slate-100" />
+                        ) : <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-700 dark:text-slate-200">{category.name}</span>}
                         {editingCategory?._id === category._id ? (
                           <><button onClick={saveCategoryName} className="text-emerald-600" title="حفظ"><CheckBadgeIcon className="h-5 w-5" /></button><button onClick={() => setEditingCategory(null)} className="text-slate-400" title="إلغاء"><XMarkIcon className="h-5 w-5" /></button></>
                         ) : (
@@ -353,22 +353,22 @@ export default function PointsPage() {
                       </div>
                     ))}
                   </div>
-                  <p className="mt-4 text-xs leading-5 text-slate-400">كل بند له زر إضافة وزر خصم بجوار كل طفل، ويمكنك إضافة أي سلوك يناسب الفصل.</p>
+                  <p className="mt-4 text-xs leading-5 text-slate-400 dark:text-slate-500">كل بند له زر إضافة وزر خصم بجوار كل طفل، ويمكنك إضافة أي سلوك يناسب الفصل.</p>
                 </section>
 
-                <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm">
-                  <div className="mb-4 flex items-center gap-2"><CalendarDaysIcon className="h-5 w-5 text-indigo-500" /><h2 className="font-black text-slate-900">آخر الحركات</h2></div>
+                <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm dark:border-slate-700/80 dark:bg-slate-900">
+                  <div className="mb-4 flex items-center gap-2"><CalendarDaysIcon className="h-5 w-5 text-indigo-500" /><h2 className="font-black text-slate-900 dark:text-slate-100">آخر الحركات</h2></div>
                   <div className="space-y-3">
                     {dashboard.recentEntries.slice(0, 6).map((entry) => (
                       <div key={entry._id} className="flex items-start gap-3">
                         <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${entry.points > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
                           {entry.points > 0 ? <ArrowUpIcon className="h-4 w-4" /> : <ArrowDownIcon className="h-4 w-4" />}
                         </div>
-                        <div className="min-w-0 flex-1"><p className="truncate text-xs font-extrabold text-slate-700">{entry.child?.name || 'طفل'} • {entry.category?.name || 'بند'}</p><p className="mt-0.5 text-[11px] text-slate-400">{formatDate(entry.createdAt)}</p></div>
+                        <div className="min-w-0 flex-1"><p className="truncate text-xs font-extrabold text-slate-700 dark:text-slate-200">{entry.child?.name || 'طفل'} • {entry.category?.name || 'بند'}</p><p className="mt-0.5 text-[11px] text-slate-400 dark:text-slate-500">{formatDate(entry.createdAt)}</p></div>
                         <span className={`text-sm font-black ${entry.points > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{entry.points > 0 ? '+' : ''}{entry.points}</span>
                       </div>
                     ))}
-                    {dashboard.recentEntries.length === 0 && <p className="py-4 text-center text-xs text-slate-400">لا توجد حركات مسجلة بعد.</p>}
+                    {dashboard.recentEntries.length === 0 && <p className="py-4 text-center text-xs text-slate-400 dark:text-slate-500">لا توجد حركات مسجلة بعد.</p>}
                   </div>
                 </section>
               </aside>
@@ -382,10 +382,10 @@ export default function PointsPage() {
 
 function StatCard({ icon, label, value, detail, tone }: { icon: React.ReactNode; label: string; value: number; detail?: string; tone: 'blue' | 'orange' | 'green' | 'purple' }) {
   const tones = {
-    blue: 'bg-blue-50 text-blue-600',
-    orange: 'bg-orange-50 text-orange-600',
-    green: 'bg-emerald-50 text-emerald-600',
-    purple: 'bg-violet-50 text-violet-600',
+    blue: 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300',
+    orange: 'bg-orange-50 text-orange-600 dark:bg-orange-900/30 dark:text-orange-300',
+    green: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-300',
+    purple: 'bg-violet-50 text-violet-600 dark:bg-violet-900/30 dark:text-violet-300',
   }
-  return <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5"><div className="flex items-center gap-3"><div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tones[tone]}`}>{icon}</div><div className="min-w-0"><p className="truncate text-xs font-bold text-slate-400">{label}</p><p className="text-2xl font-black text-slate-900">{value}</p>{detail && <p className="truncate text-xs font-bold text-violet-600">{detail}</p>}</div></div></div>
+  return <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm dark:border-slate-700/80 dark:bg-slate-900 sm:p-5"><div className="flex items-center gap-3"><div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tones[tone]}`}>{icon}</div><div className="min-w-0"><p className="truncate text-xs font-bold text-slate-400 dark:text-slate-500">{label}</p><p className="text-2xl font-black text-slate-900 dark:text-slate-100">{value}</p>{detail && <p className="truncate text-xs font-bold text-violet-600 dark:text-violet-300">{detail}</p>}</div></div></div>
 }
